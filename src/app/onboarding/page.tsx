@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useShop } from '@/context/ShopContext';
 import { useAuth } from '@/context/AuthContext';
@@ -8,7 +8,7 @@ import { TextInput, Button, Paper, Title, Stack, Alert, Text, Stepper, Group, Pa
 import { IconAlertCircle, IconCheck, IconBuilding, IconBrandShopee, IconKey } from '@tabler/icons-react';
 import styles from '../login/login.module.scss';
 
-export default function OnboardingPage() {
+function OnboardingContent() {
   const searchParams = useSearchParams();
   const isAddingShop = searchParams.get('add') === 'true';
   const [active, setActive] = useState(0);
@@ -197,5 +197,17 @@ export default function OnboardingPage() {
         </Group>
       </Paper>
     </div>
+  );
+}
+
+export default function OnboardingPage() {
+  return (
+    <Suspense fallback={
+      <Center h="100vh">
+        <Loader size="lg" />
+      </Center>
+    }>
+      <OnboardingContent />
+    </Suspense>
   );
 }
