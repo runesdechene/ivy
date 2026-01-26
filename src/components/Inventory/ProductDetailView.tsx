@@ -6,7 +6,7 @@ import { IconArrowLeft, IconPhoto, IconPlus, IconMinus, IconDeviceFloppy } from 
 import { notifications } from '@mantine/notifications';
 import { ProductData } from './ProductCard';
 import { SortOptionsBar } from './SortOptionsBar';
-import { getColorHex, isColorOption } from '@/utils/colorMap';
+import { getColorHex, isColorOption } from '@/utils/color-transformer';
 import styles from './ProductDetailView.module.scss';
 
 interface ProductDetailViewProps {

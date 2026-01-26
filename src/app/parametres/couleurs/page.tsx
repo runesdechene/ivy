@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Title, Text, Paper, Stack, Table, TextInput, Button, Group, ActionIcon, Badge, ColorSwatch, Modal, Loader, Center } from '@mantine/core';
+import { Title, Text, Paper, Stack, Table, TextInput, Button, Group, ActionIcon, Badge, ColorSwatch, Modal, Loader, Center, ColorPicker, Popover } from '@mantine/core';
 import { IconPlus, IconTrash, IconEdit } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useDisclosure } from '@mantine/hooks';
@@ -231,19 +231,43 @@ export default function CouleursPage() {
               value={editingColor.display_name || ''}
               onChange={(e) => setEditingColor({ ...editingColor, display_name: e.target.value || null })}
             />
-            <Group align="flex-end">
-              <TextInput
-                label="Couleur associée"
-                description="Code hexadécimal pour l'affichage visuel"
-                placeholder="#FF0000"
-                value={editingColor.hex_value}
-                onChange={(e) => setEditingColor({ ...editingColor, hex_value: e.target.value })}
-                style={{ flex: 1 }}
-              />
-              <div style={{ paddingTop: 24 }}>
-                <ColorSwatch color={editingColor.hex_value} size={36} />
-              </div>
-            </Group>
+            <div>
+              <Text size="sm" fw={500} mb={4}>Couleur associée</Text>
+              <Text size="xs" c="dimmed" mb="xs">Code hexadécimal pour l'affichage visuel</Text>
+              <Group align="flex-start">
+                <TextInput
+                  placeholder="#FF0000"
+                  value={editingColor.hex_value}
+                  onChange={(e) => setEditingColor({ ...editingColor, hex_value: e.target.value })}
+                  style={{ flex: 1 }}
+                />
+                <Popover position="bottom" withArrow shadow="md">
+                  <Popover.Target>
+                    <ActionIcon 
+                      variant="light" 
+                      size={36}
+                      style={{ backgroundColor: editingColor.hex_value, border: '2px solid #ddd' }}
+                    >
+                      <span />
+                    </ActionIcon>
+                  </Popover.Target>
+                  <Popover.Dropdown>
+                    <ColorPicker
+                      format="hex"
+                      value={editingColor.hex_value}
+                      onChange={(color) => setEditingColor({ ...editingColor, hex_value: color })}
+                      swatches={[
+                        '#ffffff', '#f8f9fa', '#e9ecef', '#dee2e6', '#ced4da', '#adb5bd', '#868e96', '#495057', '#343a40', '#212529',
+                        '#000000', '#c92a2a', '#a61e4d', '#862e9c', '#5f3dc4', '#364fc7', '#1864ab', '#0b7285', '#087f5b', '#2b8a3e',
+                        '#5c940d', '#e67700', '#d9480f', '#f03e3e', '#d6336c', '#ae3ec9', '#7048e8', '#4263eb', '#1c7ed6', '#15aabf',
+                        '#12b886', '#40c057', '#82c91e', '#fab005', '#fd7e14', '#ff6b6b', '#f06595', '#cc5de8', '#845ef7', '#5c7cfa',
+                        '#339af0', '#22b8cf', '#20c997', '#51cf66', '#94d82d', '#fcc419', '#ff922b',
+                      ]}
+                    />
+                  </Popover.Dropdown>
+                </Popover>
+              </Group>
+            </div>
             <Group justify="flex-end" mt="md">
               <Button variant="subtle" onClick={closeColorModal}>Annuler</Button>
               <Button 

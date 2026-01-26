@@ -446,8 +446,11 @@ async function fetchVariantMetafields(
     // Construire le map des métachamps par variant shopify_id
     const result: Record<string, Record<string, string>> = {};
     
-    // Créer un set des métachamps configurés pour filtrage rapide
-    const configuredKeys = new Set(metafieldConfigs.map(c => `${c.namespace}.${c.key}`));
+    // Créer un map des métachamps configurés pour filtrage rapide (insensible à la casse)
+    const configuredKeysMap = new Map<string, { namespace: string; key: string; display_name: string }>();
+    for (const c of metafieldConfigs) {
+      configuredKeysMap.set(`${c.namespace}.${c.key}`.toLowerCase(), c);
+    }
     
     for (const node of data.data?.nodes || []) {
       if (!node?.id) continue;
@@ -461,11 +464,11 @@ async function fetchVariantMetafields(
       for (const edge of node.metafields?.edges || []) {
         const mf = edge.node;
         if (mf && mf.value) {
-          const fullKey = `${mf.namespace}.${mf.key}`;
-          // Ne garder que les métachamps configurés
-          if (configuredKeys.has(fullKey)) {
-            const config = metafieldConfigs.find(c => c.namespace === mf.namespace && c.key === mf.key);
-            const displayName = config?.display_name || fullKey;
+          const fullKeyLower = `${mf.namespace}.${mf.key}`.toLowerCase();
+          // Ne garder que les métachamps configurés (comparaison insensible à la casse)
+          const config = configuredKeysMap.get(fullKeyLower);
+          if (config) {
+            const displayName = config.display_name || `${mf.namespace}.${mf.key}`;
             result[shopifyId][displayName] = mf.value;
           }
         }

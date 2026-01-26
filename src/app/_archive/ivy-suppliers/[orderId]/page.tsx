@@ -9,7 +9,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { useShop } from '@/context/ShopContext';
 import { useLocation } from '@/context/LocationContext';
 import { ProductCard, ProductData } from '@/components/Inventory';
-import { getColorHex } from '@/utils/colorMap';
+import { getColorHex } from '@/utils/color-transformer';
 import styles from './order-detail.module.scss';
 
 // Ordre des tailles pour le tri

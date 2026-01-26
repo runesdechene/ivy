@@ -151,3 +151,12 @@ export function getColorHex(color: string): string {
   
   return '#808080';
 }
+
+/**
+ * Vérifie si un nom d'option correspond à une option de type couleur
+ */
+export function isColorOption(optionName: string): boolean {
+  if (!optionName) return false;
+  const normalized = optionName.toLowerCase().trim();
+  return normalized === 'couleur' || normalized === 'color' || normalized === 'colour';
+}

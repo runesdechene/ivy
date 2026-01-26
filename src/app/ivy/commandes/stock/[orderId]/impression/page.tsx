@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Title, Text, Paper, Button, Group, Badge, Checkbox, Loader, Center, Progress, SimpleGrid, Stack, Divider } from '@mantine/core';
 import { IconArrowLeft, IconPrinter, IconCheck } from '@tabler/icons-react';
 import { useShop } from '@/context/ShopContext';
-import { getColorHex } from '@/utils/colorMap';
+import { getColorHex, loadColorMappingsFromSupabase } from '@/utils/color-transformer';
 import styles from './impression.module.scss';
 
 interface OrderItem {
@@ -47,6 +47,9 @@ export default function FeuilleImpressionPage() {
     
     setLoading(true);
     try {
+      // Charger les mappings de couleurs
+      await loadColorMappingsFromSupabase(currentShop.id);
+      
       const response = await fetch(`/api/suppliers/orders/${orderId}?shopId=${currentShop.id}`);
       if (response.ok) {
         const data = await response.json();
@@ -235,11 +238,8 @@ export default function FeuilleImpressionPage() {
           <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing="md">
             {groupedItems.map((group) => {
               const allPrinted = group.printedCount === group.quantity;
-              const colorOption = group.variant_title?.split('/').find(part => 
-                getColorHex(part.trim()) !== null
-              );
-              const colorHex = colorOption ? getColorHex(colorOption.trim()) : null;
-              const sizeOption = group.variant_title?.split('/').pop()?.trim();
+              // Parser toutes les options du variant_title
+              const allOptions = group.variant_title?.split('/').map(part => part.trim()).filter(Boolean) || [];
 
               return (
                 <Paper 
@@ -287,27 +287,42 @@ export default function FeuilleImpressionPage() {
                       {group.sku || 'Sans SKU'}
                     </Badge>
 
-                    {/* Couleur et Taille */}
-                    <Group gap="xs">
-                      {colorHex && (
-                        <Group gap={4}>
-                          <div
-                            style={{
-                              width: 20,
-                              height: 20,
-                              borderRadius: '50%',
-                              background: colorHex,
-                              border: '2px solid #ddd',
-                            }}
-                          />
-                          <Text size="sm">{colorOption?.trim()}</Text>
-                        </Group>
-                      )}
-                      {sizeOption && (
-                        <Badge variant="filled" color="blue" size="lg">
-                          {sizeOption}
-                        </Badge>
-                      )}
+                    {/* Toutes les options (couleur, taille, impression, etc.) */}
+                    <Group gap="xs" wrap="wrap">
+                      {allOptions.map((option, idx) => {
+                        const colorHex = getColorHex(option);
+                        // Si c'est une couleur reconnue, afficher avec la pastille
+                        if (colorHex && colorHex !== '#808080') {
+                          return (
+                            <Group key={idx} gap={4}>
+                              <div
+                                style={{
+                                  width: 16,
+                                  height: 16,
+                                  borderRadius: '50%',
+                                  background: colorHex,
+                                  border: '1px solid #ddd',
+                                }}
+                              />
+                              <Text size="sm">{option}</Text>
+                            </Group>
+                          );
+                        }
+                        // Si c'est une taille (dernière option généralement), badge bleu
+                        if (idx === allOptions.length - 1 && /^(XXXS|XXS|XS|S|M|L|XL|XXL|2XL|3XL|4XL|5XL|\d+)$/i.test(option)) {
+                          return (
+                            <Badge key={idx} variant="filled" color="blue" size="lg">
+                              {option}
+                            </Badge>
+                          );
+                        }
+                        // Sinon, badge gris pour les autres options
+                        return (
+                          <Badge key={idx} variant="light" color="gray" size="sm">
+                            {option}
+                          </Badge>
+                        );
+                      })}
                     </Group>
 
                     {/* Métachamps */}
