@@ -71,7 +71,6 @@ export default function PriceRulesPage() {
   const [modalOpened, { open: openModal, close: closeModal }] = useDisclosure(false);
 
   // État pour le formulaire
-  const [formSku, setFormSku] = useState('');
   const [formBasePrice, setFormBasePrice] = useState<number>(0);
   const [formDescription, setFormDescription] = useState('');
   const [formProductType, setFormProductType] = useState('');
@@ -120,7 +119,6 @@ export default function PriceRulesPage() {
   }, [fetchData]);
 
   const resetForm = () => {
-    setFormSku('');
     setFormBasePrice(0);
     setFormDescription('');
     setFormProductType('');
@@ -143,7 +141,6 @@ export default function PriceRulesPage() {
 
   const openEditModal = (rule: PriceRule) => {
     setEditingRule(rule);
-    setFormSku(rule.sku);
     setFormBasePrice(rule.base_price);
     setFormDescription(rule.description || '');
     setFormProductType(rule.product_type || '');
@@ -211,10 +208,10 @@ export default function PriceRulesPage() {
   };
 
   const saveRule = async () => {
-    if (!currentShop || !formSku.trim()) {
+    if (!currentShop || !formProductType.trim()) {
       notifications.show({
         title: 'Erreur',
-        message: 'Le SKU est obligatoire',
+        message: 'Le type de produit est obligatoire',
         color: 'red',
       });
       return;
@@ -227,19 +224,19 @@ export default function PriceRulesPage() {
       const body = editingRule
         ? {
             id: editingRule.id,
-            sku: formSku,
+            sku: formProductType, // On utilise le type comme identifiant
             basePrice: formBasePrice,
             description: formDescription || null,
-            productType: formProductType || null,
+            productType: formProductType,
             modifiers: formModifiers,
             optionModifiers: formOptionModifiers,
           }
         : {
             shopId: currentShop.id,
-            sku: formSku,
+            sku: formProductType, // On utilise le type comme identifiant
             basePrice: formBasePrice,
             description: formDescription || null,
-            productType: formProductType || null,
+            productType: formProductType,
             modifiers: formModifiers,
             optionModifiers: formOptionModifiers,
           };
@@ -713,10 +710,11 @@ export default function PriceRulesPage() {
       >
         <Stack gap="md">
           <TextInput
-            label="SKU"
-            placeholder="Ex: CRAFTER"
-            value={formSku}
-            onChange={(e) => setFormSku(e.target.value.toUpperCase())}
+            label="Type de produit"
+            placeholder="Ex: T-shirt, Sweat, Hoodie..."
+            value={formProductType}
+            onChange={(e) => setFormProductType(e.target.value)}
+            description="Doit correspondre exactement au type de produit dans Shopify"
             required
           />
 
@@ -736,14 +734,6 @@ export default function PriceRulesPage() {
             placeholder="Ex: T-shirt basique"
             value={formDescription}
             onChange={(e) => setFormDescription(e.target.value)}
-          />
-
-          <TextInput
-            label="Type de produit (optionnel)"
-            placeholder="Ex: T-shirt, Sweat, Hoodie..."
-            value={formProductType}
-            onChange={(e) => setFormProductType(e.target.value)}
-            description="Filtre les variantes par type de produit Shopify"
           />
 
           <Paper withBorder p="md" radius="md">
