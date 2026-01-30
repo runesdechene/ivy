@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
         option2,
         option3,
         cost,
+        price,
         product:products!inner(
           id,
           title,
@@ -54,17 +55,18 @@ export async function GET(request: NextRequest) {
 
     // Calculer les statistiques
     const stats = {
-      totalVariants: 0,
       totalStock: 0,
       totalStockValue: 0,
-      byProductType: {} as Record<string, { count: number; stock: number; value: number }>,
+      totalSaleValue: 0,
+      potentialProfit: 0,
+      byProductType: {} as Record<string, { count: number; stock: number; value: number; saleValue: number }>,
       byColor: {} as Record<string, { count: number; stock: number }>,
       bySize: {} as Record<string, { count: number; stock: number }>,
-      topProducts: [] as { title: string; stock: number; value: number }[],
+      topProducts: [] as { title: string; stock: number; value: number; saleValue: number }[],
     };
 
     // Map pour agréger par produit
-    const productStats = new Map<string, { title: string; stock: number; value: number }>();
+    const productStats = new Map<string, { title: string; stock: number; value: number; saleValue: number }>();
 
     // Patterns pour détecter les tailles
     const sizePattern = /^(XXXS|XXS|XS|S|M|L|XL|XXL|2XL|3XL|4XL|5XL|\d+)$/i;
@@ -74,20 +76,23 @@ export async function GET(request: NextRequest) {
       const inventoryLevels = variant.inventory_levels || [];
       const totalQuantity = inventoryLevels.reduce((sum: number, il: any) => sum + (il.quantity || 0), 0);
       const cost = variant.cost || 0;
-      const variantValue = totalQuantity * cost;
+      const price = variant.price || 0;
+      const variantCostValue = totalQuantity * cost;
+      const variantSaleValue = totalQuantity * price;
 
-      stats.totalVariants++;
       stats.totalStock += totalQuantity;
-      stats.totalStockValue += variantValue;
+      stats.totalStockValue += variantCostValue;
+      stats.totalSaleValue += variantSaleValue;
 
       // Par type de produit
       const productType = product?.product_type || 'Non défini';
       if (!stats.byProductType[productType]) {
-        stats.byProductType[productType] = { count: 0, stock: 0, value: 0 };
+        stats.byProductType[productType] = { count: 0, stock: 0, value: 0, saleValue: 0 };
       }
       stats.byProductType[productType].count++;
       stats.byProductType[productType].stock += totalQuantity;
-      stats.byProductType[productType].value += variantValue;
+      stats.byProductType[productType].value += variantCostValue;
+      stats.byProductType[productType].saleValue += variantSaleValue;
 
       // Analyser les options pour couleur et taille
       const options = [variant.option1, variant.option2, variant.option3].filter(Boolean);
@@ -119,9 +124,10 @@ export async function GET(request: NextRequest) {
       const existing = productStats.get(productTitle);
       if (existing) {
         existing.stock += totalQuantity;
-        existing.value += variantValue;
+        existing.value += variantCostValue;
+        existing.saleValue += variantSaleValue;
       } else {
-        productStats.set(productTitle, { title: productTitle, stock: totalQuantity, value: variantValue });
+        productStats.set(productTitle, { title: productTitle, stock: totalQuantity, value: variantCostValue, saleValue: variantSaleValue });
       }
     }
 
@@ -144,6 +150,9 @@ export async function GET(request: NextRequest) {
     const sortedTypes = Object.entries(stats.byProductType)
       .sort((a, b) => b[1].stock - a[1].stock);
     stats.byProductType = Object.fromEntries(sortedTypes);
+
+    // Calculer le profit potentiel
+    stats.potentialProfit = stats.totalSaleValue - stats.totalStockValue;
 
     return NextResponse.json(stats);
 

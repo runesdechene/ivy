@@ -14,13 +14,14 @@ import { useLocation } from '@/context/LocationContext';
 import { getColorHex, loadColorMappingsFromSupabase } from '@/utils/color-transformer';
 
 interface Stats {
-  totalVariants: number;
   totalStock: number;
   totalStockValue: number;
-  byProductType: Record<string, { count: number; stock: number; value: number }>;
+  totalSaleValue: number;
+  potentialProfit: number;
+  byProductType: Record<string, { count: number; stock: number; value: number; saleValue: number }>;
   byColor: Record<string, { count: number; stock: number }>;
   bySize: Record<string, { count: number; stock: number }>;
-  topProducts: { title: string; stock: number; value: number }[];
+  topProducts: { title: string; stock: number; value: number; saleValue: number }[];
 }
 
 export default function InventaireDashboardPage() {
@@ -105,10 +106,10 @@ export default function InventaireDashboardPage() {
           <Group justify="space-between">
             <div>
               <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
-                Variantes en stock
+                Unités en stock
               </Text>
               <Text fw={700} size="xl">
-                {stats.totalVariants.toLocaleString('fr-FR')}
+                {stats.totalStock.toLocaleString('fr-FR')}
               </Text>
             </div>
             <ThemeIcon color="blue" variant="light" size={48} radius="md">
@@ -121,10 +122,26 @@ export default function InventaireDashboardPage() {
           <Group justify="space-between">
             <div>
               <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
-                Unités en stock
+                Coût du stock
               </Text>
               <Text fw={700} size="xl">
-                {stats.totalStock.toLocaleString('fr-FR')}
+                {stats.totalStockValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €
+              </Text>
+            </div>
+            <ThemeIcon color="orange" variant="light" size={48} radius="md">
+              <IconCurrencyEuro size={24} />
+            </ThemeIcon>
+          </Group>
+        </Paper>
+
+        <Paper withBorder p="md" radius="md">
+          <Group justify="space-between">
+            <div>
+              <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
+                Valeur de vente
+              </Text>
+              <Text fw={700} size="xl">
+                {stats.totalSaleValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €
               </Text>
             </div>
             <ThemeIcon color="teal" variant="light" size={48} radius="md">
@@ -137,29 +154,13 @@ export default function InventaireDashboardPage() {
           <Group justify="space-between">
             <div>
               <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
-                Valeur estimée
+                Profit potentiel
               </Text>
-              <Text fw={700} size="xl">
-                {stats.totalStockValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €
+              <Text fw={700} size="xl" c={stats.potentialProfit >= 0 ? 'green' : 'red'}>
+                {stats.potentialProfit.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €
               </Text>
             </div>
             <ThemeIcon color="green" variant="light" size={48} radius="md">
-              <IconCurrencyEuro size={24} />
-            </ThemeIcon>
-          </Group>
-        </Paper>
-
-        <Paper withBorder p="md" radius="md">
-          <Group justify="space-between">
-            <div>
-              <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
-                Types de produits
-              </Text>
-              <Text fw={700} size="xl">
-                {Object.keys(stats.byProductType).length}
-              </Text>
-            </div>
-            <ThemeIcon color="violet" variant="light" size={48} radius="md">
               <IconTrendingUp size={24} />
             </ThemeIcon>
           </Group>

@@ -248,6 +248,7 @@ export async function GET(request: NextRequest) {
             // Récupérer le coût depuis notre map
             const inventoryItemId = variant.inventory_item_id?.toString();
             const cost = inventoryItemId ? (inventoryItemToCost[inventoryItemId] ?? 0) : 0;
+            const price = variant.price ? parseFloat(variant.price) : 0;
 
             variantsToUpsert.push({
               product_id: productId,
@@ -259,6 +260,7 @@ export async function GET(request: NextRequest) {
               option3: variant.option3,
               inventory_item_id: inventoryItemId,
               cost: cost,
+              price: price,
             });
 
             if (variant.inventory_item_id) {
