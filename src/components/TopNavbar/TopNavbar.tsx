@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { Button, Group, Text, ActionIcon, Tooltip } from '@mantine/core';
-import { IconLogout, IconSettings } from '@tabler/icons-react';
+import { IconLogout, IconSettings, IconCash } from '@tabler/icons-react';
 import Image from 'next/image';
 import { APP_VERSION } from '@/config/version';
 import { ShopSelector } from '@/components/ShopSelector';
@@ -16,6 +16,7 @@ export function TopNavbar() {
   
   const isCommandesSection = pathname.startsWith('/ivy/commandes');
   const isInventaireSection = pathname.startsWith('/ivy/inventaire');
+  const isCaisseSection = pathname.startsWith('/ivy/caisse');
 
   const handleLogout = async () => {
     try {
@@ -55,6 +56,16 @@ export function TopNavbar() {
             className={isInventaireSection ? styles.activeButton : styles.inactiveButton}
           >
             Inventaire
+          </Button>
+          <Button
+            variant={isCaisseSection ? 'filled' : 'subtle'}
+            color="orange"
+            onClick={() => router.push('/ivy/caisse')}
+            size="md"
+            leftSection={<IconCash size={18} />}
+            className={isCaisseSection ? styles.activeButton : styles.inactiveButton}
+          >
+            Caisse
           </Button>
         </Group>
       </Group>

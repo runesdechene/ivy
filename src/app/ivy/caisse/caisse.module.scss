@@ -1,0 +1,348 @@
+.caisseLayout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--mantine-color-gray-1);
+}
+
+.caisseHeader {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.locationFloating {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.caisseMain {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  padding-top: 0;
+}
+
+.caisseContainer {
+  display: flex;
+  flex: 1;
+  height: 100%;
+  overflow: hidden;
+}
+
+.selectionZone {
+  flex: 1;
+  display: flex;
+  padding: 1rem;
+  padding-top: 4rem; // Espace pour le header flottant
+  gap: 0.5rem;
+  overflow-x: auto;
+  background: var(--mantine-color-gray-1);
+}
+
+.cartZone {
+  width: 320px;
+  min-width: 320px;
+  display: flex;
+  flex-direction: column;
+  background: var(--mantine-color-white);
+  border-left: 1px solid var(--mantine-color-gray-3);
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
+  max-width: 180px;
+  max-height: 100%;
+  background: var(--mantine-color-white);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.columnHeader {
+  padding: 0.75rem;
+  background: var(--mantine-color-orange-6);
+  color: white;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.columnContent {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-height: 0; // Important pour permettre le scroll dans un flex container
+}
+
+.optionButton {
+  padding: 0.5rem;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background: var(--mantine-color-gray-0);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 0.8rem;
+  text-align: left;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem;
+  overflow: hidden;
+
+  span:first-child {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &:hover {
+    background: var(--mantine-color-orange-0);
+    border-color: var(--mantine-color-orange-3);
+  }
+
+  &.selected {
+    background: var(--mantine-color-orange-1);
+    border-color: var(--mantine-color-orange-5);
+    font-weight: 600;
+  }
+
+  &.outOfStock {
+    opacity: 0.7;
+    background: var(--mantine-color-yellow-0);
+  }
+}
+
+.colorSwatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--mantine-color-gray-4);
+  flex-shrink: 0;
+}
+
+.stockWarning {
+  color: var(--mantine-color-yellow-7);
+  font-size: 0.8rem;
+}
+
+.stockCount {
+  font-size: 0.75rem;
+  color: var(--mantine-color-gray-5);
+  font-weight: 400;
+  margin-left: 0.25rem;
+}
+
+// Cart Zone
+.cartHeader {
+  padding: 1rem;
+  border-bottom: 1px solid var(--mantine-color-gray-3);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cartTitle {
+  font-size: 1.1rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cartItems {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.cartItem {
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: var(--mantine-color-gray-0);
+  margin-bottom: 0.5rem;
+
+  &.refundItem {
+    background: var(--mantine-color-red-0);
+    border: 1px solid var(--mantine-color-red-3);
+  }
+}
+
+.cartItemHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+}
+
+.cartItemName {
+  font-size: 0.85rem;
+  font-weight: 500;
+  line-height: 1.3;
+  flex: 1;
+  padding-right: 0.5rem;
+}
+
+.cartItemDetails {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.quantityControl {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.quantityButton {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--mantine-color-gray-4);
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  font-weight: 600;
+
+  &:hover {
+    background: var(--mantine-color-gray-1);
+  }
+
+  &:active {
+    background: var(--mantine-color-gray-2);
+  }
+}
+
+.quantityValue {
+  min-width: 32px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 1rem;
+
+  &.negative {
+    color: var(--mantine-color-red-6);
+  }
+}
+
+.cartItemPrice {
+  text-align: right;
+}
+
+.unitPrice {
+  font-size: 0.75rem;
+  color: var(--mantine-color-gray-6);
+}
+
+.linePrice {
+  font-weight: 600;
+  font-size: 0.95rem;
+
+  &.negative {
+    color: var(--mantine-color-red-6);
+  }
+}
+
+.discountBadge {
+  font-size: 0.7rem;
+  color: var(--mantine-color-green-7);
+  background: var(--mantine-color-green-0);
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  margin-left: 0.25rem;
+}
+
+.cartFooter {
+  padding: 1rem;
+  border-top: 1px solid var(--mantine-color-gray-3);
+  background: var(--mantine-color-gray-0);
+}
+
+.cartTotals {
+  margin-bottom: 1rem;
+}
+
+.totalRow {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.25rem 0;
+  font-size: 0.9rem;
+
+  &.subtotal {
+    color: var(--mantine-color-gray-6);
+  }
+
+  &.discount {
+    color: var(--mantine-color-green-7);
+  }
+
+  &.grandTotal {
+    font-size: 1.2rem;
+    font-weight: 700;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--mantine-color-gray-4);
+    margin-top: 0.25rem;
+  }
+}
+
+.discountToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem;
+  background: var(--mantine-color-gray-1);
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.discountName {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.confirmButton {
+  width: 100%;
+  height: 56px;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.emptyCart {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--mantine-color-gray-5);
+  padding: 2rem;
+  text-align: center;
+}
+
+.emptyCartIcon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}

@@ -1,5 +1,11 @@
 @use "../style/_mantine.scss" as *;
 
+.fullscreen {
+  min-height: calc(100vh - 60px);
+  max-height: calc(100vh - 60px);
+  overflow: hidden;
+}
+
 .view {
   display: flex;
   min-height: calc(100vh - 60px);
@@ -7,7 +13,6 @@
 
   .menu {
     position: sticky;
-    z-index: 99;
     top: 60px;
     height: calc(100vh - 60px);
     width: $app-menu-width;
