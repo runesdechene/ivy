@@ -3,7 +3,15 @@
 import { useState, useEffect } from 'react';
 import { Modal, Button, Select, Text, Group, Stack, Avatar, Loader, Center } from '@mantine/core';
 import { IconCheck, IconX } from '@tabler/icons-react';
-import { Seller, CartItem } from '../types';
+import { CartItem } from '../types';
+
+interface Seller {
+  id: string;
+  name: string;
+  initials: string | null;
+  color: string | null;
+  isActive: boolean;
+}
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -60,7 +68,8 @@ export function PaymentModal({
           setSellers(data.map(s => ({
             id: s.id,
             name: s.name,
-            avatarUrl: s.avatar_url,
+            initials: s.initials,
+            color: s.color,
             isActive: s.is_active,
           })));
         }
@@ -115,11 +124,11 @@ export function PaymentModal({
                 return (
                   <Group gap="sm">
                     <Avatar 
-                      src={seller?.avatarUrl} 
                       size="sm" 
                       radius="xl"
+                      style={{ backgroundColor: seller?.color || undefined }}
                     >
-                      {seller?.name.charAt(0).toUpperCase()}
+                      {seller?.initials || seller?.name.charAt(0).toUpperCase()}
                     </Avatar>
                     <span>{option.label}</span>
                   </Group>

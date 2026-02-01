@@ -5,9 +5,11 @@ CREATE TABLE IF NOT EXISTS pos_sellers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
   name VARCHAR(100) NOT NULL,
-  avatar_url TEXT,
+  initials VARCHAR(2),
+  color VARCHAR(20),
   is_active BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Règles de remise dynamiques
