@@ -4,7 +4,7 @@ import styles from './IvyLayout.module.scss';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import clsx from 'clsx';
-import { IconPalette, IconTag, IconShoppingCart, IconCurrencyEuro, IconDiscount, IconUsers } from '@tabler/icons-react';
+import { IconPalette, IconTag, IconShoppingCart, IconCurrencyEuro, IconDiscount, IconUsers, IconPlug } from '@tabler/icons-react';
 
 interface ParametresLayoutProps {
   children: React.ReactNode;

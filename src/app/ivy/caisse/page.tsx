@@ -71,7 +71,7 @@ export default function CaissePage() {
     productSelection.resetSelection();
   }, [cart, productSelection]);
 
-  const handleConfirmPayment = async (sellerId: string | null) => {
+  const handleConfirmPayment = async (sellerId: string | null, customerEmail: string | null, customerPhone: string | null) => {
     if (!currentShop || cart.items.length === 0) return;
 
     setProcessingPayment(true);
@@ -84,6 +84,8 @@ export default function CaissePage() {
           shopId: currentShop.id,
           locationId: currentLocation?.id || null,
           sellerId,
+          customerEmail,
+          customerPhone,
           discountRuleId: cart.activeDiscountRule?.id || null,
           subtotal: cart.subtotal,
           discountAmount: cart.totalDiscount,

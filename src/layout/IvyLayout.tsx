@@ -7,7 +7,7 @@ import Link from 'next/link';
 import clsx from 'clsx';
 import { Button } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconHome, IconPackage, IconTruck, IconChartBar, IconPrinter, IconShoppingCart, IconFileInvoice, IconArchive, IconRefresh, IconChecklist } from '@tabler/icons-react';
+import { IconHome, IconPackage, IconTruck, IconChartBar, IconPrinter, IconShoppingCart, IconFileInvoice, IconArchive, IconRefresh, IconChecklist, IconHistory, IconCash, IconChartPie } from '@tabler/icons-react';
 import { LocationProvider } from '@/context/LocationContext';
 import { LocationSelector } from '@/components/LocationSelector';
 import { useShop } from '@/context/ShopContext';
@@ -23,6 +23,7 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
   
   const isCommandesSection = pathname.startsWith('/ivy/commandes');
   const isInventaireSection = pathname.startsWith('/ivy/inventaire');
+  const isStandSection = pathname.startsWith('/ivy/stand');
   const isCaisseSection = pathname.startsWith('/ivy/caisse');
 
   const handleSync = async () => {
@@ -79,7 +80,7 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
       ],
     },
     {
-      title: 'Commandes boutique',
+      title: 'Atelier',
       items: [
         {
           href: '/ivy/commandes/boutique',
@@ -143,18 +144,44 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
     },
   ];
 
-  const menuCategories = isCommandesSection ? commandesMenu : inventaireMenu;
+  const standMenu = [
+    {
+      title: 'Commandes stand',
+      items: [
+        {
+          href: '/ivy/stand',
+          label: 'Tableau de bord',
+          icon: IconHome,
+          exact: true,
+        },
+        {
+          href: '/ivy/stand/historique',
+          label: 'Historique',
+          icon: IconHistory,
+        },
+      ],
+    },
+  ];
+
+  const menuCategories = isCommandesSection
+    ? commandesMenu
+    : isStandSection
+      ? standMenu
+      : inventaireMenu;
 
   // Section Caisse : pas de sidebar, layout plein écran
   if (isCaisseSection) {
     return <div className={styles.fullscreen}>{children}</div>;
   }
 
+  const showSyncButton = isCommandesSection;
+  const showLocationSelector = isInventaireSection || isStandSection;
+
   return (
     <div className={styles.view}>
       <div className={styles.menu}>
         <div className={styles.menu_header}>
-          {isCommandesSection ? (
+          {showSyncButton ? (
             <Button
               variant="light"
               leftSection={<IconRefresh size={16} />}
@@ -165,9 +192,9 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
             >
               Synchroniser
             </Button>
-          ) : (
+          ) : showLocationSelector ? (
             <LocationSelector />
-          )}
+          ) : null}
         </div>
         <ul className={styles.menu_links}>
           {menuCategories.map((category) => (

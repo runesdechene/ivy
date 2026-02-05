@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Modal, Button, Select, Text, Group, Stack, Avatar, Loader, Center } from '@mantine/core';
-import { IconCheck, IconX } from '@tabler/icons-react';
+import { Modal, Button, Select, Text, Group, Stack, Avatar, Loader, Center, TextInput, Tabs } from '@mantine/core';
+import { IconCheck, IconX, IconMail, IconPhone } from '@tabler/icons-react';
 import { CartItem } from '../types';
 
 interface Seller {
@@ -22,7 +22,7 @@ const supabase = createClient(
 interface PaymentModalProps {
   opened: boolean;
   onClose: () => void;
-  onConfirm: (sellerId: string | null) => void;
+  onConfirm: (sellerId: string | null, customerEmail: string | null, customerPhone: string | null) => void;
   items: CartItem[];
   subtotal: number;
   totalDiscount: number;
@@ -49,6 +49,8 @@ export function PaymentModal({
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [selectedSellerId, setSelectedSellerId] = useState<string | null>(null);
   const [loadingSellers, setLoadingSellers] = useState(true);
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
 
   // Load sellers
   useEffect(() => {
@@ -88,8 +90,21 @@ export function PaymentModal({
   };
 
   const handleConfirm = () => {
-    onConfirm(selectedSellerId);
+    onConfirm(
+      selectedSellerId, 
+      customerEmail.trim() || null, 
+      customerPhone.trim() || null
+    );
   };
+
+  // Reset form when modal closes
+  useEffect(() => {
+    if (!opened) {
+      setCustomerEmail('');
+      setCustomerPhone('');
+      setSelectedSellerId(null);
+    }
+  }, [opened]);
 
   return (
     <Modal
@@ -136,6 +151,27 @@ export function PaymentModal({
               }}
             />
           )}
+        </div>
+
+        {/* Customer Info (optional) */}
+        <div>
+          <Text size="sm" fw={500} mb="xs">Client (optionnel)</Text>
+          <Group grow>
+            <TextInput
+              placeholder="Email"
+              leftSection={<IconMail size={16} />}
+              value={customerEmail}
+              onChange={(e) => setCustomerEmail(e.target.value)}
+              type="email"
+            />
+            <TextInput
+              placeholder="Téléphone"
+              leftSection={<IconPhone size={16} />}
+              value={customerPhone}
+              onChange={(e) => setCustomerPhone(e.target.value)}
+              type="tel"
+            />
+          </Group>
         </div>
 
         {/* Summary */}

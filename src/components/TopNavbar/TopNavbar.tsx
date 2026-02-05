@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { Button, Group, Text, ActionIcon, Tooltip } from '@mantine/core';
-import { IconLogout, IconSettings, IconCash } from '@tabler/icons-react';
+import { IconLogout, IconSettings, IconCash, IconBuildingStore, IconTent } from '@tabler/icons-react';
 import Image from 'next/image';
 import { APP_VERSION } from '@/config/version';
 import { ShopSelector } from '@/components/ShopSelector';
@@ -16,6 +16,7 @@ export function TopNavbar() {
   
   const isCommandesSection = pathname.startsWith('/ivy/commandes');
   const isInventaireSection = pathname.startsWith('/ivy/inventaire');
+  const isStandSection = pathname.startsWith('/ivy/stand');
   const isCaisseSection = pathname.startsWith('/ivy/caisse');
 
   const handleLogout = async () => {
@@ -44,9 +45,20 @@ export function TopNavbar() {
             color="orange"
             onClick={() => router.push('/ivy/commandes')}
             size="md"
+            leftSection={<IconBuildingStore size={18} />}
             className={isCommandesSection ? styles.activeButton : styles.inactiveButton}
           >
-            Commandes
+            Atelier
+          </Button>
+          <Button
+            variant={isStandSection ? 'filled' : 'subtle'}
+            color="orange"
+            onClick={() => router.push('/ivy/stand')}
+            size="md"
+            leftSection={<IconTent size={18} />}
+            className={isStandSection ? styles.activeButton : styles.inactiveButton}
+          >
+            Commandes stand
           </Button>
           <Button
             variant={isInventaireSection ? 'filled' : 'subtle'}
