@@ -248,32 +248,26 @@ export default function StandHistoriquePage() {
       });
 
       if (res.ok) {
-        notifications.show({ title: 'Modifié', message: 'Commande mise à jour', color: 'green' });
+        const data = await res.json();
+        notifications.show({ title: 'Commande modifiée', message: 'Les données de la vente ont été mises à jour', color: 'green' });
+
+        // Show stock adjustment results
+        const stockAdj = data.stockAdjustments || [];
+        if (stockAdj.length > 0) {
+          const localOk = stockAdj.filter((s: any) => s.localOk).length;
+          const shopifyOk = stockAdj.filter((s: any) => s.shopifyOk).length;
+          notifications.show({
+            title: 'Stock mis à jour',
+            message: `Inventaire local : ${localOk}/${stockAdj.length} ✓ — Shopify : ${shopifyOk}/${stockAdj.length} ✓`,
+            color: shopifyOk === stockAdj.length ? 'green' : 'orange',
+            autoClose: 6000,
+          });
+        }
+
         setEditing(false);
         setDetailModalOpen(false);
-        // Reload
-        setPage(p => p);
-        // Force reload by toggling a dep
-        const loadSales = async () => {
-          setLoading(true);
-          let countQuery = supabase.from('pos_sales').select('id', { count: 'exact', head: true }).eq('shop_id', currentShop!.id);
-          if (filterType === 'refund') countQuery = countQuery.eq('is_refund', true);
-          else if (filterType === 'sale') countQuery = countQuery.eq('is_refund', false);
-          if (dateRange[0]) { const d = typeof dateRange[0] === 'string' ? new Date(dateRange[0]) : dateRange[0]; countQuery = countQuery.gte('created_at', d.toISOString()); }
-          if (dateRange[1]) { const d = typeof dateRange[1] === 'string' ? new Date(dateRange[1]) : new Date(dateRange[1]); d.setHours(23,59,59,999); countQuery = countQuery.lte('created_at', d.toISOString()); }
-          const { count } = await countQuery;
-          setTotalPages(Math.ceil((count || 0) / PAGE_SIZE));
-
-          let query = supabase.from('pos_sales').select(`id, created_at, subtotal, discount_amount, total_amount, items_count, is_refund, customer_email, customer_phone, seller:pos_sellers(name, initials, color), location:locations(name), discount_rule:pos_discount_rules(name)`).eq('shop_id', currentShop!.id).order('created_at', { ascending: false }).range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
-          if (filterType === 'refund') query = query.eq('is_refund', true);
-          else if (filterType === 'sale') query = query.eq('is_refund', false);
-          if (dateRange[0]) { const d = typeof dateRange[0] === 'string' ? new Date(dateRange[0]) : dateRange[0]; query = query.gte('created_at', d.toISOString()); }
-          if (dateRange[1]) { const d = typeof dateRange[1] === 'string' ? new Date(dateRange[1]) : new Date(dateRange[1]); d.setHours(23,59,59,999); query = query.lte('created_at', d.toISOString()); }
-          const { data } = await query;
-          setSales((data || []).map((s: any) => ({ ...s, seller: s.seller?.[0] || s.seller || null, location: s.location?.[0] || s.location || null, discount_rule: s.discount_rule?.[0] || s.discount_rule || null, items: [] })));
-          setLoading(false);
-        };
-        loadSales();
+        // Force reload
+        window.location.reload();
       } else {
         notifications.show({ title: 'Erreur', message: 'Impossible de modifier', color: 'red' });
       }
@@ -291,11 +285,24 @@ export default function StandHistoriquePage() {
     try {
       const res = await fetch(`/api/pos/sales?saleId=${selectedSale.id}`, { method: 'DELETE' });
       if (res.ok) {
-        notifications.show({ title: 'Supprimé', message: 'Commande supprimée', color: 'green' });
+        const data = await res.json();
+        notifications.show({ title: 'Commande supprimée', message: 'La vente a été supprimée', color: 'green' });
+
+        // Show stock restoration results
+        const stockAdj = data.stockAdjustments || [];
+        if (stockAdj.length > 0) {
+          const localOk = stockAdj.filter((s: any) => s.localOk).length;
+          const shopifyOk = stockAdj.filter((s: any) => s.shopifyOk).length;
+          notifications.show({
+            title: 'Stock restauré',
+            message: `Inventaire local : ${localOk}/${stockAdj.length} ✓ — Shopify : ${shopifyOk}/${stockAdj.length} ✓`,
+            color: shopifyOk === stockAdj.length ? 'green' : 'orange',
+            autoClose: 6000,
+          });
+        }
+
         setDetailModalOpen(false);
         setSelectedSale(null);
-        // Reload sales list
-        setFilterType(prev => prev);
         window.location.reload();
       } else {
         notifications.show({ title: 'Erreur', message: 'Impossible de supprimer', color: 'red' });

@@ -137,6 +137,9 @@ export default function CaissePage() {
 
       cart.clearCart();
       setPaymentModalOpen(false);
+
+      // Refresh inventory to reflect stock changes
+      productSelection.refreshInventory();
     } catch (error) {
       console.error('Payment error:', error);
       notifications.show({

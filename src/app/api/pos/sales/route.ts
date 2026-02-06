@@ -188,6 +188,96 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// Adjust stock for a list of variant changes (local Supabase + Shopify)
+async function adjustStock(shopId: string, locationId: string | null, changes: { variantId: string; quantity: number }[]): Promise<{ results: any[] }> {
+  if (!locationId || changes.length === 0) return { results: [] };
+
+  // Get shop for Shopify credentials
+  const { data: shop } = await supabase
+    .from('shops')
+    .select('shopify_url, shopify_token')
+    .eq('id', shopId)
+    .single();
+
+  const results: { variantId: string; success: boolean; localOk: boolean; shopifyOk: boolean; error?: string }[] = [];
+
+  for (const change of changes) {
+    if (change.quantity === 0) continue;
+
+    const resolvedId = await resolveVariantId(change.variantId);
+    if (!resolvedId) {
+      results.push({ variantId: change.variantId, success: false, localOk: false, shopifyOk: false, error: 'Variant not found' });
+      continue;
+    }
+
+    let localOk = false;
+    let shopifyOk = false;
+
+    // Update local inventory
+    const { data: currentLevel } = await supabase
+      .from('inventory_levels')
+      .select('quantity')
+      .eq('variant_id', resolvedId)
+      .eq('location_id', locationId)
+      .single();
+
+    const newQuantity = (currentLevel?.quantity || 0) + change.quantity;
+
+    const { error: updateError } = await supabase
+      .from('inventory_levels')
+      .upsert({
+        variant_id: resolvedId,
+        location_id: locationId,
+        quantity: newQuantity,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'variant_id,location_id' });
+
+    localOk = !updateError;
+    if (updateError) console.error('Local inventory update error:', updateError);
+
+    // Sync with Shopify
+    if (shop?.shopify_url && shop?.shopify_token) {
+      const { data: variant } = await supabase
+        .from('product_variants')
+        .select('inventory_item_id')
+        .eq('id', resolvedId)
+        .single();
+
+      if (variant?.inventory_item_id) {
+        // locationId is a Shopify ID (TEXT), use it directly
+        try {
+          const shopifyResponse = await fetch(
+            `https://${shop.shopify_url}/admin/api/2024-01/inventory_levels/adjust.json`,
+            {
+              method: 'POST',
+              headers: {
+                'X-Shopify-Access-Token': shop.shopify_token,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                location_id: locationId,
+                inventory_item_id: variant.inventory_item_id,
+                available_adjustment: change.quantity,
+              }),
+            }
+          );
+          shopifyOk = shopifyResponse.ok;
+          if (!shopifyResponse.ok) {
+            const errData = await shopifyResponse.json().catch(() => ({}));
+            console.error('Shopify inventory adjust error:', errData);
+          }
+        } catch (e) {
+          console.error('Shopify sync error:', e);
+        }
+      }
+    }
+
+    results.push({ variantId: change.variantId, success: localOk, localOk, shopifyOk });
+  }
+
+  return { results };
+}
+
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
@@ -196,6 +286,13 @@ export async function PUT(request: NextRequest) {
     if (!saleId) {
       return NextResponse.json({ error: 'Missing saleId' }, { status: 400 });
     }
+
+    // Get the sale with its current items and location for stock adjustment
+    const { data: sale } = await supabase
+      .from('pos_sales')
+      .select('shop_id, location_id, is_refund')
+      .eq('id', saleId)
+      .single();
 
     // Update sale header
     const updates: Record<string, any> = {};
@@ -225,23 +322,73 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    // If items provided, replace all sale items
-    if (items && items.length > 0) {
+    // If items provided, compute stock diff and replace items
+    let stockResults: any[] = [];
+    if (items && items.length > 0 && sale) {
+      // Get old items
+      const { data: oldItems } = await supabase
+        .from('pos_sale_items')
+        .select('variant_id, quantity')
+        .eq('sale_id', saleId);
+
+      // Build old qty map (variant_id -> total quantity)
+      const oldQtyMap = new Map<string, number>();
+      (oldItems || []).forEach((oi: any) => {
+        oldQtyMap.set(oi.variant_id, (oldQtyMap.get(oi.variant_id) || 0) + oi.quantity);
+      });
+
+      // Build new qty map
+      const newQtyMap = new Map<string, number>();
+      for (const item of items) {
+        const resolvedId = await resolveVariantId(item.variantId);
+        if (resolvedId) {
+          newQtyMap.set(resolvedId, (newQtyMap.get(resolvedId) || 0) + item.quantity);
+        }
+      }
+
+      // Compute diff: positive = need to add back to stock, negative = need to remove from stock
+      const stockChanges: { variantId: string; quantity: number }[] = [];
+      const allVariantIds = new Set([...oldQtyMap.keys(), ...newQtyMap.keys()]);
+      for (const vid of allVariantIds) {
+        const oldQty = oldQtyMap.get(vid) || 0;
+        const newQty = newQtyMap.get(vid) || 0;
+        const diff = oldQty - newQty; // positive = items removed from sale = add back to stock
+        if (diff !== 0) {
+          stockChanges.push({ variantId: vid, quantity: diff });
+        }
+      }
+
+      // Resolve location_id: sale stores UUID, but inventory_levels uses Shopify ID
+      let shopifyLocationId = sale.location_id;
+      if (sale.location_id && UUID_REGEX.test(sale.location_id)) {
+        const { data: loc } = await supabase.from('locations').select('shopify_id').eq('id', sale.location_id).single();
+        shopifyLocationId = loc?.shopify_id || sale.location_id;
+      }
+
+      if (stockChanges.length > 0) {
+        const result = await adjustStock(sale.shop_id, shopifyLocationId, stockChanges);
+        stockResults = result.results;
+      }
+
       // Delete existing items
       await supabase.from('pos_sale_items').delete().eq('sale_id', saleId);
 
-      // Insert new items
-      const saleItems = items.map((item: any) => ({
-        sale_id: saleId,
-        variant_id: item.variantId,
-        product_title: item.productTitle,
-        variant_title: item.variantTitle || null,
-        quantity: item.quantity,
-        unit_price: item.unitPrice,
-        discount_percentage: item.discountPercentage || 0,
-        discount_amount: item.discountAmount || 0,
-        total_price: item.totalPrice,
-      }));
+      // Insert new items with resolved variant IDs
+      const saleItems = [];
+      for (const item of items) {
+        const resolvedId = await resolveVariantId(item.variantId);
+        saleItems.push({
+          sale_id: saleId,
+          variant_id: resolvedId || item.variantId,
+          product_title: item.productTitle,
+          variant_title: item.variantTitle || null,
+          quantity: item.quantity,
+          unit_price: item.unitPrice,
+          discount_percentage: item.discountPercentage || 0,
+          discount_amount: item.discountAmount || 0,
+          total_price: item.totalPrice,
+        });
+      }
 
       const { error: itemsError } = await supabase
         .from('pos_sale_items')
@@ -252,7 +399,7 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, stockAdjustments: stockResults });
   } catch (error) {
     console.error('Error in PUT /api/pos/sales:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -268,7 +415,38 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Missing saleId' }, { status: 400 });
     }
 
-    // Delete items first (cascade should handle it, but be explicit)
+    // Get sale info + items before deleting
+    const { data: sale } = await supabase
+      .from('pos_sales')
+      .select('shop_id, location_id, is_refund')
+      .eq('id', saleId)
+      .single();
+
+    const { data: saleItems } = await supabase
+      .from('pos_sale_items')
+      .select('variant_id, quantity')
+      .eq('sale_id', saleId);
+
+    // Restore stock (add back sold quantities)
+    let stockResults: any[] = [];
+    if (sale && saleItems && saleItems.length > 0) {
+      // Resolve location_id: sale stores UUID, but inventory_levels uses Shopify ID
+      let shopifyLocationId = sale.location_id;
+      if (sale.location_id && UUID_REGEX.test(sale.location_id)) {
+        const { data: loc } = await supabase.from('locations').select('shopify_id').eq('id', sale.location_id).single();
+        shopifyLocationId = loc?.shopify_id || sale.location_id;
+      }
+
+      const stockChanges = saleItems.map((item: any) => ({
+        variantId: item.variant_id,
+        quantity: item.quantity, // Add back (positive = restore stock)
+      }));
+
+      const result = await adjustStock(sale.shop_id, shopifyLocationId, stockChanges);
+      stockResults = result.results;
+    }
+
+    // Delete items then sale
     await supabase.from('pos_sale_items').delete().eq('sale_id', saleId);
 
     const { error } = await supabase
@@ -280,7 +458,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, stockAdjustments: stockResults });
   } catch (error) {
     console.error('Error in DELETE /api/pos/sales:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

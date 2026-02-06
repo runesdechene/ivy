@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ProductSelection, SelectedProduct, VariantOption } from '../types';
 import { createClient } from '@supabase/supabase-js';
 
@@ -24,6 +24,7 @@ interface UseProductSelectionReturn {
   resetSelection: () => void;
   selectedVariant: VariantOption | null;
   loading: boolean;
+  refreshInventory: () => Promise<void>;
 }
 
 export function useProductSelection(
@@ -41,82 +42,88 @@ export function useProductSelection(
   const [allProducts, setAllProducts] = useState<SelectedProduct[]>([]);
   const [allVariants, setAllVariants] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const shopIdRef = useRef(shopId);
+  const locationIdRef = useRef(locationId);
+  shopIdRef.current = shopId;
+  locationIdRef.current = locationId;
+
+  const loadData = useCallback(async () => {
+    const sid = shopIdRef.current;
+    const lid = locationIdRef.current;
+    if (!sid) return;
+
+    setLoading(true);
+    try {
+      // Load products
+      const { data: products } = await supabase
+        .from('products')
+        .select('id, shopify_id, title, product_type, option1_name, option2_name, option3_name')
+        .eq('shop_id', sid)
+        .eq('status', 'active');
+
+      if (products) {
+        setAllProducts(products.map(p => ({
+          id: p.id,
+          shopifyId: p.shopify_id,
+          title: p.title,
+          productType: p.product_type || 'Non défini',
+          option1Name: p.option1_name,
+          option2Name: p.option2_name,
+          option3Name: p.option3_name,
+        })));
+      }
+
+      // Load variants with inventory levels (only variants that have inventory for this location)
+      let variantsQuery = supabase
+        .from('product_variants')
+        .select(`
+          id,
+          product_id,
+          shopify_id,
+          title,
+          sku,
+          option1,
+          option2,
+          option3,
+          price,
+          cost,
+          inventory_item_id,
+          inventory_levels!inner(quantity, location_id)
+        `);
+
+      if (lid) {
+        variantsQuery = variantsQuery.eq('inventory_levels.location_id', lid);
+      }
+
+      const { data: variants } = await variantsQuery;
+
+      if (variants) {
+        setAllVariants(variants.map(v => ({
+          id: v.id,
+          productId: v.product_id,
+          shopifyId: v.shopify_id,
+          title: v.title,
+          sku: v.sku,
+          option1: v.option1,
+          option2: v.option2,
+          option3: v.option3,
+          price: v.price || 0,
+          cost: v.cost || 0,
+          inventoryItemId: v.inventory_item_id,
+          stock: v.inventory_levels?.reduce((sum: number, il: any) => sum + (il.quantity || 0), 0) || 0,
+        })));
+      }
+    } catch (error) {
+      console.error('Error loading products:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   // Load products and variants
   useEffect(() => {
-    if (!shopId) return;
-
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        // Load products
-        const { data: products } = await supabase
-          .from('products')
-          .select('id, shopify_id, title, product_type, option1_name, option2_name, option3_name')
-          .eq('shop_id', shopId)
-          .eq('status', 'active');
-
-        if (products) {
-          setAllProducts(products.map(p => ({
-            id: p.id,
-            shopifyId: p.shopify_id,
-            title: p.title,
-            productType: p.product_type || 'Non défini',
-            option1Name: p.option1_name,
-            option2Name: p.option2_name,
-            option3Name: p.option3_name,
-          })));
-        }
-
-        // Load variants with inventory levels (only variants that have inventory for this location)
-        let variantsQuery = supabase
-          .from('product_variants')
-          .select(`
-            id,
-            product_id,
-            shopify_id,
-            title,
-            sku,
-            option1,
-            option2,
-            option3,
-            price,
-            cost,
-            inventory_item_id,
-            inventory_levels!inner(quantity, location_id)
-          `);
-
-        if (locationId) {
-          variantsQuery = variantsQuery.eq('inventory_levels.location_id', locationId);
-        }
-
-        const { data: variants } = await variantsQuery;
-
-        if (variants) {
-          setAllVariants(variants.map(v => ({
-            id: v.id,
-            productId: v.product_id,
-            shopifyId: v.shopify_id,
-            title: v.title,
-            sku: v.sku,
-            option1: v.option1,
-            option2: v.option2,
-            option3: v.option3,
-            price: v.price || 0,
-            cost: v.cost || 0,
-            inventoryItemId: v.inventory_item_id,
-            stock: v.inventory_levels?.reduce((sum: number, il: any) => sum + (il.quantity || 0), 0) || 0,
-          })));
-        }
-      } catch (error) {
-        console.error('Error loading products:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadData();
-  }, [shopId, locationId]);
+  }, [shopId, locationId, loadData]);
 
   // Get unique product types with stock count
   const productTypes = useMemo((): VariantOption[] => {
@@ -324,5 +331,6 @@ export function useProductSelection(
     resetSelection,
     selectedVariant,
     loading,
+    refreshInventory: loadData,
   };
 }
