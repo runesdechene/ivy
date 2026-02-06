@@ -52,6 +52,8 @@ export default function FacturationBoutiquePage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [handlingFee, setHandlingFee] = useState(0);
+  // Map: "encodedOrderId::productIndex" -> checkedCount
+  const [checkedCounts, setCheckedCounts] = useState<Record<string, number>>({});
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -89,6 +91,22 @@ export default function FacturationBoutiquePage() {
       );
 
       setOrders(filteredOrders);
+
+      // Charger les checked counts depuis line_item_checks
+      const { data: checks } = await supabase
+        .from('line_item_checks')
+        .select('order_id, product_index')
+        .eq('shop_id', currentShop.id)
+        .eq('checked', true);
+
+      if (checks) {
+        const counts: Record<string, number> = {};
+        for (const check of checks) {
+          const key = `${check.order_id}::${check.product_index}`;
+          counts[key] = (counts[key] || 0) + 1;
+        }
+        setCheckedCounts(counts);
+      }
     } catch (err) {
       console.error('Error fetching data:', err);
     } finally {
@@ -133,6 +151,25 @@ export default function FacturationBoutiquePage() {
     }
   };
 
+  // Recharger les checked counts depuis Supabase
+  const reloadCheckedCounts = useCallback(async () => {
+    if (!currentShop) return;
+    const { data: checks } = await supabase
+      .from('line_item_checks')
+      .select('order_id, product_index')
+      .eq('shop_id', currentShop.id)
+      .eq('checked', true);
+
+    if (checks) {
+      const counts: Record<string, number> = {};
+      for (const check of checks) {
+        const key = `${check.order_id}::${check.product_index}`;
+        counts[key] = (counts[key] || 0) + 1;
+      }
+      setCheckedCounts(counts);
+    }
+  }, [currentShop]);
+
   useEffect(() => {
     fetchData();
   }, [fetchData]);
@@ -140,6 +177,24 @@ export default function FacturationBoutiquePage() {
   useEffect(() => {
     fetchBillingStatus();
   }, [fetchBillingStatus]);
+
+  // Écouter les changements de checks en temps réel
+  useEffect(() => {
+    if (!currentShop) return;
+
+    const channel = supabase
+      .channel('facturation-checks')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'line_item_checks', filter: `shop_id=eq.${currentShop.id}` },
+        () => reloadCheckedCounts()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentShop, reloadCheckedCounts]);
 
   // Grouper les commandes par mois
   const ordersByMonth = orders.reduce<Record<string, Order[]>>((acc, order) => {
@@ -170,11 +225,23 @@ export default function FacturationBoutiquePage() {
     return variantTitle.split(' / ').map(part => transformColor(part)).join(' - ');
   };
 
+  const getItemBilledCost = (order: Order, item: LineItem, index: number): number => {
+    const encodedOrderId = encodeFirestoreId(order.shopify_id);
+    const key = `${encodedOrderId}::${index}`;
+    const checked = checkedCounts[key] || 0;
+    return checked * (item.unitCost || 0);
+  };
+
   const calculateOrderCost = (order: Order): number => {
+    let idx = 0;
     const itemsCost = order.line_items
       .filter(item => !item.isCancelled)
-      .reduce((sum, item) => sum + (item.totalCost || 0), 0);
-    return itemsCost + handlingFee;
+      .reduce((sum, item) => {
+        const cost = getItemBilledCost(order, item, idx);
+        idx++;
+        return sum + cost;
+      }, 0);
+    return itemsCost + (itemsCost > 0 ? handlingFee : 0);
   };
 
   const calculateMonthlyTotal = (monthOrders: Order[]): number => {
@@ -261,10 +328,15 @@ export default function FacturationBoutiquePage() {
               </Table.Thead>
               <Table.Tbody>
                 {currentMonthOrders.map((order) => {
+                  let itemIdx = 0;
                   const itemsCost = order.line_items
                     .filter(item => !item.isCancelled)
-                    .reduce((sum, item) => sum + (item.totalCost || 0), 0);
-                  const totalCost = itemsCost + handlingFee;
+                    .reduce((sum, item) => {
+                      const cost = getItemBilledCost(order, item, itemIdx);
+                      itemIdx++;
+                      return sum + cost;
+                    }, 0);
+                  const totalCost = itemsCost + (itemsCost > 0 ? handlingFee : 0);
 
                   return (
                     <Table.Tr key={order.id}>
@@ -308,9 +380,10 @@ export default function FacturationBoutiquePage() {
                                     )}
                                   </Text>
                                   <Text size="xs" fw={500} style={{ minWidth: 60, textAlign: 'right' }}>
-                                    {item.totalCost !== null && item.totalCost !== undefined && item.totalCost > 0
-                                      ? `${item.totalCost.toFixed(2)} €`
-                                      : '-'}
+                                    {(() => {
+                                      const billedCost = getItemBilledCost(order, item, index);
+                                      return billedCost > 0 ? `${billedCost.toFixed(2)} \u20ac` : '-';
+                                    })()}
                                   </Text>
                                 </Group>
                               );
@@ -337,13 +410,28 @@ export default function FacturationBoutiquePage() {
                   </Table.Td>
                   <Table.Td style={{ textAlign: 'right' }}>
                     <Text fw={600}>
-                      {currentMonthOrders.reduce((sum, o) => 
-                        sum + o.line_items.filter(i => !i.isCancelled).reduce((s, i) => s + (i.totalCost || 0), 0), 0
-                      ).toFixed(2)} €
+                      {currentMonthOrders.reduce((sum, o) => {
+                        let idx = 0;
+                        return sum + o.line_items.filter(i => !i.isCancelled).reduce((s, i) => {
+                          const cost = getItemBilledCost(o, i, idx);
+                          idx++;
+                          return s + cost;
+                        }, 0);
+                      }, 0).toFixed(2)} €
                     </Text>
                   </Table.Td>
                   <Table.Td style={{ textAlign: 'right' }}>
-                    <Text fw={600}>{(handlingFee * currentMonthOrders.length).toFixed(2)} €</Text>
+                    <Text fw={600}>
+                      {currentMonthOrders.reduce((sum, o) => {
+                        let idx = 0;
+                        const hasChecked = o.line_items.filter(i => !i.isCancelled).some(i => {
+                          const cost = getItemBilledCost(o, i, idx);
+                          idx++;
+                          return cost > 0;
+                        });
+                        return sum + (hasChecked ? handlingFee : 0);
+                      }, 0).toFixed(2)} €
+                    </Text>
                   </Table.Td>
                   <Table.Td style={{ textAlign: 'right' }}>
                     <Text fw={700} c="blue" size="lg">

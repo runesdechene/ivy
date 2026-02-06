@@ -73,11 +73,14 @@ export async function GET(request: NextRequest) {
         send('', 'info');
         send('📋 Mise à jour des commandes...', 'info');
 
-        // Récupérer toutes les commandes avec leurs line_items
+        // Récupérer les commandes en cours (non expédiées, non annulées, non remboursées)
         const { data: orders, error: ordersError } = await supabase
           .from('orders')
           .select('id, name, line_items')
-          .eq('shop_id', shopId);
+          .eq('shop_id', shopId)
+          .neq('display_fulfillment_status', 'FULFILLED')
+          .is('cancelled_at', null)
+          .neq('display_financial_status', 'REFUNDED');
 
         if (ordersError || !orders) {
           send('❌ Erreur lors de la récupération des commandes', 'error');

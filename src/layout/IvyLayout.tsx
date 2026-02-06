@@ -159,6 +159,11 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
           label: 'Historique',
           icon: IconHistory,
         },
+        {
+          href: '/ivy/stand/zones',
+          label: 'Zones d\'étude',
+          icon: IconChartPie,
+        },
       ],
     },
   ];

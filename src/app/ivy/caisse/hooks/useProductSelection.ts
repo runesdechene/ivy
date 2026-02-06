@@ -144,7 +144,8 @@ export function useProductSelection(
         const productVariants = allVariants.filter(v => v.productId === p.id);
         const stock = productVariants.reduce((sum, v) => sum + v.stock, 0);
         return { ...p, stock };
-      });
+      })
+      .sort((a, b) => a.title.localeCompare(b.title));
   }, [allProducts, allVariants, selection.type]);
 
   // Get variants for selected product
@@ -165,10 +166,9 @@ export function useProductSelection(
       }
     });
 
-    return Array.from(colorMap.entries()).map(([value, stock]) => ({
-      value,
-      stock,
-    }));
+    return Array.from(colorMap.entries())
+      .map(([value, stock]) => ({ value, stock }))
+      .sort((a, b) => a.value.localeCompare(b.value));
   }, [productVariants, selection.product]);
 
   // Get size options (option2) filtered by color

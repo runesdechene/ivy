@@ -552,12 +552,12 @@ export default function PriceRulesPage() {
                       onClick={(e) => e.stopPropagation()}
                     />
                     <div>
-                      <Text fw={600}>{rule.sku}</Text>
+                      <Text fw={600}>{rule.product_type || rule.sku}</Text>
+                      {rule.sku && rule.sku !== rule.product_type && (
+                        <Text size="xs" c="dimmed">SKU : {rule.sku}</Text>
+                      )}
                       {rule.description && (
                         <Text size="xs" c="dimmed">{rule.description}</Text>
-                      )}
-                      {rule.product_type && (
-                        <Text size="xs" c="blue">Type: {rule.product_type}</Text>
                       )}
                     </div>
                   </Group>

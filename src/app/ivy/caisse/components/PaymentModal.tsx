@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Modal, Button, Select, Text, Group, Stack, Avatar, Loader, Center, TextInput, Tabs } from '@mantine/core';
-import { IconCheck, IconX, IconMail, IconPhone } from '@tabler/icons-react';
+import { Modal, Button, Text, Group, Stack, Avatar, Loader, Center, TextInput, UnstyledButton } from '@mantine/core';
+import { IconCheck, IconX, IconMail } from '@tabler/icons-react';
 import { CartItem } from '../types';
 
 interface Seller {
@@ -125,53 +125,53 @@ export function PaymentModal({
           ) : sellers.length === 0 ? (
             <Text size="sm" c="dimmed">Aucun vendeur configuré</Text>
           ) : (
-            <Select
-              placeholder="Sélectionner un vendeur"
-              data={sellers.map(s => ({
-                value: s.id,
-                label: s.name,
-              }))}
-              value={selectedSellerId}
-              onChange={setSelectedSellerId}
-              clearable
-              renderOption={({ option }) => {
-                const seller = sellers.find(s => s.id === option.value);
+            <Group gap="sm">
+              {sellers.map(seller => {
+                const isSelected = selectedSellerId === seller.id;
                 return (
-                  <Group gap="sm">
-                    <Avatar 
-                      size="sm" 
+                  <UnstyledButton
+                    key={seller.id}
+                    onClick={() => setSelectedSellerId(isSelected ? null : seller.id)}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 4,
+                      padding: '0.5rem',
+                      borderRadius: 8,
+                      border: `2px solid ${isSelected ? (seller.color || 'var(--mantine-color-blue-5)') : 'transparent'}`,
+                      background: isSelected ? 'var(--mantine-color-gray-0)' : 'transparent',
+                      transition: 'all 0.15s ease',
+                      opacity: selectedSellerId && !isSelected ? 0.5 : 1,
+                    }}
+                  >
+                    <Avatar
+                      size="md"
                       radius="xl"
-                      style={{ backgroundColor: seller?.color || undefined }}
+                      style={{ backgroundColor: seller.color || 'var(--mantine-color-gray-5)' }}
                     >
-                      {seller?.initials || seller?.name.charAt(0).toUpperCase()}
+                      {seller.initials || seller.name.charAt(0).toUpperCase()}
                     </Avatar>
-                    <span>{option.label}</span>
-                  </Group>
+                    <Text size="xs" fw={isSelected ? 600 : 400} ta="center">
+                      {seller.name}
+                    </Text>
+                  </UnstyledButton>
                 );
-              }}
-            />
+              })}
+            </Group>
           )}
         </div>
 
         {/* Customer Info (optional) */}
         <div>
           <Text size="sm" fw={500} mb="xs">Client (optionnel)</Text>
-          <Group grow>
-            <TextInput
-              placeholder="Email"
-              leftSection={<IconMail size={16} />}
-              value={customerEmail}
-              onChange={(e) => setCustomerEmail(e.target.value)}
-              type="email"
-            />
-            <TextInput
-              placeholder="Téléphone"
-              leftSection={<IconPhone size={16} />}
-              value={customerPhone}
-              onChange={(e) => setCustomerPhone(e.target.value)}
-              type="tel"
-            />
-          </Group>
+          <TextInput
+            placeholder="Email"
+            leftSection={<IconMail size={16} />}
+            value={customerEmail}
+            onChange={(e) => setCustomerEmail(e.target.value)}
+            type="email"
+          />
         </div>
 
         {/* Summary */}
