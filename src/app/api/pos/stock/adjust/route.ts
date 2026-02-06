@@ -6,6 +6,20 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// Resolve a variant ID that could be a Supabase UUID or a Shopify numeric ID
+async function resolveVariantId(variantId: string): Promise<string | null> {
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(variantId);
+  if (isUuid) return variantId;
+
+  const { data } = await supabase
+    .from('product_variants')
+    .select('id')
+    .eq('shopify_id', variantId)
+    .single();
+
+  return data?.id || null;
+}
+
 interface StockAdjustment {
   variantId: string;
   quantity: number; // Negative to decrease, positive to increase
@@ -45,11 +59,18 @@ export async function POST(request: NextRequest) {
 
     for (const item of items) {
       try {
+        // Resolve variant ID (could be Shopify ID)
+        const resolvedVariantId = await resolveVariantId(item.variantId);
+        if (!resolvedVariantId) {
+          results.push({ variantId: item.variantId, success: false, error: 'Variant not found' });
+          continue;
+        }
+
         // Get variant with inventory_item_id
         const { data: variant, error: variantError } = await supabase
           .from('product_variants')
           .select('id, inventory_item_id')
-          .eq('id', item.variantId)
+          .eq('id', resolvedVariantId)
           .single();
 
         if (variantError || !variant) {
@@ -67,7 +88,7 @@ export async function POST(request: NextRequest) {
           const { data: currentLevel } = await supabase
             .from('inventory_levels')
             .select('quantity')
-            .eq('variant_id', item.variantId)
+            .eq('variant_id', resolvedVariantId)
             .eq('location_id', locationId)
             .single();
 
@@ -76,7 +97,7 @@ export async function POST(request: NextRequest) {
           const { error: updateError } = await supabase
             .from('inventory_levels')
             .upsert({
-              variant_id: item.variantId,
+              variant_id: resolvedVariantId,
               location_id: locationId,
               quantity: newQuantity,
               updated_at: new Date().toISOString(),
@@ -91,14 +112,19 @@ export async function POST(request: NextRequest) {
 
         // Sync with Shopify
         if (variant.inventory_item_id && locationId) {
-          // Get Shopify location ID
-          const { data: location } = await supabase
-            .from('locations')
-            .select('shopify_id')
-            .eq('id', locationId)
-            .single();
+          // Get Shopify location ID (locationId might already be a Shopify ID)
+          const isLocationUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(locationId);
+          let shopifyLocationId = locationId;
+          if (isLocationUuid) {
+            const { data: location } = await supabase
+              .from('locations')
+              .select('shopify_id')
+              .eq('id', locationId)
+              .single();
+            shopifyLocationId = location?.shopify_id || locationId;
+          }
 
-          if (location?.shopify_id) {
+          if (shopifyLocationId) {
             const shopifyResponse = await fetch(
               `https://${shop.shopify_url}/admin/api/2024-01/inventory_levels/adjust.json`,
               {
@@ -108,7 +134,7 @@ export async function POST(request: NextRequest) {
                   'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                  location_id: location.shopify_id,
+                  location_id: shopifyLocationId,
                   inventory_item_id: variant.inventory_item_id,
                   available_adjustment: item.quantity,
                 }),

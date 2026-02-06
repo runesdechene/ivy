@@ -106,7 +106,9 @@ export default function CaissePage() {
       });
 
       if (!response.ok) {
-        throw new Error('Erreur lors de la création de la vente');
+        const errData = await response.json().catch(() => ({}));
+        console.error('Sale creation failed:', response.status, errData);
+        throw new Error(errData?.error || 'Erreur lors de la création de la vente');
       }
 
       // Adjust stock
