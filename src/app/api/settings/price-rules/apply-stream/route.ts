@@ -1,6 +1,5 @@
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { createAdminApiClient } from '@shopify/admin-api-client';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -57,6 +56,85 @@ const GET_VARIANTS_BY_PRODUCT_TYPE_QUERY = `
   }
 `;
 
+// Raw fetch to Shopify GraphQL API — bypasses @shopify/admin-api-client which
+// can throw non-standard errors that silently kill SSE streams.
+async function shopifyGraphQL(
+  shopDomain: string,
+  token: string,
+  query: string,
+  variables: any,
+  send: (message: string, type?: string) => void,
+  maxRetries = 6
+): Promise<any> {
+  const url = `https://${shopDomain}/admin/api/2024-10/graphql.json`;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    let res: Response | undefined;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Shopify-Access-Token': token,
+        },
+        body: JSON.stringify({ query, variables }),
+      });
+
+      // Hard rate-limit (HTTP 429)
+      if (res.status === 429) {
+        const retryAfter = parseFloat(res.headers.get('Retry-After') || '2');
+        const waitMs = Math.max(retryAfter * 1000, 2000) * (attempt + 1);
+        send(`  ⏳ HTTP 429 — pause ${(waitMs / 1000).toFixed(1)}s (tentative ${attempt + 1}/${maxRetries})`, 'info');
+        await new Promise(r => setTimeout(r, waitMs));
+        continue;
+      }
+
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(`HTTP ${res.status}: ${body.slice(0, 200)}`);
+      }
+
+      const json = await res.json();
+
+      // Check for THROTTLED GraphQL error
+      if (json.errors?.some((e: any) => e.extensions?.code === 'THROTTLED')) {
+        const waitMs = 2000 * (attempt + 1);
+        send(`  ⏳ Throttle GraphQL — pause ${(waitMs / 1000).toFixed(0)}s (tentative ${attempt + 1}/${maxRetries})`, 'info');
+        await new Promise(r => setTimeout(r, waitMs));
+        continue;
+      }
+
+      // Proactive throttle management via cost extensions
+      const throttle = json.extensions?.cost?.throttleStatus;
+      if (throttle) {
+        const remaining = throttle.currentlyAvailable;
+        const restoreRate = throttle.restoreRate;
+        if (remaining < 200) {
+          const waitMs = Math.ceil(((200 - remaining) / restoreRate) * 1000);
+          if (waitMs > 500) {
+            send(`  ⏳ Budget API bas (${remaining} pts), pause ${(waitMs / 1000).toFixed(1)}s...`, 'info');
+          }
+          await new Promise(r => setTimeout(r, waitMs));
+        }
+      }
+
+      return json;
+    } catch (err: any) {
+      const errMsg = err?.message || String(err);
+
+      // Network / timeout errors — always retry
+      if (attempt < maxRetries) {
+        const waitMs = 1000 * (attempt + 1);
+        send(`  ⚠️ Erreur réseau (${errMsg.slice(0, 80)}), retry dans ${(waitMs / 1000).toFixed(0)}s...`, 'info');
+        await new Promise(r => setTimeout(r, waitMs));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error('Max retries exceeded');
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const shopId = searchParams.get('shopId');
@@ -67,12 +145,29 @@ export async function GET(request: NextRequest) {
   }
 
   const encoder = new TextEncoder();
+  let streamClosed = false;
   
   const stream = new ReadableStream({
     async start(controller) {
-      const send = (message: string, type: 'info' | 'success' | 'error' | 'progress' = 'info') => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ message, type, timestamp: new Date().toISOString() })}\n\n`));
+      const send = (message: string, type: string = 'info') => {
+        if (streamClosed) return;
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ message, type, timestamp: new Date().toISOString() })}\n\n`));
+        } catch {
+          streamClosed = true;
+        }
       };
+
+      // Heartbeat to keep the connection alive (every 15s)
+      const heartbeat = setInterval(() => {
+        if (streamClosed) { clearInterval(heartbeat); return; }
+        try {
+          controller.enqueue(encoder.encode(`: keepalive\n\n`));
+        } catch {
+          streamClosed = true;
+          clearInterval(heartbeat);
+        }
+      }, 15000);
 
       try {
         send('🚀 Démarrage de l\'application des règles...', 'info');
@@ -86,7 +181,6 @@ export async function GET(request: NextRequest) {
 
         if (shopError || !shop) {
           send('❌ Boutique non trouvée', 'error');
-          controller.close();
           return;
         }
 
@@ -101,14 +195,11 @@ export async function GET(request: NextRequest) {
 
         if (ruleError || !rule) {
           send('❌ Règle non trouvée', 'error');
-          controller.close();
           return;
         }
 
-        // Vérifier que la règle a un product_type (obligatoire maintenant)
         if (!rule.product_type) {
           send('❌ La règle doit avoir un type de produit défini', 'error');
-          controller.close();
           return;
         }
 
@@ -122,12 +213,8 @@ export async function GET(request: NextRequest) {
           send(`  └─ ${rule.option_modifiers.length} modificateur(s) d'option`, 'info');
         }
 
-        // Créer le client Shopify
-        const shopifyClient = createAdminApiClient({
-          storeDomain: shop.shopify_url,
-          apiVersion: '2024-10',
-          accessToken: shop.shopify_token,
-        });
+        const shopDomain = shop.shopify_url;
+        const shopToken = shop.shopify_token;
 
         // Récupérer toutes les variantes par type de produit
         send(`📦 Récupération des variantes (${rule.product_type})...`, 'info');
@@ -139,11 +226,14 @@ export async function GET(request: NextRequest) {
 
         while (hasNextPage) {
           pageNum++;
-          const variantsResult: any = await shopifyClient.request(GET_VARIANTS_BY_PRODUCT_TYPE_QUERY, {
-            variables: { query: `product_type:"${rule.product_type}"`, cursor },
-          });
+          const variantsResult = await shopifyGraphQL(
+            shopDomain, shopToken,
+            GET_VARIANTS_BY_PRODUCT_TYPE_QUERY,
+            { query: `product_type:"${rule.product_type}"`, cursor },
+            send
+          );
 
-          const pageData: any = variantsResult.data?.productVariants;
+          const pageData = variantsResult.data?.productVariants;
           const pageVariants = pageData?.nodes || [];
           allVariants = [...allVariants, ...pageVariants];
           
@@ -155,7 +245,6 @@ export async function GET(request: NextRequest) {
 
         if (allVariants.length === 0) {
           send(`⚠️ Aucune variante trouvée pour le type "${rule.product_type}"`, 'error');
-          controller.close();
           return;
         }
 
@@ -167,9 +256,23 @@ export async function GET(request: NextRequest) {
         let errorCount = 0;
 
         for (let i = 0; i < allVariants.length; i++) {
+          if (streamClosed) {
+            console.log(`Stream closed by client at ${i}/${allVariants.length}`);
+            break;
+          }
+
           const variant = allVariants[i];
+          const variantLabel = `${variant.sku || 'no-sku'} - ${variant.title || 'no-title'}`;
           
           try {
+            // Safety check: skip variants without inventoryItem
+            if (!variant.inventoryItem?.id) {
+              send(`  ⚠️ [${i + 1}/${allVariants.length}] ${variantLabel}: pas d'inventoryItem, ignoré`, 'warning');
+              console.log(`[apply-stream] Variant ${i} has no inventoryItem:`, JSON.stringify(variant).slice(0, 300));
+              errorCount++;
+              continue;
+            }
+
             // Calculer le coût
             let cost = rule.base_price;
             const metafields = variant.metafields?.nodes || [];
@@ -207,30 +310,39 @@ export async function GET(request: NextRequest) {
               }
             }
 
-            // Mettre à jour sur Shopify
-            const updateResult: any = await shopifyClient.request(UPDATE_INVENTORY_COST_MUTATION, {
-              variables: {
+            // Log before mutation for debugging
+            console.log(`[apply-stream] ${i + 1}/${allVariants.length} Updating ${variantLabel} → ${cost.toFixed(2)}€`);
+
+            // Mettre à jour sur Shopify via fetch direct
+            const updateResult = await shopifyGraphQL(
+              shopDomain, shopToken,
+              UPDATE_INVENTORY_COST_MUTATION,
+              {
                 id: variant.inventoryItem.id,
                 input: { cost: cost.toFixed(2) },
               },
-            });
+              send
+            );
 
             if (updateResult.data?.inventoryItemUpdate?.userErrors?.length > 0) {
               const err = updateResult.data.inventoryItemUpdate.userErrors[0].message;
-              send(`  ❌ [${i + 1}/${allVariants.length}] ${variant.sku} - ${variant.title}: ${err}`, 'error');
+              send(`  ❌ [${i + 1}/${allVariants.length}] ${variantLabel}: ${err}`, 'error');
               errorCount++;
             } else {
               const calcStr = costParts.length > 1 ? ` (${costParts.join(' ')})` : '';
-              send(`  ✓ [${i + 1}/${allVariants.length}] ${variant.sku} - ${variant.title} → ${cost.toFixed(2)}€${calcStr}`, 'progress');
+              send(`  ✓ [${i + 1}/${allVariants.length}] ${variantLabel} → ${cost.toFixed(2)}€${calcStr}`, 'progress');
               updatedCount++;
             }
 
-            // Petite pause pour éviter le rate limiting
-            await new Promise(resolve => setTimeout(resolve, 50));
+            // Pause de 100ms entre chaque mutation
+            await new Promise(resolve => setTimeout(resolve, 100));
 
-          } catch (err) {
-            send(`  ❌ [${i + 1}/${allVariants.length}] ${variant.sku}: Erreur`, 'error');
+          } catch (err: any) {
+            console.error(`[apply-stream] CRASH at variant ${i + 1}/${allVariants.length} (${variantLabel}):`, err);
+            send(`  ❌ [${i + 1}/${allVariants.length}] ${variantLabel}: ${err?.message || String(err)}`, 'error');
             errorCount++;
+            // Pause supplémentaire après une erreur
+            await new Promise(resolve => setTimeout(resolve, 2000));
           }
         }
 
@@ -246,10 +358,12 @@ export async function GET(request: NextRequest) {
 
         send('DONE', 'success');
 
-      } catch (error) {
-        send(`❌ Erreur: ${error}`, 'error');
+      } catch (error: any) {
+        send(`❌ Erreur fatale: ${error?.message || error}`, 'error');
+        send('DONE', 'error');
       } finally {
-        controller.close();
+        clearInterval(heartbeat);
+        try { controller.close(); } catch { /* already closed */ }
       }
     },
   });

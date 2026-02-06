@@ -74,6 +74,7 @@ export default function PriceRulesPage() {
   const [formBasePrice, setFormBasePrice] = useState<number>(0);
   const [formDescription, setFormDescription] = useState('');
   const [formProductType, setFormProductType] = useState('');
+  const [formSku, setFormSku] = useState('');
   const [formModifiers, setFormModifiers] = useState<Modifier[]>([]);
   const [formOptionModifiers, setFormOptionModifiers] = useState<OptionModifier[]>([]);
 
@@ -122,6 +123,7 @@ export default function PriceRulesPage() {
     setFormBasePrice(0);
     setFormDescription('');
     setFormProductType('');
+    setFormSku('');
     setFormModifiers([]);
     setFormOptionModifiers([]);
     setNewModifierNamespace('');
@@ -144,6 +146,7 @@ export default function PriceRulesPage() {
     setFormBasePrice(rule.base_price);
     setFormDescription(rule.description || '');
     setFormProductType(rule.product_type || '');
+    setFormSku(rule.sku || '');
     setFormModifiers(rule.modifiers.map(m => ({
       namespace: m.metafield_namespace || m.namespace,
       key: m.metafield_key || m.key,
@@ -224,7 +227,7 @@ export default function PriceRulesPage() {
       const body = editingRule
         ? {
             id: editingRule.id,
-            sku: formProductType, // On utilise le type comme identifiant
+            sku: formSku.trim() || formProductType,
             basePrice: formBasePrice,
             description: formDescription || null,
             productType: formProductType,
@@ -233,7 +236,7 @@ export default function PriceRulesPage() {
           }
         : {
             shopId: currentShop.id,
-            sku: formProductType, // On utilise le type comme identifiant
+            sku: formSku.trim() || formProductType,
             basePrice: formBasePrice,
             description: formDescription || null,
             productType: formProductType,
@@ -727,6 +730,14 @@ export default function PriceRulesPage() {
             fixedDecimalScale
             min={0}
             step={0.5}
+          />
+
+          <TextInput
+            label="SKU (optionnel)"
+            placeholder="Ex: SLAMMER"
+            value={formSku}
+            onChange={(e) => setFormSku(e.target.value)}
+            description="Sert à cibler les produits des commandes déjà passées. Si vide, le type de produit sera utilisé."
           />
 
           <TextInput

@@ -27,17 +27,49 @@ export function useTerminalStream() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
+      let buffer = '';
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const text = decoder.decode(value);
-        const lines = text.split('\n').filter(line => line.startsWith('data: '));
+        // Append decoded chunk to buffer (stream: true handles multi-byte chars)
+        buffer += decoder.decode(value, { stream: true });
 
+        // Process complete SSE messages (separated by double newline)
+        const parts = buffer.split('\n\n');
+        // Keep the last part as it may be incomplete
+        buffer = parts.pop() || '';
+
+        for (const part of parts) {
+          const lines = part.split('\n');
+          for (const line of lines) {
+            // Skip SSE comments (keepalive) and empty lines
+            if (!line.startsWith('data: ')) continue;
+
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.message === 'DONE') {
+                terminal.endSync(options?.actions);
+                options?.onComplete?.();
+                return true;
+              } else if (data.message) {
+                terminal.log(data.message, data.type || 'info');
+              }
+            } catch (e) {
+              // Ignore parse errors for malformed JSON
+            }
+          }
+        }
+      }
+
+      // Process any remaining buffer
+      if (buffer.trim()) {
+        const lines = buffer.split('\n');
         for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
           try {
-            const data = JSON.parse(line.replace('data: ', ''));
+            const data = JSON.parse(line.slice(6));
             if (data.message === 'DONE') {
               terminal.endSync(options?.actions);
               options?.onComplete?.();
@@ -46,7 +78,7 @@ export function useTerminalStream() {
               terminal.log(data.message, data.type || 'info');
             }
           } catch (e) {
-            // Ignore parse errors
+            // Ignore
           }
         }
       }
