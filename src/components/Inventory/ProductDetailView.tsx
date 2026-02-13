@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Button, Title, Text, Badge, Group, Stack, Table, Image, NumberInput, ActionIcon, Loader, Modal } from '@mantine/core';
+import { Button, Title, Text, Badge, Group, Stack, Table, Image, NumberInput, ActionIcon, Loader, Modal, Paper } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconArrowLeft, IconPhoto, IconPlus, IconMinus, IconDeviceFloppy, IconTrash, IconRefresh } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
@@ -32,7 +32,85 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [resetModalOpened, { open: openResetModal, close: closeResetModal }] = useDisclosure(false);
+  const [deleteGroup, setDeleteGroup] = useState<{ label: string; ids: string[] } | null>(null);
   const { streamFromUrl } = useTerminalStream();
+
+  // Variantes locales groupées par première option commune
+  const localVariantGroups = useMemo(() => {
+    const locals = product.variants.filter(v => v.shopifyActive === false);
+    if (locals.length === 0) return [];
+
+    const groups: Record<string, typeof locals> = {};
+    for (const v of locals) {
+      const key = v.options?.[0]?.value || v.title || 'Autre';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(v);
+    }
+
+    return Object.entries(groups).map(([label, variants]) => ({
+      label,
+      variants,
+      subabaseIds: variants.map(v => v.supabaseId).filter(Boolean) as string[],
+      subValues: variants
+        .map(v => v.options?.slice(1).map(o => o.value).join(' / ') || '')
+        .filter(Boolean),
+    }));
+  }, [product.variants]);
+
+  // Supprimer un groupe de variantes locales
+  const handleDeleteVariants = async () => {
+    if (!deleteGroup || !shopId) return;
+
+    try {
+      for (const variantId of deleteGroup.ids) {
+        const params = new URLSearchParams({ variantId, shopId });
+        const response = await fetch(`/api/inventory/delete-variant?${params}`, {
+          method: 'DELETE',
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Erreur de suppression');
+      }
+
+      // Retirer les variantes du state
+      const deletedIds = new Set(deleteGroup.ids);
+      if (onProductUpdated) {
+        const updatedVariants = product.variants.filter(v => !deletedIds.has(v.supabaseId || ''));
+        const updatedProduct: ProductData = {
+          ...product,
+          variants: updatedVariants,
+          totalQuantity: updatedVariants.reduce((sum, v) => sum + v.quantity, 0),
+          sizeBreakdown: updatedVariants.reduce((acc, v) => {
+            if (v.size) acc[v.size] = (acc[v.size] || 0) + v.quantity;
+            return acc;
+          }, {} as Record<string, number>),
+        };
+        onProductUpdated(updatedProduct);
+      }
+
+      setQuantities(prev => {
+        const next = { ...prev };
+        for (const v of product.variants) {
+          if (deletedIds.has(v.supabaseId || '')) delete next[v.id];
+        }
+        return next;
+      });
+
+      notifications.show({
+        title: 'Variantes supprimées',
+        message: `${deleteGroup.ids.length} variante${deleteGroup.ids.length > 1 ? 's' : ''} supprimée${deleteGroup.ids.length > 1 ? 's' : ''}`,
+        color: 'green',
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Une erreur est survenue';
+      notifications.show({
+        title: 'Erreur de suppression',
+        message,
+        color: 'red',
+      });
+    } finally {
+      setDeleteGroup(null);
+    }
+  };
 
   // Remettre toutes les quantités à zéro
   const handleResetStock = () => {
@@ -283,7 +361,6 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
   // Trier les variantes selon l'ordre de priorité défini
   const sortedVariants = useMemo(() => {
     return [...product.variants].sort((a, b) => {
-      // Parcourir les options dans l'ordre de priorité
       for (const optName of sortOrder) {
         const aVal = getOptionValue(a, optName);
         const bVal = getOptionValue(b, optName);
@@ -413,18 +490,52 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
           </div>
         </div>
 
+        {/* Bloc variantes locales (groupées) */}
+        {localVariantGroups.length > 0 && (
+          <Paper withBorder radius="md" p="sm" mb="md" style={{ borderColor: 'var(--mantine-color-gray-4)' }}>
+            <Group gap="xs" mb="xs">
+              <Text size="xs" fw={600} c="dimmed">Variantes locales</Text>
+              <Badge size="xs" color="gray" variant="light">
+                {product.variants.filter(v => v.shopifyActive === false).length}
+              </Badge>
+            </Group>
+            <Stack gap={6}>
+              {localVariantGroups.map((group) => (
+                <Group key={group.label} justify="space-between" gap="xs">
+                  <Group gap="xs" style={{ flex: 1, minWidth: 0 }}>
+                    <Text size="sm" fw={500}>{group.label}</Text>
+                    {group.subValues.length > 0 && (
+                      <Text size="xs" c="dimmed" truncate>
+                        {group.subValues.join(', ')}
+                      </Text>
+                    )}
+                  </Group>
+                  <ActionIcon
+                    variant="subtle"
+                    color="red"
+                    size="sm"
+                    onClick={() => setDeleteGroup({ label: group.label, ids: group.subabaseIds })}
+                  >
+                    <IconTrash size={14} />
+                  </ActionIcon>
+                </Group>
+              ))}
+            </Stack>
+          </Paper>
+        )}
+
         {/* Tableau des variantes */}
         <div className={styles.variantsSection}>
           <Group justify="space-between" align="center" mb="md">
             <Text size="sm" fw={600} className={styles.variantsTitle}>
               Détail des variantes ({sortedVariants.length})
             </Text>
-<SortOptionsBar
+            <SortOptionsBar
               options={sortOrder}
               onReorder={setSortOrder}
             />
           </Group>
-          
+
           <Table striped highlightOnHover className={styles.variantsTable}>
             <Table.Thead>
               <Table.Tr>
@@ -463,7 +574,7 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
                   <Table.Td style={{ textAlign: 'center' }}>
                     <Badge
                       size="xs"
-                      color={variant.shopifyActive === false ? 'gray' : 'green'}
+                      color={variant.shopifyActive === false ? 'red' : 'green'}
                       variant="light"
                     >
                       {variant.shopifyActive === false ? 'Locale' : 'Live'}
@@ -547,6 +658,37 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
             </Button>
             <Button color="red" onClick={handleResetStock}>
               Remettre à zéro
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      {/* Modal de confirmation suppression variantes locales */}
+      <Modal
+        opened={!!deleteGroup}
+        onClose={() => setDeleteGroup(null)}
+        title={
+          <Group gap="xs">
+            <IconTrash size={20} color="var(--mantine-color-red-6)" />
+            <Text fw={600}>Supprimer {deleteGroup?.ids.length === 1 ? 'la variante' : 'les variantes'}</Text>
+          </Group>
+        }
+        centered
+      >
+        <Stack gap="md">
+          <Text size="sm">
+            Supprimer définitivement <Text span fw={600}>{deleteGroup?.label}</Text>{' '}
+            ({deleteGroup?.ids.length} variante{(deleteGroup?.ids.length || 0) > 1 ? 's' : ''}) ?
+          </Text>
+          <Text size="sm" c="dimmed">
+            Le stock associé sera perdu. Cette action est irréversible.
+          </Text>
+          <Group justify="flex-end" gap="sm" mt="md">
+            <Button variant="default" onClick={() => setDeleteGroup(null)}>
+              Annuler
+            </Button>
+            <Button color="red" onClick={handleDeleteVariants}>
+              Supprimer
             </Button>
           </Group>
         </Stack>
