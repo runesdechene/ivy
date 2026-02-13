@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { Button, Title, Text, Badge, Group, Stack, Table, Image, NumberInput, ActionIcon, Loader, Modal, Paper } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconArrowLeft, IconPhoto, IconPlus, IconMinus, IconDeviceFloppy, IconTrash, IconRefresh } from '@tabler/icons-react';
+import { IconArrowLeft, IconPhoto, IconPlus, IconMinus, IconDeviceFloppy, IconTrash, IconRefresh, IconArchive } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useTerminalStream } from '@/hooks/useTerminalStream';
 import { ProductData } from './ProductCard';
@@ -33,7 +33,11 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
   const [syncing, setSyncing] = useState(false);
   const [resetModalOpened, { open: openResetModal, close: closeResetModal }] = useDisclosure(false);
   const [deleteGroup, setDeleteGroup] = useState<{ label: string; ids: string[] } | null>(null);
+  const [archiveModalOpened, { open: openArchiveModal, close: closeArchiveModal }] = useDisclosure(false);
+  const [archiving, setArchiving] = useState(false);
   const { streamFromUrl } = useTerminalStream();
+
+  const isLocalProduct = product.status === 'LOCAL' || product.status === 'DRAFT';
 
   // Variantes locales groupées par première option commune
   const localVariantGroups = useMemo(() => {
@@ -109,6 +113,36 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
       });
     } finally {
       setDeleteGroup(null);
+    }
+  };
+
+  // Archiver le produit (local/draft → archived)
+  const handleArchive = async () => {
+    if (!shopId || !product.supabaseId) return;
+    setArchiving(true);
+    try {
+      const params = new URLSearchParams({
+        productId: product.supabaseId,
+        shopId,
+        action: 'archive',
+      });
+      const response = await fetch(`/api/inventory/archive?${params}`, { method: 'PATCH' });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Erreur');
+      }
+      notifications.show({
+        title: 'Produit archivé',
+        message: `${product.title} a été déplacé dans les archives`,
+        color: 'green',
+      });
+      closeArchiveModal();
+      onBack();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Erreur';
+      notifications.show({ title: 'Erreur', message, color: 'red' });
+    } finally {
+      setArchiving(false);
     }
   };
 
@@ -423,6 +457,18 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
             >
               {syncing ? 'Sync...' : 'Synchroniser'}
             </Button>
+            {isLocalProduct && (
+              <Button
+                variant="light"
+                color="orange"
+                leftSection={<IconArchive size={16} />}
+                onClick={openArchiveModal}
+                disabled={saving || syncing}
+                size="sm"
+              >
+                Archiver
+              </Button>
+            )}
             <Button
               variant="light"
               color="red"
@@ -689,6 +735,36 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
             </Button>
             <Button color="red" onClick={handleDeleteVariants}>
               Supprimer
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      {/* Modal de confirmation archivage */}
+      <Modal
+        opened={archiveModalOpened}
+        onClose={closeArchiveModal}
+        title={
+          <Group gap="xs">
+            <IconArchive size={20} color="var(--mantine-color-orange-6)" />
+            <Text fw={600}>Archiver le produit</Text>
+          </Group>
+        }
+        centered
+      >
+        <Stack gap="md">
+          <Text size="sm">
+            Déplacer <Text span fw={600}>{product.title}</Text> dans les archives ?
+          </Text>
+          <Text size="sm" c="dimmed">
+            Le produit ne sera plus visible dans l'inventaire. Vous pourrez le restaurer depuis la page Archives.
+          </Text>
+          <Group justify="flex-end" gap="sm" mt="md">
+            <Button variant="default" onClick={closeArchiveModal}>
+              Annuler
+            </Button>
+            <Button color="orange" onClick={handleArchive} loading={archiving}>
+              Archiver
             </Button>
           </Group>
         </Stack>

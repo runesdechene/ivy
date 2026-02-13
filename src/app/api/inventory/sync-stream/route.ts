@@ -137,26 +137,32 @@ export async function GET(request: NextRequest) {
 
         send(`✓ ${productsToUpsert.length} produits sauvegardés`, 'success');
 
-        // Marquer les produits absents de Shopify comme archivés
-        // (supprimés ou désactivés côté Shopify)
+        // Marquer les produits absents de Shopify comme locaux
+        // (brouillons, supprimés ou désactivés côté Shopify)
         const activeShopifyProductIds = allProducts.map((p: any) => p.id.toString());
-        if (activeShopifyProductIds.length > 0 && !productType) {
-          // Seulement lors d'un sync complet (pas filtré par type)
-          const { data: archivedRows } = await supabase
+        if (activeShopifyProductIds.length > 0) {
+          let query = supabase
             .from('products')
-            .update({ status: 'archived' })
+            .update({ status: 'local' })
             .eq('shop_id', shopId)
-            .eq('status', 'active')
+            .in('status', ['active', 'draft']);
+
+          // Si sync par type, ne marquer que les produits de ce type
+          if (productType) {
+            query = query.eq('product_type', productType);
+          }
+
+          const { data: localRows } = await query
             .not('shopify_id', 'in', `(${activeShopifyProductIds.join(',')})`)
             .select('id, title');
 
-          if (archivedRows && archivedRows.length > 0) {
-            send(`🗑️ ${archivedRows.length} produit${archivedRows.length > 1 ? 's' : ''} archivé${archivedRows.length > 1 ? 's' : ''} (supprimé${archivedRows.length > 1 ? 's' : ''} de Shopify)`, 'info');
-            for (const p of archivedRows.slice(0, 5)) {
+          if (localRows && localRows.length > 0) {
+            send(`📌 ${localRows.length} produit${localRows.length > 1 ? 's' : ''} passé${localRows.length > 1 ? 's' : ''} en local (plus actif${localRows.length > 1 ? 's' : ''} sur Shopify)`, 'info');
+            for (const p of localRows.slice(0, 5)) {
               send(`   └─ ${p.title}`, 'info');
             }
-            if (archivedRows.length > 5) {
-              send(`   └─ ... et ${archivedRows.length - 5} autres`, 'info');
+            if (localRows.length > 5) {
+              send(`   └─ ... et ${localRows.length - 5} autres`, 'info');
             }
           }
         }

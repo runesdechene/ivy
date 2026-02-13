@@ -140,6 +140,11 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
           label: 'Statistiques',
           icon: IconChartBar,
         },
+        {
+          href: '/ivy/inventaire/archives',
+          label: 'Archives',
+          icon: IconArchive,
+        },
       ],
     },
   ];

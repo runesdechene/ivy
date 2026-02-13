@@ -8,6 +8,7 @@ export interface ProductData {
   supabaseId?: string;
   title: string;
   handle: string;
+  status?: string;
   image: string | null;
   imageAlt: string;
   productType?: string | null;
@@ -34,7 +35,8 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product, onClick }: ProductCardProps) {
-  // Compter les variantes locales
+  // Statut produit : local/draft = plus actif sur Shopify
+  const isLocal = product.status === 'LOCAL' || product.status === 'DRAFT';
   const localVariantsCount = product.variants.filter(v => v.shopifyActive === false).length;
 
   // Formater le breakdown des tailles
@@ -91,11 +93,24 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
             }
           </Text>
         )}
-        {localVariantsCount > 0 && (
-          <Badge size="xs" color="orange" variant="light">
-            {localVariantsCount} locale{localVariantsCount > 1 ? 's' : ''}
-          </Badge>
-        )}
+        <Group gap={4}>
+          {isLocal ? (
+            <Badge size="xs" color="orange" variant="light">
+              Local seulement
+            </Badge>
+          ) : (
+            <>
+              <Badge size="xs" color="teal" variant="light">
+                Shopify
+              </Badge>
+              {localVariantsCount > 0 && (
+                <Badge size="xs" color="orange" variant="light">
+                  + {localVariantsCount} locale{localVariantsCount > 1 ? 's' : ''}
+                </Badge>
+              )}
+            </>
+          )}
+        </Group>
       </Stack>
     </Paper>
   );

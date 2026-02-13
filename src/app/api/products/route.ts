@@ -120,7 +120,7 @@ export async function GET(request: Request) {
           )
         `)
         .eq('shop_id', shopId)
-        .eq('status', 'active')
+        .in('status', ['active', 'local', 'draft'])
         .order('title');
       
       if (productsError) {
