@@ -73,8 +73,15 @@ export function useProductSelection(
         })));
       }
 
-      // Load variants with inventory levels (only variants that have inventory for this location)
-      let variantsQuery = supabase
+      // Attendre qu'un emplacement soit sélectionné avant de charger les stocks
+      if (!lid) {
+        setAllVariants([]);
+        setLoading(false);
+        return;
+      }
+
+      // Load variants with inventory levels (only active Shopify variants for this location)
+      const { data: variants } = await supabase
         .from('product_variants')
         .select(`
           id,
@@ -89,13 +96,9 @@ export function useProductSelection(
           cost,
           inventory_item_id,
           inventory_levels!inner(quantity, location_id)
-        `);
-
-      if (lid) {
-        variantsQuery = variantsQuery.eq('inventory_levels.location_id', lid);
-      }
-
-      const { data: variants } = await variantsQuery;
+        `)
+        .neq('shopify_active', false)
+        .eq('inventory_levels.location_id', lid);
 
       if (variants) {
         setAllVariants(variants.map(v => ({
