@@ -386,7 +386,7 @@ export async function GET(request: NextRequest) {
             await new Promise(resolve => setTimeout(resolve, delay));
             
             const levelsResponse = await fetch(
-              `https://${shop.shopify_url}/admin/api/2024-01/inventory_levels.json?inventory_item_ids=${batch.join(',')}`,
+              `https://${shop.shopify_url}/admin/api/2024-01/inventory_levels.json?inventory_item_ids=${batch.join(',')}&limit=250`,
               {
                 headers: {
                   'X-Shopify-Access-Token': shop.shopify_token,

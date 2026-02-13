@@ -54,6 +54,7 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
     return Object.entries(groups).map(([label, variants]) => ({
       label,
       variants,
+      totalQuantity: variants.reduce((sum, v) => sum + v.quantity, 0),
       subabaseIds: variants.map(v => v.supabaseId).filter(Boolean) as string[],
       subValues: variants
         .map(v => v.options?.slice(1).map(o => o.value).join(' / ') || '')
@@ -455,7 +456,7 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
               disabled={syncing || saving}
               size="sm"
             >
-              {syncing ? 'Sync...' : 'Synchroniser'}
+              {syncing ? 'Import...' : 'Importer de Shopify'}
             </Button>
             {isLocalProduct && (
               <Button
@@ -542,7 +543,7 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
             <Group gap="xs" mb="xs">
               <Text size="xs" fw={600} c="dimmed">Variantes locales</Text>
               <Badge size="xs" color="gray" variant="light">
-                {product.variants.filter(v => v.shopifyActive === false).length}
+                {product.variants.filter(v => v.shopifyActive === false).reduce((sum, v) => sum + v.quantity, 0)}/{product.variants.filter(v => v.shopifyActive === false).length}
               </Badge>
             </Group>
             <Stack gap={6}>
@@ -550,6 +551,9 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
                 <Group key={group.label} justify="space-between" gap="xs">
                   <Group gap="xs" style={{ flex: 1, minWidth: 0 }}>
                     <Text size="sm" fw={500}>{group.label}</Text>
+                    <Badge size="xs" color="gray" variant="light">
+                      {group.totalQuantity}/{group.variants.length}
+                    </Badge>
                     {group.subValues.length > 0 && (
                       <Text size="xs" c="dimmed" truncate>
                         {group.subValues.join(', ')}
@@ -620,10 +624,10 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
                   <Table.Td style={{ textAlign: 'center' }}>
                     <Badge
                       size="xs"
-                      color={variant.shopifyActive === false ? 'red' : 'green'}
+                      color={variant.shopifyActive === false ? 'orange' : 'teal'}
                       variant="light"
                     >
-                      {variant.shopifyActive === false ? 'Locale' : 'Live'}
+                      {variant.shopifyActive === false ? 'Locale' : 'Shopify'}
                     </Badge>
                   </Table.Td>
                   <Table.Td style={{ textAlign: 'right' }}>
