@@ -54,12 +54,29 @@ export function useProductSelection(
 
     setLoading(true);
     try {
-      // Load products
+      // Requête unique : products avec variantes et inventory imbriqués
+      // Évite la limite de 1000 lignes de Supabase sur product_variants
       const { data: products } = await supabase
         .from('products')
-        .select('id, shopify_id, title, product_type, option1_name, option2_name, option3_name')
+        .select(`
+          id, shopify_id, title, product_type, option1_name, option2_name, option3_name,
+          variants:product_variants(
+            id,
+            product_id,
+            shopify_id,
+            title,
+            sku,
+            option1,
+            option2,
+            option3,
+            price,
+            cost,
+            inventory_item_id,
+            inventory_levels(quantity, location_id)
+          )
+        `)
         .eq('shop_id', sid)
-        .eq('status', 'active');
+        .in('status', ['active', 'local', 'draft']);
 
       if (products) {
         setAllProducts(products.map(p => ({
@@ -71,50 +88,32 @@ export function useProductSelection(
           option2Name: p.option2_name,
           option3Name: p.option3_name,
         })));
-      }
 
-      // Attendre qu'un emplacement soit sélectionné avant de charger les stocks
-      if (!lid) {
-        setAllVariants([]);
-        setLoading(false);
-        return;
-      }
+        // Extraire toutes les variantes avec stock filtré par emplacement
+        const allVars: any[] = [];
+        for (const p of products) {
+          for (const v of (p.variants as any[]) || []) {
+            const levels = (v.inventory_levels as any[]) || [];
+            const level = lid ? levels.find((il: any) => il.location_id === lid) : null;
+            const stock = Math.max(0, level?.quantity || 0);
 
-      // Load variants with inventory levels (only active Shopify variants for this location)
-      const { data: variants } = await supabase
-        .from('product_variants')
-        .select(`
-          id,
-          product_id,
-          shopify_id,
-          title,
-          sku,
-          option1,
-          option2,
-          option3,
-          price,
-          cost,
-          inventory_item_id,
-          inventory_levels!inner(quantity, location_id)
-        `)
-        .neq('shopify_active', false)
-        .eq('inventory_levels.location_id', lid);
-
-      if (variants) {
-        setAllVariants(variants.map(v => ({
-          id: v.id,
-          productId: v.product_id,
-          shopifyId: v.shopify_id,
-          title: v.title,
-          sku: v.sku,
-          option1: v.option1,
-          option2: v.option2,
-          option3: v.option3,
-          price: v.price || 0,
-          cost: v.cost || 0,
-          inventoryItemId: v.inventory_item_id,
-          stock: v.inventory_levels?.reduce((sum: number, il: any) => sum + (il.quantity || 0), 0) || 0,
-        })));
+            allVars.push({
+              id: v.id,
+              productId: v.product_id,
+              shopifyId: v.shopify_id,
+              title: v.title,
+              sku: v.sku,
+              option1: v.option1,
+              option2: v.option2,
+              option3: v.option3,
+              price: v.price || 0,
+              cost: v.cost || 0,
+              inventoryItemId: v.inventory_item_id,
+              stock,
+            });
+          }
+        }
+        setAllVariants(allVars);
       }
     } catch (error) {
       console.error('Error loading products:', error);

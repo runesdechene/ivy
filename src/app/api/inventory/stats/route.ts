@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
         )
       `)
       .eq('shop_id', shopId)
-      .eq('status', 'active');
+      .in('status', ['active', 'local', 'draft']);
 
     if (productsError) {
       console.error('Error fetching products:', productsError);
