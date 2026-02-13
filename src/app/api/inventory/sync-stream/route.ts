@@ -157,6 +157,13 @@ export async function GET(request: NextRequest) {
             .select('id, title');
 
           if (localRows && localRows.length > 0) {
+            // Passer toutes les variantes de ces produits en locale
+            const localProductIds = localRows.map(p => p.id);
+            await supabase
+              .from('product_variants')
+              .update({ shopify_active: false })
+              .in('product_id', localProductIds);
+
             send(`📌 ${localRows.length} produit${localRows.length > 1 ? 's' : ''} passé${localRows.length > 1 ? 's' : ''} en local (plus actif${localRows.length > 1 ? 's' : ''} sur Shopify)`, 'info');
             for (const p of localRows.slice(0, 5)) {
               send(`   └─ ${p.title}`, 'info');

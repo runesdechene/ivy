@@ -40,7 +40,6 @@ export async function GET(request: NextRequest) {
 
         if (shopError || !shop) {
           send('Boutique non trouvée', 'error');
-          controller.close();
           return;
         }
 
@@ -58,8 +57,101 @@ export async function GET(request: NextRequest) {
         );
 
         if (!productResponse.ok) {
+          if (productResponse.status === 404) {
+            // Produit non trouvé sur Shopify → basculer en local
+            send('Produit non trouvé sur Shopify', 'warning');
+            send('Basculement en Local seulement...', 'info');
+
+            // Récupérer le produit en DB
+            const { data: dbProd } = await supabase
+              .from('products')
+              .select('id, shopify_id, title, handle, image_url, product_type, option1_name, option2_name, option3_name')
+              .eq('shop_id', shopId)
+              .eq('shopify_id', shopifyProductId)
+              .single();
+
+            if (dbProd) {
+              await supabase
+                .from('products')
+                .update({ status: 'local' })
+                .eq('id', dbProd.id);
+
+              // Passer toutes les variantes en locale
+              await supabase
+                .from('product_variants')
+                .update({ shopify_active: false })
+                .eq('product_id', dbProd.id);
+
+              // Construire le produit mis à jour pour le frontend
+              const { data: dbVariants } = await supabase
+                .from('product_variants')
+                .select('id, shopify_id, title, sku, option1, option2, option3, cost, shopify_active, inventory_levels(quantity, location_id)')
+                .eq('product_id', dbProd.id);
+
+              const variants = (dbVariants || []).map((variant: any) => {
+                const size = variant.option1;
+                let quantity = 0;
+                if (variant.inventory_levels && Array.isArray(variant.inventory_levels)) {
+                  if (locationId) {
+                    const level = variant.inventory_levels.find((l: any) => l.location_id === locationId);
+                    quantity = level?.quantity || 0;
+                  } else {
+                    quantity = variant.inventory_levels.reduce((sum: number, l: any) => sum + (l.quantity || 0), 0);
+                  }
+                }
+                return {
+                  id: `gid://shopify/ProductVariant/${variant.shopify_id}`,
+                  supabaseId: variant.id,
+                  title: variant.title,
+                  sku: variant.sku,
+                  quantity,
+                  size,
+                  cost: variant.cost || 0,
+                  shopifyActive: variant.shopify_active ?? true,
+                  options: [
+                    variant.option1 && { name: dbProd.option1_name || 'Option 1', value: variant.option1 },
+                    variant.option2 && { name: dbProd.option2_name || 'Option 2', value: variant.option2 },
+                    variant.option3 && { name: dbProd.option3_name || 'Option 3', value: variant.option3 },
+                  ].filter(Boolean),
+                };
+              });
+
+              const totalQuantity = variants.reduce((sum: number, v: any) => sum + v.quantity, 0);
+              const sizeBreakdown: Record<string, number> = {};
+              variants.forEach((v: any) => {
+                if (v.size) sizeBreakdown[v.size] = (sizeBreakdown[v.size] || 0) + v.quantity;
+              });
+              const costs = variants.map((v: any) => v.cost || 0);
+              const costRange = costs.length > 0
+                ? { min: Math.min(...costs), max: Math.max(...costs) }
+                : undefined;
+
+              const updatedProduct = {
+                id: `gid://shopify/Product/${shopifyProductId}`,
+                supabaseId: dbProd.id,
+                title: dbProd.title,
+                handle: dbProd.handle,
+                status: 'LOCAL',
+                image: dbProd.image_url,
+                imageAlt: dbProd.title,
+                productType: dbProd.product_type || null,
+                totalQuantity,
+                sizeBreakdown,
+                costRange,
+                variants,
+                syncedAt: new Date().toISOString(),
+              };
+
+              send('✅ Produit basculé en Local seulement', 'success');
+              sendResult(updatedProduct);
+            } else {
+              send('Produit introuvable en base de données', 'error');
+            }
+
+            return;
+          }
+
           send(`Erreur API Shopify: ${productResponse.status}`, 'error');
-          controller.close();
           return;
         }
 
@@ -86,7 +178,6 @@ export async function GET(request: NextRequest) {
 
         if (productUpsertError) {
           send(`Erreur sauvegarde: ${productUpsertError.message}`, 'error');
-          controller.close();
           return;
         }
 
@@ -100,7 +191,6 @@ export async function GET(request: NextRequest) {
 
         if (!dbProduct) {
           send('Produit introuvable en DB après upsert', 'error');
-          controller.close();
           return;
         }
 
@@ -141,7 +231,6 @@ export async function GET(request: NextRequest) {
 
           if (error) {
             send(`Erreur variantes: ${error.message}`, 'error');
-            controller.close();
             return;
           }
         }
