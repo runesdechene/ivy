@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Button, Title, Text, Badge, Group, Stack, Table, Image, NumberInput, ActionIcon, Loader } from '@mantine/core';
-import { IconArrowLeft, IconPhoto, IconPlus, IconMinus, IconDeviceFloppy } from '@tabler/icons-react';
+import { Button, Title, Text, Badge, Group, Stack, Table, Image, NumberInput, ActionIcon, Loader, Modal } from '@mantine/core';
+import { useDisclosure } from '@mantine/hooks';
+import { IconArrowLeft, IconPhoto, IconPlus, IconMinus, IconDeviceFloppy, IconTrash, IconRefresh } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
+import { useTerminalStream } from '@/hooks/useTerminalStream';
 import { ProductData } from './ProductCard';
 import { SortOptionsBar } from './SortOptionsBar';
 import { getColorHex, isColorOption } from '@/utils/color-transformer';
@@ -28,6 +30,55 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
     return initial;
   });
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [resetModalOpened, { open: openResetModal, close: closeResetModal }] = useDisclosure(false);
+  const { streamFromUrl } = useTerminalStream();
+
+  // Remettre toutes les quantités à zéro
+  const handleResetStock = () => {
+    const zeroed: Record<string, number> = {};
+    product.variants.forEach(v => {
+      zeroed[v.id] = 0;
+    });
+    setQuantities(zeroed);
+    closeResetModal();
+  };
+
+  // Synchroniser ce produit depuis Shopify via le terminal stream
+  const handleSyncProduct = async () => {
+    if (!shopId) return;
+
+    const shopifyProductId = product.id.replace('gid://shopify/Product/', '');
+    const params = new URLSearchParams({ shopId, productId: shopifyProductId });
+    if (locationId) params.set('locationId', locationId);
+
+    setSyncing(true);
+    const success = await streamFromUrl(`/api/inventory/sync-product?${params}`, {
+      title: `Sync: ${product.title}`,
+      onComplete: (data) => {
+        if (data?.product && onProductUpdated) {
+          const updatedProduct = data.product as ProductData;
+          onProductUpdated(updatedProduct);
+
+          // Mettre à jour les quantités locales
+          const newQtys: Record<string, number> = {};
+          updatedProduct.variants.forEach(v => {
+            newQtys[v.id] = v.quantity;
+          });
+          setQuantities(newQtys);
+        }
+      },
+    });
+
+    if (!success) {
+      notifications.show({
+        title: 'Erreur de synchronisation',
+        message: 'La synchronisation a échoué',
+        color: 'red',
+      });
+    }
+    setSyncing(false);
+  };
 
   // Détecter dynamiquement les options du produit
   const productOptions = useMemo(() => {
@@ -282,17 +333,39 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
           </Text>
         )}
 
-        {/* Bouton Sauvegarder */}
+        {/* Boutons d'action */}
         <div className={styles.saveButtonContainer}>
-          <Button
-            color="green"
-            leftSection={saving ? <Loader size={16} color="white" /> : <IconDeviceFloppy size={18} />}
-            onClick={handleSave}
-            disabled={!hasChanges || saving}
-            className={styles.saveButton}
-          >
-            {saving ? 'Sauvegarde...' : 'Sauvegarder'}
-          </Button>
+          <Group gap="xs">
+            <Button
+              variant="light"
+              color="blue"
+              leftSection={syncing ? <Loader size={14} color="blue" /> : <IconRefresh size={16} />}
+              onClick={handleSyncProduct}
+              disabled={syncing || saving}
+              size="sm"
+            >
+              {syncing ? 'Sync...' : 'Synchroniser'}
+            </Button>
+            <Button
+              variant="light"
+              color="red"
+              leftSection={<IconTrash size={16} />}
+              onClick={openResetModal}
+              disabled={saving || syncing || newTotalQuantity === 0}
+              size="sm"
+            >
+              Remettre à zéro
+            </Button>
+            <Button
+              color="green"
+              leftSection={saving ? <Loader size={16} color="white" /> : <IconDeviceFloppy size={18} />}
+              onClick={handleSave}
+              disabled={!hasChanges || saving || syncing}
+              className={styles.saveButton}
+            >
+              {saving ? 'Sauvegarde...' : 'Sauvegarder'}
+            </Button>
+          </Group>
         </div>
       </div>
 
@@ -448,6 +521,36 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
           </Table>
         </div>
       </div>
+
+      {/* Modal de confirmation reset */}
+      <Modal
+        opened={resetModalOpened}
+        onClose={closeResetModal}
+        title={
+          <Group gap="xs">
+            <IconTrash size={20} color="var(--mantine-color-red-6)" />
+            <Text fw={600}>Remettre le stock à zéro</Text>
+          </Group>
+        }
+        centered
+      >
+        <Stack gap="md">
+          <Text size="sm">
+            Toutes les quantités de <Text span fw={600}>{product.title}</Text> seront mises à zéro.
+          </Text>
+          <Text size="sm" c="dimmed">
+            Les modifications ne seront effectives qu'après avoir cliqué sur Sauvegarder.
+          </Text>
+          <Group justify="flex-end" gap="sm" mt="md">
+            <Button variant="default" onClick={closeResetModal}>
+              Annuler
+            </Button>
+            <Button color="red" onClick={handleResetStock}>
+              Remettre à zéro
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </div>
   );
 }

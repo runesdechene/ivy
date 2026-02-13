@@ -52,10 +52,10 @@ export async function POST(request: Request) {
           shopifyVariantId = shopifyVariantId.split('/').pop() || shopifyVariantId;
         }
 
-        // Récupérer l'inventory_item_id de la variante (shopify_id = ID Shopify de la variante)
+        // Récupérer l'inventory_item_id et le statut Shopify de la variante
         const { data: variant, error: variantError } = await supabase
           .from('product_variants')
-          .select('id, inventory_item_id')
+          .select('id, inventory_item_id, shopify_active')
           .eq('shopify_id', shopifyVariantId)
           .single();
 
@@ -68,35 +68,37 @@ export async function POST(request: Request) {
           continue;
         }
 
-        // Mettre à jour sur Shopify via l'API REST
-        const shopifyUrl = shop.shopify_url.replace(/\/$/, '');
-        const setResponse = await fetch(
-          `https://${shopifyUrl}/admin/api/2024-01/inventory_levels/set.json`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Shopify-Access-Token': shop.shopify_token,
-            },
-            body: JSON.stringify({
-              location_id: shopifyLocationId,
-              inventory_item_id: variant.inventory_item_id,
-              available: change.quantity,
-            }),
-          }
-        );
+        // Si la variante est live sur Shopify, mettre à jour Shopify d'abord
+        if (variant.shopify_active !== false) {
+          const shopifyUrl = shop.shopify_url.replace(/\/$/, '');
+          const setResponse = await fetch(
+            `https://${shopifyUrl}/admin/api/2024-01/inventory_levels/set.json`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Shopify-Access-Token': shop.shopify_token,
+              },
+              body: JSON.stringify({
+                location_id: shopifyLocationId,
+                inventory_item_id: variant.inventory_item_id,
+                available: change.quantity,
+              }),
+            }
+          );
 
-        if (!setResponse.ok) {
-          const errorData = await setResponse.json();
-          results.push({
-            variantId: change.variantId,
-            success: false,
-            error: errorData.errors || 'Shopify API error',
-          });
-          continue;
+          if (!setResponse.ok) {
+            const errorData = await setResponse.json();
+            results.push({
+              variantId: change.variantId,
+              success: false,
+              error: errorData.errors || 'Shopify API error',
+            });
+            continue;
+          }
         }
 
-        // Mettre à jour le cache Supabase (utiliser l'UUID de la variante)
+        // Mettre à jour le cache Supabase (variantes live ET locales)
         await supabase
           .from('inventory_levels')
           .upsert({

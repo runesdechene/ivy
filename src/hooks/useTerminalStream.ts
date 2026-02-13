@@ -10,7 +10,7 @@ export function useTerminalStream() {
     url: string,
     options?: {
       title?: string;
-      onComplete?: () => void;
+      onComplete?: (data?: Record<string, unknown>) => void;
       actions?: TerminalAction[];
     }
   ) => {
@@ -51,7 +51,7 @@ export function useTerminalStream() {
               const data = JSON.parse(line.slice(6));
               if (data.message === 'DONE') {
                 terminal.endSync(options?.actions);
-                options?.onComplete?.();
+                options?.onComplete?.(data);
                 return true;
               } else if (data.message) {
                 terminal.log(data.message, data.type || 'info');
@@ -72,7 +72,7 @@ export function useTerminalStream() {
             const data = JSON.parse(line.slice(6));
             if (data.message === 'DONE') {
               terminal.endSync(options?.actions);
-              options?.onComplete?.();
+              options?.onComplete?.(data);
               return true;
             } else if (data.message) {
               terminal.log(data.message, data.type || 'info');
