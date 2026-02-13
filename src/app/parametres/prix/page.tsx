@@ -1,16 +1,46 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { 
-  Title, Text, Paper, Stack, Table, TextInput, Button, Group, 
+import { useState, useEffect, useCallback, ReactNode } from 'react';
+import {
+  Title, Text, Paper, Stack, Table, TextInput, Button, Group,
   ActionIcon, Badge, Loader, Center, Modal, NumberInput, Select,
   Accordion, Switch, Tooltip
 } from '@mantine/core';
-import { IconPlus, IconTrash, IconEdit, IconPlayerPlay, IconCheck, IconDownload } from '@tabler/icons-react';
+import { IconPlus, IconTrash, IconEdit, IconPlayerPlay, IconCheck, IconDownload, IconCopy, IconGripVertical } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useDisclosure } from '@mantine/hooks';
 import { useShop } from '@/context/ShopContext';
 import { useTerminalStream } from '@/hooks/useTerminalStream';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  arrayMove,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+function SortableItem({ id, children }: { id: string; children: (dragHandleProps: Record<string, unknown>) => ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={style}>
+      {children({ ...attributes, ...listeners })}
+    </div>
+  );
+}
 
 interface Modifier {
   id?: string;
@@ -38,11 +68,13 @@ interface OptionModifier {
 
 interface PriceRule {
   id?: string;
+  title: string | null;
   sku: string;
   base_price: number;
   description: string | null;
   product_type: string | null;
   is_active: boolean;
+  local_only: boolean;
   last_applied_at: string | null;
   modifiers: Modifier[];
   option_modifiers: OptionModifier[];
@@ -62,8 +94,10 @@ export default function PriceRulesPage() {
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState<string | null>(null);
   const [applyingLocal, setApplyingLocal] = useState<string | null>(null);
+  const [applyingIvy, setApplyingIvy] = useState<string | null>(null);
   const [applyingAllShopify, setApplyingAllShopify] = useState(false);
   const [applyingAllLocal, setApplyingAllLocal] = useState(false);
+  const [applyingAllIvy, setApplyingAllIvy] = useState(false);
   
   const [rules, setRules] = useState<PriceRule[]>([]);
   const [metafields, setMetafields] = useState<MetafieldConfig[]>([]);
@@ -71,10 +105,12 @@ export default function PriceRulesPage() {
   const [modalOpened, { open: openModal, close: closeModal }] = useDisclosure(false);
 
   // État pour le formulaire
+  const [formTitle, setFormTitle] = useState('');
   const [formBasePrice, setFormBasePrice] = useState<number>(0);
   const [formDescription, setFormDescription] = useState('');
   const [formProductType, setFormProductType] = useState('');
   const [formSku, setFormSku] = useState('');
+  const [formLocalOnly, setFormLocalOnly] = useState(false);
   const [formModifiers, setFormModifiers] = useState<Modifier[]>([]);
   const [formOptionModifiers, setFormOptionModifiers] = useState<OptionModifier[]>([]);
 
@@ -120,10 +156,12 @@ export default function PriceRulesPage() {
   }, [fetchData]);
 
   const resetForm = () => {
+    setFormTitle('');
     setFormBasePrice(0);
     setFormDescription('');
     setFormProductType('');
     setFormSku('');
+    setFormLocalOnly(false);
     setFormModifiers([]);
     setFormOptionModifiers([]);
     setNewModifierNamespace('');
@@ -143,10 +181,34 @@ export default function PriceRulesPage() {
 
   const openEditModal = (rule: PriceRule) => {
     setEditingRule(rule);
+    setFormTitle(rule.title || '');
     setFormBasePrice(rule.base_price);
     setFormDescription(rule.description || '');
     setFormProductType(rule.product_type || '');
     setFormSku(rule.sku || '');
+    setFormLocalOnly(rule.local_only || false);
+    setFormModifiers(rule.modifiers.map(m => ({
+      namespace: m.metafield_namespace || m.namespace,
+      key: m.metafield_key || m.key,
+      value: m.metafield_value || m.value,
+      amount: m.modifier_amount || m.amount,
+    })));
+    setFormOptionModifiers((rule.option_modifiers || []).map(m => ({
+      optionName: m.option_name || m.optionName,
+      optionValue: m.option_value || m.optionValue,
+      amount: m.modifier_amount || m.amount,
+    })));
+    openModal();
+  };
+
+  const duplicateRule = (rule: PriceRule) => {
+    setEditingRule(null);
+    setFormTitle(rule.title ? `${rule.title} (copie)` : '');
+    setFormBasePrice(rule.base_price);
+    setFormDescription(rule.description || '');
+    setFormProductType(rule.product_type || '');
+    setFormSku('');
+    setFormLocalOnly(rule.local_only || false);
     setFormModifiers(rule.modifiers.map(m => ({
       namespace: m.metafield_namespace || m.namespace,
       key: m.metafield_key || m.key,
@@ -227,19 +289,23 @@ export default function PriceRulesPage() {
       const body = editingRule
         ? {
             id: editingRule.id,
+            title: formTitle.trim() || null,
             sku: formSku.trim() || formProductType,
             basePrice: formBasePrice,
             description: formDescription || null,
             productType: formProductType,
+            localOnly: formLocalOnly,
             modifiers: formModifiers,
             optionModifiers: formOptionModifiers,
           }
         : {
             shopId: currentShop.id,
+            title: formTitle.trim() || null,
             sku: formSku.trim() || formProductType,
             basePrice: formBasePrice,
             description: formDescription || null,
             productType: formProductType,
+            localOnly: formLocalOnly,
             modifiers: formModifiers,
             optionModifiers: formOptionModifiers,
           };
@@ -429,6 +495,51 @@ export default function PriceRulesPage() {
     );
   };
 
+  const applyRuleIvy = async (rule: PriceRule) => {
+    if (!currentShop || !rule.id) return;
+
+    setApplyingIvy(rule.id);
+
+    await streamFromUrl(
+      `/api/settings/price-rules/apply-ivy-stream?shopId=${currentShop.id}&ruleId=${rule.id}`,
+      {
+        title: `Stocks locaux: ${rule.product_type || rule.sku}`,
+        onComplete: () => {
+          fetchData();
+          setApplyingIvy(null);
+        },
+      }
+    );
+  };
+
+  // Appliquer toutes les règles actives sur Ivy (variantes Supabase)
+  const applyAllIvy = async () => {
+    if (!currentShop) return;
+
+    const activeRules = rules.filter(r => r.is_active);
+    if (activeRules.length === 0) {
+      notifications.show({
+        title: 'Attention',
+        message: 'Aucune règle active à appliquer',
+        color: 'orange',
+      });
+      return;
+    }
+
+    setApplyingAllIvy(true);
+
+    await streamFromUrl(
+      `/api/settings/price-rules/apply-all-stream?shopId=${currentShop.id}&target=ivy`,
+      {
+        title: 'Appliquer aux stocks locaux',
+        onComplete: () => {
+          fetchData();
+          setApplyingAllIvy(false);
+        },
+      }
+    );
+  };
+
   const toggleRuleActive = async (rule: PriceRule) => {
     try {
       const response = await fetch('/api/settings/price-rules', {
@@ -463,6 +574,36 @@ export default function PriceRulesPage() {
       return sum + amount;
     }, 0);
     return rule.base_price + modifiersTotal + optionModifiersTotal;
+  };
+
+  // DnD sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor)
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = rules.findIndex(r => r.id === active.id);
+    const newIndex = rules.findIndex(r => r.id === over.id);
+    const reordered = arrayMove(rules, oldIndex, newIndex);
+
+    // Optimistic update
+    setRules(reordered);
+
+    // Persist en arrière-plan
+    try {
+      await fetch('/api/settings/price-rules/reorder', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderedIds: reordered.map(r => r.id) }),
+      });
+    } catch {
+      // Rollback si erreur
+      fetchData();
+    }
   };
 
   // Options pour le select des métachamps
@@ -512,16 +653,28 @@ export default function PriceRulesPage() {
                 variant="light"
                 onClick={applyAllLocal}
                 loading={applyingAllLocal}
-                disabled={applyingAllShopify}
+                disabled={applyingAllShopify || applyingAllIvy}
               >
                 Appliquer aux commandes
               </Button>
+              {rules.some(r => r.is_active && r.local_only) && (
+                <Button
+                  leftSection={applyingAllIvy ? <Loader size={14} /> : <IconPlayerPlay size={16} />}
+                  color="orange"
+                  variant="light"
+                  onClick={applyAllIvy}
+                  loading={applyingAllIvy}
+                  disabled={applyingAllLocal || applyingAllShopify}
+                >
+                  Appliquer aux stocks locaux
+                </Button>
+              )}
               <Button
                 leftSection={applyingAllShopify ? <Loader size={14} /> : <IconPlayerPlay size={16} />}
                 color="green"
                 onClick={applyAllShopify}
                 loading={applyingAllShopify}
-                disabled={applyingAllLocal}
+                disabled={applyingAllLocal || applyingAllIvy}
               >
                 Appliquer toutes sur Shopify
               </Button>
@@ -537,171 +690,216 @@ export default function PriceRulesPage() {
           </Center>
         </Paper>
       ) : (
-        <Accordion variant="separated">
-          {rules.map((rule) => (
-            <Accordion.Item key={rule.id} value={rule.id || rule.sku}>
-              <Accordion.Control>
-                <Group justify="space-between" wrap="nowrap" style={{ flex: 1 }}>
-                  <Group gap="md">
-                    <Switch
-                      checked={rule.is_active}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        toggleRuleActive(rule);
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                    <div>
-                      <Text fw={600}>{rule.product_type || rule.sku}</Text>
-                      {rule.sku && rule.sku !== rule.product_type && (
-                        <Text size="xs" c="dimmed">SKU : {rule.sku}</Text>
-                      )}
-                      {rule.description && (
-                        <Text size="xs" c="dimmed">{rule.description}</Text>
-                      )}
-                    </div>
-                  </Group>
-                  <Group gap="xs">
-                    <Badge color="blue" variant="light">
-                      Base: {rule.base_price.toFixed(2)} €
-                    </Badge>
-                    {rule.modifiers.length > 0 && (
-                      <Badge color="violet" variant="light">
-                        +{rule.modifiers.length} métachamp(s)
-                      </Badge>
-                    )}
-                    {(rule.option_modifiers || []).length > 0 && (
-                      <Badge color="orange" variant="light">
-                        +{rule.option_modifiers.length} option(s)
-                      </Badge>
-                    )}
-                  </Group>
-                </Group>
-              </Accordion.Control>
-              <Accordion.Panel>
-                <Stack gap="md">
-                  {rule.modifiers.length > 0 && (
-                    <Table>
-                      <Table.Thead>
-                        <Table.Tr>
-                          <Table.Th>Métachamp</Table.Th>
-                          <Table.Th>Valeur</Table.Th>
-                          <Table.Th style={{ textAlign: 'right' }}>Majoration</Table.Th>
-                        </Table.Tr>
-                      </Table.Thead>
-                      <Table.Tbody>
-                        {rule.modifiers.map((mod, index) => (
-                          <Table.Tr key={index}>
-                            <Table.Td>
-                              {getMetafieldLabel(
-                                mod.metafield_namespace || mod.namespace,
-                                mod.metafield_key || mod.key
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={rules.map(r => r.id!)} strategy={verticalListSortingStrategy}>
+            <Accordion variant="separated">
+              {rules.map((rule) => (
+                <SortableItem key={rule.id} id={rule.id!}>
+                  {(dragHandleProps) => (
+                    <Accordion.Item value={rule.id || rule.sku}>
+                      <Accordion.Control>
+                        <Group justify="space-between" wrap="nowrap" style={{ flex: 1 }}>
+                          <Group gap="sm">
+                            <div
+                              {...dragHandleProps}
+                              onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                              style={{ cursor: 'grab', display: 'flex', alignItems: 'center', color: 'var(--mantine-color-dimmed)' }}
+                            >
+                              <IconGripVertical size={18} />
+                            </div>
+                            <Switch
+                              checked={rule.is_active}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                toggleRuleActive(rule);
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                            <div>
+                              <Text fw={600}>{rule.title || rule.product_type || rule.sku}</Text>
+                              {rule.product_type && (
+                                <Text size="xs" c="dimmed">Type : {rule.product_type}</Text>
                               )}
-                            </Table.Td>
-                            <Table.Td>
-                              <Badge variant="outline">
-                                {mod.metafield_value || mod.value}
+                              {rule.description && (
+                                <Text size="xs" c="dimmed">{rule.description}</Text>
+                              )}
+                            </div>
+                          </Group>
+                          <Group gap="xs">
+                            <Badge color="blue" variant="light">
+                              Base: {rule.base_price.toFixed(2)} €
+                            </Badge>
+                            {rule.modifiers.length > 0 && (
+                              <Badge color="violet" variant="light">
+                                +{rule.modifiers.length} métachamp(s)
                               </Badge>
-                            </Table.Td>
-                            <Table.Td style={{ textAlign: 'right' }}>
-                              <Text fw={500} c={(mod.modifier_amount || mod.amount) >= 0 ? 'green' : 'red'}>
-                                {(mod.modifier_amount || mod.amount) >= 0 ? '+' : ''}
-                                {(mod.modifier_amount || mod.amount).toFixed(2)} €
-                              </Text>
-                            </Table.Td>
-                          </Table.Tr>
-                        ))}
-                      </Table.Tbody>
-                    </Table>
-                  )}
-
-                  {/* Tableau des modificateurs d'options */}
-                  {(rule.option_modifiers || []).length > 0 && (
-                    <Table>
-                      <Table.Thead>
-                        <Table.Tr>
-                          <Table.Th>Option</Table.Th>
-                          <Table.Th>Valeur</Table.Th>
-                          <Table.Th style={{ textAlign: 'right' }}>Majoration</Table.Th>
-                        </Table.Tr>
-                      </Table.Thead>
-                      <Table.Tbody>
-                        {rule.option_modifiers.map((mod, index) => (
-                          <Table.Tr key={index}>
-                            <Table.Td>
-                              {mod.option_name || mod.optionName}
-                            </Table.Td>
-                            <Table.Td>
-                              <Badge variant="outline" color="orange">
-                                {mod.option_value || mod.optionValue}
+                            )}
+                            {(rule.option_modifiers || []).length > 0 && (
+                              <Badge color="orange" variant="light">
+                                +{rule.option_modifiers.length} option(s)
                               </Badge>
-                            </Table.Td>
-                            <Table.Td style={{ textAlign: 'right' }}>
-                              <Text fw={500} c={(mod.modifier_amount || mod.amount) >= 0 ? 'green' : 'red'}>
-                                {(mod.modifier_amount || mod.amount) >= 0 ? '+' : ''}
-                                {(mod.modifier_amount || mod.amount).toFixed(2)} €
-                              </Text>
-                            </Table.Td>
-                          </Table.Tr>
-                        ))}
-                      </Table.Tbody>
-                    </Table>
-                  )}
+                            )}
+                            {rule.local_only && (
+                              <Badge color="orange" variant="filled" size="xs">
+                                Local seulement
+                              </Badge>
+                            )}
+                          </Group>
+                        </Group>
+                      </Accordion.Control>
+                      <Accordion.Panel>
+                        <Stack gap="md">
+                          {rule.modifiers.length > 0 && (
+                            <Table>
+                              <Table.Thead>
+                                <Table.Tr>
+                                  <Table.Th>Métachamp</Table.Th>
+                                  <Table.Th>Valeur</Table.Th>
+                                  <Table.Th style={{ textAlign: 'right' }}>Majoration</Table.Th>
+                                </Table.Tr>
+                              </Table.Thead>
+                              <Table.Tbody>
+                                {rule.modifiers.map((mod, index) => (
+                                  <Table.Tr key={index}>
+                                    <Table.Td>
+                                      {getMetafieldLabel(
+                                        mod.metafield_namespace || mod.namespace,
+                                        mod.metafield_key || mod.key
+                                      )}
+                                    </Table.Td>
+                                    <Table.Td>
+                                      <Badge variant="outline">
+                                        {mod.metafield_value || mod.value}
+                                      </Badge>
+                                    </Table.Td>
+                                    <Table.Td style={{ textAlign: 'right' }}>
+                                      <Text fw={500} c={(mod.modifier_amount || mod.amount) >= 0 ? 'green' : 'red'}>
+                                        {(mod.modifier_amount || mod.amount) >= 0 ? '+' : ''}
+                                        {(mod.modifier_amount || mod.amount).toFixed(2)} €
+                                      </Text>
+                                    </Table.Td>
+                                  </Table.Tr>
+                                ))}
+                              </Table.Tbody>
+                            </Table>
+                          )}
 
-                  <Group justify="space-between">
-                    <Group gap="xs">
-                      <ActionIcon
-                        variant="light"
-                        color="blue"
-                        onClick={() => openEditModal(rule)}
-                      >
-                        <IconEdit size={16} />
-                      </ActionIcon>
-                      <ActionIcon
-                        variant="light"
-                        color="red"
-                        onClick={() => rule.id && deleteRule(rule.id)}
-                      >
-                        <IconTrash size={16} />
-                      </ActionIcon>
-                    </Group>
-                    <Group gap="xs">
-                      <Tooltip label="Met à jour les coûts dans les commandes Supabase">
-                        <Button
-                          leftSection={applyingLocal === rule.id ? <Loader size={14} /> : <IconPlayerPlay size={16} />}
-                          color="blue"
-                          variant="light"
-                          onClick={() => applyRuleLocal(rule)}
-                          loading={applyingLocal === rule.id}
-                          disabled={!rule.is_active}
-                        >
-                          Appliquer aux commandes
-                        </Button>
-                      </Tooltip>
-                      <Tooltip label="Appliquer sur Shopify (met à jour le coût des variantes)">
-                        <Button
-                          leftSection={applying === rule.id ? <Loader size={14} /> : <IconPlayerPlay size={16} />}
-                          color="green"
-                          onClick={() => applyRule(rule)}
-                          loading={applying === rule.id}
-                          disabled={!rule.is_active}
-                        >
-                          Appliquer sur Shopify
-                        </Button>
-                      </Tooltip>
-                    </Group>
-                  </Group>
+                          {/* Tableau des modificateurs d'options */}
+                          {(rule.option_modifiers || []).length > 0 && (
+                            <Table>
+                              <Table.Thead>
+                                <Table.Tr>
+                                  <Table.Th>Option</Table.Th>
+                                  <Table.Th>Valeur</Table.Th>
+                                  <Table.Th style={{ textAlign: 'right' }}>Majoration</Table.Th>
+                                </Table.Tr>
+                              </Table.Thead>
+                              <Table.Tbody>
+                                {rule.option_modifiers.map((mod, index) => (
+                                  <Table.Tr key={index}>
+                                    <Table.Td>
+                                      {mod.option_name || mod.optionName}
+                                    </Table.Td>
+                                    <Table.Td>
+                                      <Badge variant="outline" color="orange">
+                                        {mod.option_value || mod.optionValue}
+                                      </Badge>
+                                    </Table.Td>
+                                    <Table.Td style={{ textAlign: 'right' }}>
+                                      <Text fw={500} c={(mod.modifier_amount || mod.amount) >= 0 ? 'green' : 'red'}>
+                                        {(mod.modifier_amount || mod.amount) >= 0 ? '+' : ''}
+                                        {(mod.modifier_amount || mod.amount).toFixed(2)} €
+                                      </Text>
+                                    </Table.Td>
+                                  </Table.Tr>
+                                ))}
+                              </Table.Tbody>
+                            </Table>
+                          )}
 
-                  {rule.last_applied_at && (
-                    <Text size="xs" c="dimmed" ta="right">
-                      Dernière application : {new Date(rule.last_applied_at).toLocaleString('fr-FR')}
-                    </Text>
+                          <Group justify="space-between">
+                            <Group gap="xs">
+                              <ActionIcon
+                                variant="light"
+                                color="blue"
+                                onClick={() => openEditModal(rule)}
+                              >
+                                <IconEdit size={16} />
+                              </ActionIcon>
+                              <ActionIcon
+                                variant="light"
+                                color="gray"
+                                onClick={() => duplicateRule(rule)}
+                              >
+                                <IconCopy size={16} />
+                              </ActionIcon>
+                              <ActionIcon
+                                variant="light"
+                                color="red"
+                                onClick={() => rule.id && deleteRule(rule.id)}
+                              >
+                                <IconTrash size={16} />
+                              </ActionIcon>
+                            </Group>
+                            <Group gap="xs">
+                              {!rule.local_only && (
+                                <Tooltip label="Met à jour les coûts dans les commandes Supabase">
+                                  <Button
+                                    leftSection={applyingLocal === rule.id ? <Loader size={14} /> : <IconPlayerPlay size={16} />}
+                                    color="blue"
+                                    variant="light"
+                                    onClick={() => applyRuleLocal(rule)}
+                                    loading={applyingLocal === rule.id}
+                                    disabled={!rule.is_active}
+                                  >
+                                    Appliquer aux commandes
+                                  </Button>
+                                </Tooltip>
+                              )}
+                              {rule.local_only && (
+                                <Tooltip label="Met à jour les coûts des variantes locales dans Supabase">
+                                  <Button
+                                    leftSection={applyingIvy === rule.id ? <Loader size={14} /> : <IconPlayerPlay size={16} />}
+                                    color="orange"
+                                    variant="light"
+                                    onClick={() => applyRuleIvy(rule)}
+                                    loading={applyingIvy === rule.id}
+                                    disabled={!rule.is_active}
+                                  >
+                                    Appliquer aux stocks locaux
+                                  </Button>
+                                </Tooltip>
+                              )}
+                              {!rule.local_only && (
+                                <Tooltip label="Appliquer sur Shopify (met à jour le coût des variantes)">
+                                  <Button
+                                    leftSection={applying === rule.id ? <Loader size={14} /> : <IconPlayerPlay size={16} />}
+                                    color="green"
+                                    onClick={() => applyRule(rule)}
+                                    loading={applying === rule.id}
+                                    disabled={!rule.is_active}
+                                  >
+                                    Appliquer sur Shopify
+                                  </Button>
+                                </Tooltip>
+                              )}
+                            </Group>
+                          </Group>
+
+                          {rule.last_applied_at && (
+                            <Text size="xs" c="dimmed" ta="right">
+                              Dernière application : {new Date(rule.last_applied_at).toLocaleString('fr-FR')}
+                            </Text>
+                          )}
+                        </Stack>
+                      </Accordion.Panel>
+                    </Accordion.Item>
                   )}
-                </Stack>
-              </Accordion.Panel>
-            </Accordion.Item>
-          ))}
-        </Accordion>
+                </SortableItem>
+              ))}
+            </Accordion>
+          </SortableContext>
+        </DndContext>
       )}
 
       {/* Modal de création/édition */}
@@ -713,7 +911,15 @@ export default function PriceRulesPage() {
       >
         <Stack gap="md">
           <TextInput
-            label="Type de produit"
+            label="Titre de la règle"
+            placeholder="Ex: Slammer DTG, Hoodie brodé..."
+            value={formTitle}
+            onChange={(e) => setFormTitle(e.target.value)}
+            description="Nom affiché dans l'interface. Si vide, le type de produit sera utilisé."
+          />
+
+          <TextInput
+            label="Type de produit (ciblage)"
             placeholder="Ex: T-shirt, Sweat, Hoodie..."
             value={formProductType}
             onChange={(e) => setFormProductType(e.target.value)}
@@ -745,6 +951,13 @@ export default function PriceRulesPage() {
             placeholder="Ex: T-shirt basique"
             value={formDescription}
             onChange={(e) => setFormDescription(e.target.value)}
+          />
+
+          <Switch
+            label="Appliquer seulement aux variantes locales"
+            description="Si activé, cette règle ne ciblera que les variantes non-Shopify (locales)"
+            checked={formLocalOnly}
+            onChange={(e) => setFormLocalOnly(e.currentTarget.checked)}
           />
 
           <Paper withBorder p="md" radius="md">

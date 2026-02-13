@@ -205,6 +205,8 @@ export async function GET(request: NextRequest) {
 
         if (target === 'shopify') {
           await applyAllOnShopify(shop, rules, send, streamClosed);
+        } else if (target === 'ivy') {
+          await applyAllOnIvy(rules, send, shopId);
         } else {
           await applyAllLocal(shop, rules, send, shopId);
         }
@@ -487,4 +489,186 @@ async function applyAllLocal(
   send('', 'info');
   send('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
   send(`✅ Terminé: ${totalOrderItemsUpdated} article(s) mis à jour dans ${totalOrders} commande(s)`, 'success');
+}
+
+async function applyAllOnIvy(
+  rules: any[],
+  send: (message: string, type?: string) => void,
+  shopId: string
+) {
+  let totalUpdated = 0;
+  let totalSkipped = 0;
+
+  // Ne traiter que les règles local_only
+  const localRules = rules.filter(r => r.local_only);
+  if (localRules.length === 0) {
+    send('⚠️ Aucune règle avec "local seulement" activée', 'warning');
+    return;
+  }
+
+  send(`🔒 ${localRules.length} règle(s) "local seulement" à appliquer`, 'info');
+
+  for (const rule of localRules) {
+    send('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+
+    if (!rule.product_type) {
+      send(`⚠️ Règle ignorée (pas de type de produit défini)`, 'warning');
+      continue;
+    }
+
+    send(`📋 Règle: ${rule.product_type} (base: ${rule.base_price}€)`, 'info');
+
+    // Récupérer les produits du type correspondant avec leurs variantes
+    const { data: products, error: productsError } = await supabase
+      .from('products')
+      .select(`
+        id,
+        title,
+        product_type,
+        option1_name,
+        option2_name,
+        option3_name,
+        variants:product_variants(
+          id,
+          sku,
+          title,
+          option1,
+          option2,
+          option3,
+          cost,
+          shopify_active
+        )
+      `)
+      .eq('shop_id', shopId)
+      .ilike('product_type', rule.product_type)
+      .in('status', ['active', 'local', 'draft']);
+
+    if (productsError || !products) {
+      send(`  ❌ Erreur: ${productsError?.message || 'Aucun produit'}`, 'error');
+      continue;
+    }
+
+    // Filtrer les variantes locales seulement
+    for (const product of products) {
+      (product as any).variants = ((product.variants as any[]) || []).filter(
+        (v: any) => v.shopify_active === false
+      );
+    }
+
+    const totalVariants = products.reduce((sum, p) => sum + ((p.variants as any[])?.length || 0), 0);
+    if (totalVariants === 0) {
+      send(`  ⚠️ Aucune variante locale trouvée`, 'warning');
+      continue;
+    }
+
+    send(`  └─ ${totalVariants} variante(s) locale(s) à traiter`, 'info');
+
+    // Charger les métachamps si nécessaire
+    let variantMetafieldsMap: Record<string, Array<{ namespace: string; key: string; value: string }>> = {};
+    if (rule.modifiers?.length > 0) {
+      const variantIds = products.flatMap(p => ((p.variants as any[]) || []).map((v: any) => v.id));
+      if (variantIds.length > 0) {
+        try {
+          const { data: metafieldsData } = await supabase
+            .from('variant_metafields')
+            .select('variant_id, namespace, key, value')
+            .in('variant_id', variantIds);
+
+          if (metafieldsData) {
+            for (const mf of metafieldsData) {
+              if (!variantMetafieldsMap[mf.variant_id]) {
+                variantMetafieldsMap[mf.variant_id] = [];
+              }
+              variantMetafieldsMap[mf.variant_id].push({
+                namespace: mf.namespace,
+                key: mf.key,
+                value: mf.value,
+              });
+            }
+          }
+        } catch {
+          // Table not available
+        }
+      }
+    }
+
+    for (const product of products) {
+      const optionNames = {
+        option1: product.option1_name || 'Option 1',
+        option2: product.option2_name || 'Option 2',
+        option3: product.option3_name || 'Option 3',
+      };
+
+      for (const variant of (product.variants as any[]) || []) {
+        let cost = rule.base_price;
+        const costParts: string[] = [`${rule.base_price}€`];
+
+        // Modificateurs métachamps
+        const metafields = variantMetafieldsMap[variant.id] || [];
+        for (const modifier of rule.modifiers || []) {
+          const match = metafields.find(
+            (mf) =>
+              mf.namespace === modifier.metafield_namespace &&
+              mf.key === modifier.metafield_key &&
+              mf.value === modifier.metafield_value
+          );
+          if (match) {
+            cost += modifier.modifier_amount;
+            const sign = modifier.modifier_amount >= 0 ? '+' : '';
+            costParts.push(`${sign}${modifier.modifier_amount}€ (${modifier.metafield_value})`);
+          }
+        }
+
+        // Modificateurs d'options
+        const selectedOptions: Array<{ name: string; value: string }> = [];
+        if (variant.option1) selectedOptions.push({ name: optionNames.option1, value: variant.option1 });
+        if (variant.option2) selectedOptions.push({ name: optionNames.option2, value: variant.option2 });
+        if (variant.option3) selectedOptions.push({ name: optionNames.option3, value: variant.option3 });
+
+        for (const optMod of rule.option_modifiers || []) {
+          const match = selectedOptions.find(
+            (opt) =>
+              opt.name.toLowerCase() === optMod.option_name.toLowerCase() &&
+              opt.value.toLowerCase() === optMod.option_value.toLowerCase()
+          );
+          if (match) {
+            cost += optMod.modifier_amount;
+            const sign = optMod.modifier_amount >= 0 ? '+' : '';
+            costParts.push(`${sign}${optMod.modifier_amount}€ (${optMod.option_value})`);
+          }
+        }
+
+        const roundedCost = Math.round(cost * 100) / 100;
+        const currentCost = variant.cost || 0;
+
+        if (Math.abs(roundedCost - currentCost) < 0.005) {
+          totalSkipped++;
+          continue;
+        }
+
+        const { error: updateError } = await supabase
+          .from('product_variants')
+          .update({ cost: roundedCost })
+          .eq('id', variant.id);
+
+        if (updateError) {
+          send(`    ❌ ${variant.sku}: ${updateError.message}`, 'error');
+        } else {
+          const calcStr = costParts.length > 1 ? ` (${costParts.join(' ')})` : '';
+          send(`    ✓ ${variant.sku || 'no-sku'} → ${roundedCost.toFixed(2)}€${calcStr}`, 'progress');
+          totalUpdated++;
+        }
+      }
+    }
+
+    // Mettre à jour la date de dernière application
+    await supabase
+      .from('price_rules')
+      .update({ last_applied_at: new Date().toISOString() })
+      .eq('id', rule.id);
+  }
+
+  send('', 'info');
+  send('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+  send(`✅ Terminé: ${totalUpdated} mise(s) à jour, ${totalSkipped} inchangée(s)`, 'success');
 }

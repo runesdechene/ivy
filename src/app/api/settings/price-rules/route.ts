@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Récupérer les règles avec leurs modificateurs et options
-    const { data: rules, error } = await supabase
+    let { data: rules, error } = await supabase
       .from('price_rules')
       .select(`
         *,
@@ -25,11 +25,27 @@ export async function GET(request: NextRequest) {
         option_modifiers:price_rule_option_modifiers(*)
       `)
       .eq('shop_id', shopId)
-      .order('sku', { ascending: true });
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true });
+
+    // Si la colonne sort_order n'existe pas encore, fallback sans tri
+    if (error && error.message.includes('sort_order')) {
+      const fallback = await supabase
+        .from('price_rules')
+        .select(`
+          *,
+          modifiers:price_rule_modifiers(*),
+          option_modifiers:price_rule_option_modifiers(*)
+        `)
+        .eq('shop_id', shopId)
+        .order('created_at', { ascending: true });
+      rules = fallback.data;
+      error = fallback.error;
+    }
 
     // Si la table n'existe pas encore, retourner un tableau vide
     if (error) {
-      if (error.code === '42P01' || error.message.includes('does not exist')) {
+      if (error.code === '42P01') {
         return NextResponse.json({ rules: [] });
       }
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -47,7 +63,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { shopId, sku, basePrice, description, productType, modifiers, optionModifiers } = body;
+    const { shopId, sku, basePrice, description, productType, localOnly, title, modifiers, optionModifiers } = body;
 
     if (!shopId || !sku) {
       return NextResponse.json({ error: 'Missing shopId or sku' }, { status: 400 });
@@ -62,6 +78,8 @@ export async function POST(request: NextRequest) {
         base_price: basePrice || 0,
         description: description || null,
         product_type: productType || null,
+        local_only: localOnly || false,
+        title: title || null,
       })
       .select()
       .single();
@@ -130,7 +148,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, sku, basePrice, description, isActive, productType, modifiers, optionModifiers } = body;
+    const { id, sku, basePrice, description, isActive, productType, localOnly, title, modifiers, optionModifiers } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Missing rule id' }, { status: 400 });
@@ -146,6 +164,8 @@ export async function PUT(request: NextRequest) {
     if (description !== undefined) updateData.description = description;
     if (isActive !== undefined) updateData.is_active = isActive;
     if (productType !== undefined) updateData.product_type = productType;
+    if (localOnly !== undefined) updateData.local_only = localOnly;
+    if (title !== undefined) updateData.title = title;
 
     const { error: ruleError } = await supabase
       .from('price_rules')
