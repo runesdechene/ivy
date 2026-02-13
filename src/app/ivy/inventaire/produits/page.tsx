@@ -10,6 +10,7 @@ import { useLocation } from '@/context/LocationContext';
 import { useTerminalStream } from '@/hooks/useTerminalStream';
 import { ProductCard, ProductData } from '@/components/Inventory';
 import { ProductDetailView } from '@/components/Inventory/ProductDetailView';
+import { loadColorMappingsFromSupabase } from '@/utils/color-transformer';
 import styles from './inventory.module.scss';
 
 export default function InventoryPage() {
@@ -36,6 +37,8 @@ export default function InventoryPage() {
     setError(null);
 
     try {
+      await loadColorMappingsFromSupabase(currentShop.id);
+
       const params = new URLSearchParams({ shopId: currentShop.id });
       if (currentLocation) {
         params.append('locationId', currentLocation.id);
