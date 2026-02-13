@@ -51,7 +51,8 @@ export async function GET(request: Request) {
             sku,
             option1,
             option2,
-            option3
+            option3,
+            shopify_active
           )
         `)
         .eq('shop_id', shopId)
@@ -111,6 +112,7 @@ export async function GET(request: Request) {
             option2,
             option3,
             cost,
+            shopify_active,
             inventory_levels(
               quantity,
               location_id
@@ -243,6 +245,7 @@ export async function GET(request: Request) {
           quantity,
           size,
           cost: variant.cost || 0,
+          shopifyActive: variant.shopify_active ?? true,
           options: [
             variant.option1 && { name: optionNames?.option1_name || 'Option 1', value: variant.option1 },
             variant.option2 && { name: optionNames?.option2_name || 'Option 2', value: variant.option2 },

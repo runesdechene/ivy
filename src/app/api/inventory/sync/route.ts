@@ -149,6 +149,7 @@ export async function POST(request: Request) {
           option3: variant.option3,
           inventory_item_id: variant.inventory_item_id?.toString(),
           cost: variant.cost ? parseFloat(variant.cost) : 0,
+          shopify_active: true,
         });
 
         if (variant.inventory_item_id) {
@@ -167,6 +168,35 @@ export async function POST(request: Request) {
     }
 
     console.log(`Upserted ${variantsToUpsert.length} variants`);
+
+    // 5a. Marquer les variantes absentes de Shopify comme locales
+    const shopifyVariantIdsByProduct: Record<string, string[]> = {};
+    for (const v of variantsToUpsert) {
+      if (!shopifyVariantIdsByProduct[v.product_id]) {
+        shopifyVariantIdsByProduct[v.product_id] = [];
+      }
+      shopifyVariantIdsByProduct[v.product_id].push(v.shopify_id);
+    }
+
+    let localVariantsCount = 0;
+    for (const productId of Object.keys(shopifyVariantIdsByProduct)) {
+      const activeShopifyIds = shopifyVariantIdsByProduct[productId];
+      const { data: markedRows } = await supabase
+        .from('product_variants')
+        .update({ shopify_active: false })
+        .eq('product_id', productId)
+        .eq('shopify_active', true)
+        .not('shopify_id', 'in', `(${activeShopifyIds.join(',')})`)
+        .select('id');
+
+      if (markedRows) {
+        localVariantsCount += markedRows.length;
+      }
+    }
+
+    if (localVariantsCount > 0) {
+      console.log(`Marked ${localVariantsCount} variants as local-only`);
+    }
 
     // 5b. Récupérer les coûts depuis inventory_items (le cost n'est pas dans products.json)
     try {

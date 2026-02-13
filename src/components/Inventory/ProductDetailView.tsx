@@ -357,6 +357,7 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
               <Table.Tr>
                 <Table.Th>Variante</Table.Th>
                 <Table.Th>SKU</Table.Th>
+                <Table.Th style={{ textAlign: 'center' }}>État</Table.Th>
                 <Table.Th style={{ textAlign: 'right' }}>Coût</Table.Th>
                 <Table.Th style={{ textAlign: 'right' }}>Quantité</Table.Th>
               </Table.Tr>
@@ -369,9 +370,9 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
                       {getVariantDisplayParts(variant).map((part, idx, arr) => (
                         <span key={idx}>
                           {part.color && (
-                            <span 
+                            <span
                               className={styles.colorDot}
-                              style={{ 
+                              style={{
                                 background: part.color,
                                 border: part.color === '#FFFFFF' ? '1px solid #ccc' : 'none'
                               }}
@@ -385,6 +386,15 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
                   </Table.Td>
                   <Table.Td className={styles.variantSku}>
                     {variant.sku || '-'}
+                  </Table.Td>
+                  <Table.Td style={{ textAlign: 'center' }}>
+                    <Badge
+                      size="xs"
+                      color={variant.shopifyActive === false ? 'gray' : 'green'}
+                      variant="light"
+                    >
+                      {variant.shopifyActive === false ? 'Locale' : 'Live'}
+                    </Badge>
                   </Table.Td>
                   <Table.Td style={{ textAlign: 'right' }}>
                     <Text size="sm" fw={500} c={(variant.cost || 0) > 0 ? 'blue' : 'orange'}>

@@ -22,6 +22,7 @@ export interface ProductData {
     quantity: number;
     size: string | null;
     cost?: number;
+    shopifyActive?: boolean;
     options: Array<{ name: string; value: string }>;
     metafields?: Array<{ namespace: string; key: string; value: string }>;
   }>;
@@ -33,6 +34,9 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product, onClick }: ProductCardProps) {
+  // Compter les variantes locales
+  const localVariantsCount = product.variants.filter(v => v.shopifyActive === false).length;
+
   // Formater le breakdown des tailles
   const sizeText = Object.entries(product.sizeBreakdown)
     .filter(([_, qty]) => qty > 0)
@@ -81,11 +85,16 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
         )}
         {product.costRange && (
           <Text size="xs" c={product.costRange.min === 0 ? 'orange' : 'blue'} fw={500}>
-            {product.costRange.min === product.costRange.max 
+            {product.costRange.min === product.costRange.max
               ? `${product.costRange.min.toFixed(2)} €`
               : `${product.costRange.min.toFixed(2)} - ${product.costRange.max.toFixed(2)} €`
             }
           </Text>
+        )}
+        {localVariantsCount > 0 && (
+          <Badge size="xs" color="orange" variant="light">
+            {localVariantsCount} locale{localVariantsCount > 1 ? 's' : ''}
+          </Badge>
         )}
       </Stack>
     </Paper>

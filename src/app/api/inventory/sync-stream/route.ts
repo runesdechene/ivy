@@ -261,6 +261,7 @@ export async function GET(request: NextRequest) {
               inventory_item_id: inventoryItemId,
               cost: cost,
               price: price,
+              shopify_active: true,
             });
 
             if (variant.inventory_item_id) {
@@ -286,6 +287,36 @@ export async function GET(request: NextRequest) {
         }
 
         send(`✓ ${variantsToUpsert.length} variantes sauvegardées avec coûts`, 'success');
+
+        // Marquer les variantes absentes de Shopify comme locales (shopify_active = false)
+        const shopifyVariantIdsByProduct: Record<string, string[]> = {};
+        for (const v of variantsToUpsert) {
+          if (!shopifyVariantIdsByProduct[v.product_id]) {
+            shopifyVariantIdsByProduct[v.product_id] = [];
+          }
+          shopifyVariantIdsByProduct[v.product_id].push(v.shopify_id);
+        }
+
+        let localVariantsCount = 0;
+        const syncedProductIds = Object.keys(shopifyVariantIdsByProduct);
+        for (const productId of syncedProductIds) {
+          const activeShopifyIds = shopifyVariantIdsByProduct[productId];
+          const { data: markedRows } = await supabase
+            .from('product_variants')
+            .update({ shopify_active: false })
+            .eq('product_id', productId)
+            .eq('shopify_active', true)
+            .not('shopify_id', 'in', `(${activeShopifyIds.join(',')})`)
+            .select('id');
+
+          if (markedRows) {
+            localVariantsCount += markedRows.length;
+          }
+        }
+
+        if (localVariantsCount > 0) {
+          send(`📌 ${localVariantsCount} variante${localVariantsCount > 1 ? 's' : ''} marquée${localVariantsCount > 1 ? 's' : ''} comme locale${localVariantsCount > 1 ? 's' : ''}`, 'info');
+        }
 
         // Récupérer les IDs des variantes pour l'inventaire
         const { data: dbVariants } = await supabase
