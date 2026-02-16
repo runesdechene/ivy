@@ -4,6 +4,7 @@ const UPSERT_BATCH_SIZE = 500;
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 100;
 const SHOPIFY_MAX_QUERY_COST = 950; // Marge de sécurité sous la limite de 1000
+const FETCH_TIMEOUT_MS = 30_000; // 30 secondes max par requête GraphQL
 
 type LogFn = (message: string, type?: string) => void;
 
@@ -21,22 +22,21 @@ interface MetafieldRow {
   synced_at: string;
 }
 
-function buildMetafieldsQuery(): string {
+/**
+ * Construit une requête GraphQL ciblée : un champ `metafield(namespace, key)` par config active.
+ * Coût estimé par nœud : 1 (nœud) + N (un par metafield singulier) au lieu de 1 + 50.
+ */
+function buildTargetedMetafieldsQuery(configs: MetafieldConfig[]): string {
+  const metafieldFields = configs.map((c, i) =>
+    `mf${i}: metafield(namespace: "${c.namespace}", key: "${c.key}") { namespace key value type }`
+  ).join('\n          ');
+
   return `
     query GetVariantMetafields($ids: [ID!]!) {
       nodes(ids: $ids) {
         ... on ProductVariant {
           id
-          metafields(first: 50) {
-            edges {
-              node {
-                namespace
-                key
-                value
-                type
-              }
-            }
-          }
+          ${metafieldFields}
         }
       }
     }
@@ -68,21 +68,14 @@ export async function syncVariantMetafields(
     return 0;
   }
 
-  // Map pour filtrage rapide (case-insensitive)
-  const configMap = new Map<string, MetafieldConfig>();
-  for (const c of configs) {
-    configMap.set(`${c.namespace}.${c.key}`.toLowerCase(), c);
-  }
-
   const shopifyIds = Object.keys(variantIdMap);
   if (shopifyIds.length === 0) return 0;
 
-  // metafields(first: 50) pour couvrir tous les métachamps existants sur la variante
-  // Coût GraphQL par nœud : 1 (nœud) + 50 (métachamps) = 51
-  // Batch = floor(950 / 51) = 18 variantes par requête
-  const costPerNode = 51;
-  const batchSize = Math.max(10, Math.floor(SHOPIFY_MAX_QUERY_COST / costPerNode));
-  const query = buildMetafieldsQuery();
+  // Requête ciblée : 1 champ metafield() par config → coût estimé = 1 + N configs
+  // Avec 3 configs : 4/nœud au lieu de 51 → ~237 variantes/batch au lieu de 18
+  const costPerNode = 1 + configs.length;
+  const batchSize = Math.min(250, Math.max(10, Math.floor(SHOPIFY_MAX_QUERY_COST / costPerNode)));
+  const query = buildTargetedMetafieldsQuery(configs);
 
   send('', 'info');
   send(`🏷️ Synchronisation des métachamps (${configs.length} config(s), batch de ${batchSize})...`, 'info');
@@ -101,10 +94,11 @@ export async function syncVariantMetafields(
     const batch = shopifyIds.slice(i, i + batchSize);
     const gids = batch.map(id => `gid://shopify/ProductVariant/${id}`);
 
-    if (totalBatches > 5 && batchNum % 10 === 1) {
-      send(`  └─ Batch ${batchNum}-${Math.min(batchNum + 9, totalBatches)}/${totalBatches}...`, 'progress');
-    } else if (totalBatches > 1 && totalBatches <= 5) {
+    // Toujours envoyer un message par batch pour garder le stream SSE actif
+    if (totalBatches <= 5) {
       send(`  └─ Batch ${batchNum}/${totalBatches} (${batch.length} variantes)...`, 'progress');
+    } else {
+      send(`  └─ Batch ${batchNum}/${totalBatches}...`, 'progress');
     }
 
     let retries = 0;
@@ -117,104 +111,119 @@ export async function syncVariantMetafields(
         await new Promise(resolve => setTimeout(resolve, backoff));
       }
 
-      const response = await fetch(
-        `https://${shopDomain}/admin/api/2024-01/graphql.json`,
-        {
-          method: 'POST',
-          headers: {
-            'X-Shopify-Access-Token': shopToken,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            query,
-            variables: { ids: gids },
-          }),
-        }
-      );
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
-      if (response.ok) {
-        const data = await response.json();
-
-        // Rate limiting dynamique basé sur le budget disponible Shopify
-        if (data.extensions?.cost) {
-          const cost = data.extensions.cost;
-          lastActualCost = cost.actualQueryCost || lastActualCost;
-          lastRestoreRate = cost.throttleStatus?.restoreRate || lastRestoreRate;
-          const available = cost.throttleStatus?.currentlyAvailable ?? 1000;
-
-          if (batchNum === 1) {
-            send(`    📊 Coût réel: ${lastActualCost}, budget: ${available}/${cost.throttleStatus?.maximumAvailable}, recharge: ${lastRestoreRate}/s`, 'info');
+        const response = await fetch(
+          `https://${shopDomain}/admin/api/2024-01/graphql.json`,
+          {
+            method: 'POST',
+            headers: {
+              'X-Shopify-Access-Token': shopToken,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              query,
+              variables: { ids: gids },
+            }),
+            signal: controller.signal,
           }
+        );
 
-          // Si le budget restant est insuffisant pour le prochain batch, attendre la recharge
-          if (available < lastActualCost * 1.2 && i + batchSize < shopifyIds.length) {
-            const deficit = lastActualCost * 1.2 - available;
-            const waitMs = Math.ceil((deficit / lastRestoreRate) * 1000) + 100;
-            if (waitMs > 200) {
-              await new Promise(resolve => setTimeout(resolve, waitMs));
+        clearTimeout(timeoutId);
+
+        if (response.ok) {
+          const data = await response.json();
+
+          // Rate limiting dynamique basé sur le budget disponible Shopify
+          if (data.extensions?.cost) {
+            const cost = data.extensions.cost;
+            lastActualCost = cost.actualQueryCost || lastActualCost;
+            lastRestoreRate = cost.throttleStatus?.restoreRate || lastRestoreRate;
+            const available = cost.throttleStatus?.currentlyAvailable ?? 1000;
+
+            if (batchNum === 1) {
+              send(`    📊 Coût réel: ${lastActualCost}, budget: ${available}/${cost.throttleStatus?.maximumAvailable}, recharge: ${lastRestoreRate}/s`, 'info');
+            }
+
+            // Si le budget restant est insuffisant pour le prochain batch, attendre la recharge
+            if (available < lastActualCost * 1.2 && i + batchSize < shopifyIds.length) {
+              const deficit = lastActualCost * 1.2 - available;
+              const waitMs = Math.ceil((deficit / lastRestoreRate) * 1000) + 100;
+              if (waitMs > 200) {
+                await new Promise(resolve => setTimeout(resolve, waitMs));
+              }
             }
           }
-        }
 
-        if (data.errors) {
-          const throttled = data.errors.some((e: { message?: string }) =>
-            e.message?.includes('Throttled')
-          );
-          const costExceeded = data.errors.some((e: { message?: string }) =>
-            e.message?.includes('cost') || e.message?.includes('exceeded')
-          );
+          if (data.errors) {
+            const throttled = data.errors.some((e: { message?: string }) =>
+              e.message?.includes('Throttled')
+            );
+            const costExceeded = data.errors.some((e: { message?: string }) =>
+              e.message?.includes('cost') || e.message?.includes('exceeded')
+            );
 
-          if ((throttled || costExceeded) && retries < MAX_RETRIES) {
-            retries++;
-            // Attendre plus longtemps pour laisser le bucket se remplir
-            const throttleWait = Math.ceil((lastActualCost * 2) / lastRestoreRate * 1000);
-            send(`    ⏳ ${costExceeded ? 'Coût dépassé' : 'Throttled'}, attente ${(throttleWait / 1000).toFixed(1)}s (retry ${retries}/${MAX_RETRIES})...`, 'warning');
+            if ((throttled || costExceeded) && retries < MAX_RETRIES) {
+              retries++;
+              // Attendre plus longtemps pour laisser le bucket se remplir
+              const throttleWait = Math.ceil((lastActualCost * 2) / lastRestoreRate * 1000);
+              send(`    ⏳ ${costExceeded ? 'Coût dépassé' : 'Throttled'}, attente ${(throttleWait / 1000).toFixed(1)}s (retry ${retries}/${MAX_RETRIES})...`, 'warning');
+              await new Promise(resolve => setTimeout(resolve, throttleWait));
+              continue;
+            }
+            send(`    ⚠️ Erreurs GraphQL: ${data.errors[0]?.message}`, 'warning');
+          }
+
+          const nodes = data.data?.nodes || [];
+          for (const node of nodes) {
+            if (!node?.id) {
+              nullNodesCount++;
+              continue;
+            }
+            const shopifyId = node.id.replace('gid://shopify/ProductVariant/', '');
+            const variantUuid = variantIdMap[shopifyId];
+            if (!variantUuid) continue;
+
+            // Lire chaque champ mfN (un par config active)
+            for (let ci = 0; ci < configs.length; ci++) {
+              const mf = node[`mf${ci}`];
+              if (!mf?.value) continue;
+
+              allRows.push({
+                variant_id: variantUuid,
+                namespace: mf.namespace,
+                key: mf.key,
+                value: mf.value,
+                type: mf.type || 'single_line_text_field',
+                synced_at: now,
+              });
+            }
+          }
+          success = true;
+        } else if (response.status === 429) {
+          retries++;
+          const throttleWait = Math.ceil((lastActualCost * 2) / lastRestoreRate * 1000);
+          if (retries <= MAX_RETRIES) {
+            send(`    ⏳ HTTP 429, attente ${(throttleWait / 1000).toFixed(1)}s (retry ${retries}/${MAX_RETRIES})...`, 'warning');
             await new Promise(resolve => setTimeout(resolve, throttleWait));
-            continue;
+          } else {
+            send(`    ❌ Batch ${batchNum}: rate limit après ${MAX_RETRIES} retries`, 'error');
           }
-          send(`    ⚠️ Erreurs GraphQL: ${data.errors[0]?.message}`, 'warning');
-        }
-
-        const nodes = data.data?.nodes || [];
-        for (const node of nodes) {
-          if (!node?.id) {
-            nullNodesCount++;
-            continue;
-          }
-          const shopifyId = node.id.replace('gid://shopify/ProductVariant/', '');
-          const variantUuid = variantIdMap[shopifyId];
-          if (!variantUuid) continue;
-
-          for (const edge of node.metafields?.edges || []) {
-            const mf = edge.node;
-            if (!mf?.value) continue;
-
-            const fullKey = `${mf.namespace}.${mf.key}`.toLowerCase();
-            if (!configMap.has(fullKey)) continue;
-
-            allRows.push({
-              variant_id: variantUuid,
-              namespace: mf.namespace,
-              key: mf.key,
-              value: mf.value,
-              type: mf.type || 'single_line_text_field',
-              synced_at: now,
-            });
-          }
-        }
-        success = true;
-      } else if (response.status === 429) {
-        retries++;
-        const throttleWait = Math.ceil((lastActualCost * 2) / lastRestoreRate * 1000);
-        if (retries <= MAX_RETRIES) {
-          send(`    ⏳ HTTP 429, attente ${(throttleWait / 1000).toFixed(1)}s (retry ${retries}/${MAX_RETRIES})...`, 'warning');
-          await new Promise(resolve => setTimeout(resolve, throttleWait));
         } else {
-          send(`    ❌ Batch ${batchNum}: rate limit après ${MAX_RETRIES} retries`, 'error');
+          send(`    ❌ Erreur GraphQL batch ${batchNum}: ${response.status}`, 'error');
+          break;
         }
-      } else {
-        send(`    ❌ Erreur GraphQL batch ${batchNum}: ${response.status}`, 'error');
-        break;
+      } catch (fetchError: unknown) {
+        const errMsg = fetchError instanceof Error ? fetchError.message : String(fetchError);
+        const isTimeout = errMsg.includes('abort');
+        retries++;
+        if (retries <= MAX_RETRIES) {
+          send(`    ⚠️ Batch ${batchNum}: ${isTimeout ? 'timeout' : errMsg}, retry ${retries}/${MAX_RETRIES}...`, 'warning');
+        } else {
+          send(`    ❌ Batch ${batchNum}: échec après ${MAX_RETRIES} retries (${errMsg})`, 'error');
+        }
       }
     }
   }

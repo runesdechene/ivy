@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { Button, Title, Text, Badge, Group, Stack, Table, Image, NumberInput, ActionIcon, Loader, Modal, Paper } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconArrowLeft, IconPhoto, IconPlus, IconMinus, IconDeviceFloppy, IconTrash, IconRefresh, IconArchive } from '@tabler/icons-react';
+import { IconArrowLeft, IconPhoto, IconPlus, IconMinus, IconDeviceFloppy, IconTrash, IconRefresh, IconArchive, IconUpload } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useTerminalStream } from '@/hooks/useTerminalStream';
 import { ProductData } from './ProductCard';
@@ -35,9 +35,13 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
   const [deleteGroup, setDeleteGroup] = useState<{ label: string; ids: string[] } | null>(null);
   const [archiveModalOpened, { open: openArchiveModal, close: closeArchiveModal }] = useDisclosure(false);
   const [archiving, setArchiving] = useState(false);
+  const [pushing, setPushing] = useState(false);
+  const [pushModalOpened, { open: openPushModal, close: closePushModal }] = useDisclosure(false);
   const { streamFromUrl } = useTerminalStream();
 
   const isLocalProduct = product.status === 'LOCAL' || product.status === 'DRAFT';
+  const [fixingStates, setFixingStates] = useState(false);
+  const mismatchedVariants = isLocalProduct ? product.variants.filter(v => v.shopifyActive !== false) : [];
 
   // Variantes locales groupées par première option commune
   const localVariantGroups = useMemo(() => {
@@ -54,7 +58,7 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
     return Object.entries(groups).map(([label, variants]) => ({
       label,
       variants,
-      totalQuantity: variants.reduce((sum, v) => sum + v.quantity, 0),
+      totalQuantity: variants.reduce((sum, v) => sum + Math.max(0, v.quantity), 0),
       subabaseIds: variants.map(v => v.supabaseId).filter(Boolean) as string[],
       subValues: variants
         .map(v => v.options?.slice(1).map(o => o.value).join(' / ') || '')
@@ -83,9 +87,9 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
         const updatedProduct: ProductData = {
           ...product,
           variants: updatedVariants,
-          totalQuantity: updatedVariants.reduce((sum, v) => sum + v.quantity, 0),
+          totalQuantity: updatedVariants.reduce((sum, v) => sum + Math.max(0, v.quantity), 0),
           sizeBreakdown: updatedVariants.reduce((acc, v) => {
-            if (v.size) acc[v.size] = (acc[v.size] || 0) + v.quantity;
+            if (v.size) acc[v.size] = (acc[v.size] || 0) + Math.max(0, v.quantity);
             return acc;
           }, {} as Record<string, number>),
         };
@@ -155,6 +159,75 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
     });
     setQuantities(zeroed);
     closeResetModal();
+  };
+
+  // Corriger l'état des variantes (forcer locale pour les produits locaux)
+  const handleFixVariantStates = async () => {
+    if (!shopId || !product.supabaseId) return;
+    setFixingStates(true);
+    try {
+      const variantIds = mismatchedVariants.map(v => v.supabaseId).filter(Boolean);
+      if (variantIds.length === 0) return;
+
+      const res = await fetch('/api/inventory/fix-variant-states', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId: product.supabaseId, shopId }),
+      });
+
+      if (!res.ok) throw new Error('Erreur');
+
+      // Mettre à jour le produit localement
+      if (onProductUpdated) {
+        onProductUpdated({
+          ...product,
+          variants: product.variants.map(v => ({ ...v, shopifyActive: false })),
+        });
+      }
+
+      notifications.show({
+        title: 'Variantes corrigées',
+        message: `${variantIds.length} variante(s) passée(s) en locale`,
+        color: 'green',
+      });
+    } catch {
+      notifications.show({
+        title: 'Erreur',
+        message: 'Impossible de corriger les variantes',
+        color: 'red',
+      });
+    } finally {
+      setFixingStates(false);
+    }
+  };
+
+  // Pousser le stock local vers Shopify
+  const handlePushToShopify = async () => {
+    if (!shopId || !locationId || !product.supabaseId) return;
+    closePushModal();
+    setPushing(true);
+
+    const params = new URLSearchParams({ shopId, locationId, productId: product.supabaseId });
+
+    const success = await streamFromUrl(`/api/inventory/push-product?${params}`, {
+      title: `Push: ${product.title}`,
+    });
+
+    if (success && onProductUpdated) {
+      // Le backend a déjà mis à jour la DB : variantes → shopify_active=true, produit → active
+      onProductUpdated({
+        ...product,
+        status: 'ACTIVE',
+        variants: product.variants.map(v => ({ ...v, shopifyActive: true })),
+      });
+    } else if (!success) {
+      notifications.show({
+        title: 'Erreur',
+        message: 'Le push vers Shopify a échoué',
+        color: 'red',
+      });
+    }
+    setPushing(false);
   };
 
   // Synchroniser ce produit depuis Shopify via le terminal stream
@@ -318,14 +391,14 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
       if (onProductUpdated) {
         const updatedProduct: ProductData = {
           ...product,
-          totalQuantity: newTotalQuantity,
+          totalQuantity: Object.values(quantities).reduce((sum, qty) => sum + Math.max(0, qty), 0),
           variants: product.variants.map(v => ({
             ...v,
             quantity: quantities[v.id],
           })),
           sizeBreakdown: product.variants.reduce((acc, v) => {
             if (v.size) {
-              acc[v.size] = quantities[v.id];
+              acc[v.size] = (acc[v.size] || 0) + Math.max(0, quantities[v.id]);
             }
             return acc;
           }, {} as Record<string, number>),
@@ -458,6 +531,16 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
             >
               {syncing ? 'Import...' : 'Importer de Shopify'}
             </Button>
+            <Button
+              variant="light"
+              color="teal"
+              leftSection={pushing ? <Loader size={14} color="teal" /> : <IconUpload size={16} />}
+              onClick={openPushModal}
+              disabled={saving || syncing || pushing}
+              size="sm"
+            >
+              {pushing ? 'Push...' : 'Pousser vers Shopify'}
+            </Button>
             {isLocalProduct && (
               <Button
                 variant="light"
@@ -536,6 +619,27 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
             )}
           </div>
         </div>
+
+        {/* Alerte : variantes mal marquées */}
+        {mismatchedVariants.length > 0 && (
+          <Paper withBorder radius="md" p="sm" mb="md" style={{ borderColor: 'var(--mantine-color-orange-4)', backgroundColor: 'var(--mantine-color-orange-0)' }}>
+            <Group justify="space-between" align="center">
+              <Text size="sm" c="orange" fw={500}>
+                {mismatchedVariants.length} variante{mismatchedVariants.length > 1 ? 's' : ''} marquée{mismatchedVariants.length > 1 ? 's' : ''} Shopify alors que le produit est local
+              </Text>
+              <Button
+                size="xs"
+                variant="light"
+                color="orange"
+                leftSection={<IconRefresh size={14} />}
+                onClick={handleFixVariantStates}
+                loading={fixingStates}
+              >
+                Corriger
+              </Button>
+            </Group>
+          </Paper>
+        )}
 
         {/* Bloc variantes locales (groupées) */}
         {localVariantGroups.length > 0 && (
@@ -783,6 +887,36 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
             </Button>
             <Button color="orange" onClick={handleArchive} loading={archiving}>
               Archiver
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      {/* Modal de confirmation push vers Shopify */}
+      <Modal
+        opened={pushModalOpened}
+        onClose={closePushModal}
+        title={
+          <Group gap="xs">
+            <IconUpload size={20} color="var(--mantine-color-teal-6)" />
+            <Text fw={600}>Pousser le stock vers Shopify</Text>
+          </Group>
+        }
+        centered
+      >
+        <Stack gap="md">
+          <Text size="sm">
+            Envoyer le stock de <Text span fw={600}>{product.title}</Text> vers Shopify ?
+          </Text>
+          <Text size="sm" c="dimmed">
+            Les quantités d'Ivy remplaceront celles de Shopify. Seules les variantes existantes sur Shopify seront mises à jour.
+          </Text>
+          <Group justify="flex-end" gap="sm" mt="md">
+            <Button variant="default" onClick={closePushModal}>
+              Annuler
+            </Button>
+            <Button color="teal" onClick={handlePushToShopify}>
+              Pousser vers Shopify
             </Button>
           </Group>
         </Stack>

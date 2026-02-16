@@ -130,6 +130,43 @@ export async function POST(request: Request) {
       productIdMap[p.shopify_id] = p.id;
     });
 
+    // 4b. Marquer les produits absents de Shopify comme locaux + leurs variantes
+    const activeShopifyProductIds = allProducts.map((p: any) => p.id.toString());
+    if (activeShopifyProductIds.length > 0) {
+      const { data: localRows } = await supabase
+        .from('products')
+        .update({ status: 'local' })
+        .eq('shop_id', shopId)
+        .in('status', ['active', 'draft'])
+        .not('shopify_id', 'in', `(${activeShopifyProductIds.join(',')})`)
+        .select('id');
+
+      if (localRows && localRows.length > 0) {
+        const localProductIds = localRows.map(p => p.id);
+        await supabase
+          .from('product_variants')
+          .update({ shopify_active: false })
+          .in('product_id', localProductIds);
+        console.log(`Marked ${localRows.length} product(s) as local`);
+      }
+    }
+
+    // Backfill : variantes de produits déjà locaux
+    const { data: alreadyLocalProducts } = await supabase
+      .from('products')
+      .select('id')
+      .eq('shop_id', shopId)
+      .eq('status', 'local');
+
+    if (alreadyLocalProducts && alreadyLocalProducts.length > 0) {
+      const localPids = alreadyLocalProducts.map(p => p.id);
+      await supabase
+        .from('product_variants')
+        .update({ shopify_active: false })
+        .in('product_id', localPids)
+        .eq('shopify_active', true);
+    }
+
     // 5. Préparer et batch upsert des variantes
     const variantsToUpsert: any[] = [];
     const inventoryItemIds: number[] = [];

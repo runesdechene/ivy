@@ -250,7 +250,7 @@ export async function GET(request: Request) {
           quantity,
           size,
           cost: variant.cost || 0,
-          shopifyActive: variant.shopify_active ?? true,
+          shopifyActive: (product.status === 'local' || product.status === 'draft') ? false : (variant.shopify_active ?? true),
           options: [
             variant.option1 && { name: optionNames?.option1_name || 'Option 1', value: variant.option1 },
             variant.option2 && { name: optionNames?.option2_name || 'Option 2', value: variant.option2 },
@@ -264,14 +264,14 @@ export async function GET(request: Request) {
         };
       });
 
-      // Calculer le total
-      const totalQuantity = variants.reduce((sum: number, v: any) => sum + v.quantity, 0);
+      // Calculer le total (les négatifs sont clampés à 0 — faux négatifs Shopify)
+      const totalQuantity = variants.reduce((sum: number, v: any) => sum + Math.max(0, v.quantity), 0);
 
-      // Grouper par taille
+      // Grouper par taille (idem, clamper les négatifs)
       const sizeBreakdown: Record<string, number> = {};
       variants.forEach((v: any) => {
         if (v.size) {
-          sizeBreakdown[v.size] = (sizeBreakdown[v.size] || 0) + v.quantity;
+          sizeBreakdown[v.size] = (sizeBreakdown[v.size] || 0) + Math.max(0, v.quantity);
         }
       });
 

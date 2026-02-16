@@ -175,6 +175,28 @@ export async function GET(request: NextRequest) {
           }
         }
 
+        // Backfill : marquer les variantes de produits déjà locaux comme shopify_active = false
+        send('🔧 Vérification des produits locaux...', 'info');
+        const { data: alreadyLocalProducts } = await supabase
+          .from('products')
+          .select('id')
+          .eq('shop_id', shopId)
+          .eq('status', 'local');
+
+        if (alreadyLocalProducts && alreadyLocalProducts.length > 0) {
+          const localPids = alreadyLocalProducts.map(p => p.id);
+          const { data: fixedRows } = await supabase
+            .from('product_variants')
+            .update({ shopify_active: false })
+            .in('product_id', localPids)
+            .eq('shopify_active', true)
+            .select('id');
+
+          if (fixedRows && fixedRows.length > 0) {
+            send(`🔧 ${fixedRows.length} variante(s) de produits locaux corrigée(s)`, 'info');
+          }
+        }
+
         // 1. D'abord collecter tous les inventory_item_ids
         send('', 'info');
         send('📋 Préparation des variantes...', 'info');
@@ -335,9 +357,11 @@ export async function GET(request: NextRequest) {
           shopifyVariantIdsByProduct[v.product_id].push(v.shopify_id);
         }
 
+        send('🔍 Vérification des variantes locales...', 'info');
         let localVariantsCount = 0;
         const syncedProductIds = Object.keys(shopifyVariantIdsByProduct);
-        for (const productId of syncedProductIds) {
+        for (let pi = 0; pi < syncedProductIds.length; pi++) {
+          const productId = syncedProductIds[pi];
           const activeShopifyIds = shopifyVariantIdsByProduct[productId];
           const { data: markedRows } = await supabase
             .from('product_variants')
@@ -350,6 +374,11 @@ export async function GET(request: NextRequest) {
           if (markedRows) {
             localVariantsCount += markedRows.length;
           }
+
+          // Keepalive toutes les 20 itérations
+          if (syncedProductIds.length > 20 && (pi + 1) % 20 === 0) {
+            send(`  └─ ${pi + 1}/${syncedProductIds.length} produits vérifiés...`, 'progress');
+          }
         }
 
         if (localVariantsCount > 0) {
@@ -360,6 +389,7 @@ export async function GET(request: NextRequest) {
         const dedupCount = await deduplicateLocalVariants(supabase, syncedProductIds, send);
 
         // Récupérer les IDs des variantes pour l'inventaire (pagination .range() car Supabase plafonne à 1000 rows)
+        send('📦 Chargement des variantes...', 'info');
         const allDbVariants: any[] = [];
         const productUuids = Object.values(productIdMap);
         for (let i = 0; i < productUuids.length; i += 50) {
@@ -379,6 +409,10 @@ export async function GET(request: NextRequest) {
               break;
             }
           }
+          // Keepalive pendant le chargement paginé
+          if (productUuids.length > 50) {
+            send(`  └─ ${allDbVariants.length} variantes chargées...`, 'progress');
+          }
         }
 
         const variantIdMap: Record<string, string> = {};
@@ -393,9 +427,15 @@ export async function GET(request: NextRequest) {
         send(`📦 ${allDbVariants.length} variantes chargées pour sync métachamps + inventaire`, 'info');
 
         // Synchroniser les métachamps des variantes depuis Shopify
-        const metafieldCount = await syncVariantMetafields(
-          supabase, shopId!, shop.shopify_url, shop.shopify_token, variantIdMap, send
-        );
+        let metafieldCount = 0;
+        try {
+          metafieldCount = await syncVariantMetafields(
+            supabase, shopId!, shop.shopify_url, shop.shopify_token, variantIdMap, send
+          );
+        } catch (metaError: unknown) {
+          const errMsg = metaError instanceof Error ? metaError.message : String(metaError);
+          send(`❌ Erreur sync métachamps: ${errMsg}`, 'error');
+        }
 
         // Récupérer les niveaux d'inventaire
         send('', 'info');
