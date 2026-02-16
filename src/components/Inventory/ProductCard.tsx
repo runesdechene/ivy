@@ -39,6 +39,16 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
   const isLocal = product.status === 'LOCAL' || product.status === 'DRAFT';
   const localVariantsCount = product.variants.filter(v => v.shopifyActive === false).length;
 
+  // Métachamps manquants : comparer au minimum (parmi celles qui en ont) pour éviter les faux positifs recto/verso
+  const shopifyVariants = product.variants.filter(v => v.shopifyActive !== false);
+  const variantsWithMeta = shopifyVariants.filter(v => (v.metafields?.length || 0) > 0);
+  const minMetafields = variantsWithMeta.length > 0
+    ? variantsWithMeta.reduce((min, v) => Math.min(min, v.metafields!.length), Infinity)
+    : 0;
+  const missingMetafieldsCount = minMetafields > 0
+    ? shopifyVariants.filter(v => (v.metafields?.length || 0) < minMetafields).length
+    : 0;
+
   // Formater le breakdown des tailles
   const sizeText = Object.entries(product.sizeBreakdown)
     .filter(([_, qty]) => qty > 0)
@@ -93,22 +103,29 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
             }
           </Text>
         )}
-        <Group gap={4}>
-          {isLocal ? (
-            <Badge size="xs" color="orange" variant="light">
-              Local seulement
-            </Badge>
-          ) : (
-            <>
-              <Badge size="xs" color="teal" variant="light">
-                Shopify
+        <Group gap={4} justify="space-between" wrap="nowrap">
+          <Group gap={4}>
+            {isLocal ? (
+              <Badge size="xs" color="orange" variant="light">
+                Local seulement
               </Badge>
-              {localVariantsCount > 0 && (
-                <Badge size="xs" color="orange" variant="light">
-                  + {localVariantsCount} locale{localVariantsCount > 1 ? 's' : ''}
+            ) : (
+              <>
+                <Badge size="xs" color="teal" variant="light">
+                  Shopify
                 </Badge>
-              )}
-            </>
+                {localVariantsCount > 0 && (
+                  <Badge size="xs" color="orange" variant="light">
+                    + {localVariantsCount} locale{localVariantsCount > 1 ? 's' : ''}
+                  </Badge>
+                )}
+              </>
+            )}
+          </Group>
+          {missingMetafieldsCount > 0 && (
+            <Text size="xs" c="orange" fw={500} style={{ whiteSpace: 'nowrap' }}>
+              ⚠ {missingMetafieldsCount} ligne{missingMetafieldsCount > 1 ? 's' : ''} sans méta
+            </Text>
           )}
         </Group>
       </Stack>
