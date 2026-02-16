@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { syncVariantMetafields, deduplicateLocalVariants } from '@/lib/shopify-metafields';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -355,20 +356,46 @@ export async function GET(request: NextRequest) {
           send(`📌 ${localVariantsCount} variante${localVariantsCount > 1 ? 's' : ''} marquée${localVariantsCount > 1 ? 's' : ''} comme locale${localVariantsCount > 1 ? 's' : ''}`, 'info');
         }
 
-        // Récupérer les IDs des variantes pour l'inventaire
-        const { data: dbVariants } = await supabase
-          .from('product_variants')
-          .select('id, shopify_id, inventory_item_id')
-          .in('product_id', Object.values(productIdMap));
+        // Supprimer les variantes locales dupliquées (même options qu'une variante Shopify active)
+        const dedupCount = await deduplicateLocalVariants(supabase, syncedProductIds, send);
+
+        // Récupérer les IDs des variantes pour l'inventaire (pagination .range() car Supabase plafonne à 1000 rows)
+        const allDbVariants: any[] = [];
+        const productUuids = Object.values(productIdMap);
+        for (let i = 0; i < productUuids.length; i += 50) {
+          const pBatch = productUuids.slice(i, i + 50);
+          let from = 0;
+          while (true) {
+            const { data } = await supabase
+              .from('product_variants')
+              .select('id, shopify_id, inventory_item_id')
+              .in('product_id', pBatch)
+              .range(from, from + 999);
+            if (data && data.length > 0) {
+              allDbVariants.push(...data);
+              if (data.length < 1000) break;
+              from += 1000;
+            } else {
+              break;
+            }
+          }
+        }
 
         const variantIdMap: Record<string, string> = {};
         const inventoryItemToVariantUuid: Record<string, string> = {};
-        dbVariants?.forEach((v: any) => {
+        allDbVariants.forEach((v: any) => {
           variantIdMap[v.shopify_id] = v.id;
           if (v.inventory_item_id) {
             inventoryItemToVariantUuid[v.inventory_item_id] = v.id;
           }
         });
+
+        send(`📦 ${allDbVariants.length} variantes chargées pour sync métachamps + inventaire`, 'info');
+
+        // Synchroniser les métachamps des variantes depuis Shopify
+        const metafieldCount = await syncVariantMetafields(
+          supabase, shopId!, shop.shopify_url, shop.shopify_token, variantIdMap, send
+        );
 
         // Récupérer les niveaux d'inventaire
         send('', 'info');
@@ -444,7 +471,7 @@ export async function GET(request: NextRequest) {
         send('', 'info');
         send('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
         send(`✅ Synchronisation terminée!`, 'success');
-        send(`   ${allProducts.length} produits, ${variantsToUpsert.length} variantes`, 'info');
+        send(`   ${allProducts.length} produits, ${variantsToUpsert.length} variantes, ${metafieldCount} métachamp(s)${dedupCount > 0 ? `, ${dedupCount} doublon(s) supprimé(s)` : ''}`, 'info');
         send('DONE', 'success');
 
       } catch (error) {

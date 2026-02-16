@@ -116,6 +116,11 @@ export async function GET(request: Request) {
             inventory_levels(
               quantity,
               location_id
+            ),
+            variant_metafields(
+              namespace,
+              key,
+              value
             )
           )
         `)
@@ -251,7 +256,11 @@ export async function GET(request: Request) {
             variant.option2 && { name: optionNames?.option2_name || 'Option 2', value: variant.option2 },
             variant.option3 && { name: optionNames?.option3_name || 'Option 3', value: variant.option3 },
           ].filter(Boolean),
-          metafields: variant.metafields || [],
+          metafields: (variant.variant_metafields || []).map((mf: { namespace: string; key: string; value: string }) => ({
+            namespace: mf.namespace,
+            key: mf.key,
+            value: mf.value,
+          })),
         };
       });
 

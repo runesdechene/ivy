@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/supabase/client';
+import { syncVariantMetafields, deduplicateLocalVariants } from '@/lib/shopify-metafields';
 
 // Sync Shopify → Supabase (récupérer les données depuis Shopify)
 export async function POST(request: Request) {
@@ -198,6 +199,12 @@ export async function POST(request: Request) {
       console.log(`Marked ${localVariantsCount} variants as local-only`);
     }
 
+    // 5a-bis. Supprimer les variantes locales dupliquées
+    const dedupCount = await deduplicateLocalVariants(supabase, Object.keys(shopifyVariantIdsByProduct));
+    if (dedupCount > 0) {
+      console.log(`Deduped ${dedupCount} local variant(s)`);
+    }
+
     // 5b. Récupérer les coûts depuis inventory_items (le cost n'est pas dans products.json)
     try {
       const inventoryItemToCost: Record<string, number> = {};
@@ -251,16 +258,45 @@ export async function POST(request: Request) {
       // Ne pas bloquer la sync si la récupération des coûts échoue
     }
 
-    // 6. Récupérer les IDs des variantes insérées
-    const { data: insertedVariants } = await supabase
-      .from('product_variants')
-      .select('id, shopify_id')
-      .in('product_id', Object.values(productIdMap));
+    // 6. Récupérer les IDs des variantes insérées (pagination .range() car Supabase plafonne à 1000 rows)
+    const allInsertedVariants: any[] = [];
+    const allProductUuids = Object.values(productIdMap);
+    for (let i = 0; i < allProductUuids.length; i += 50) {
+      const pBatch = allProductUuids.slice(i, i + 50);
+      let from = 0;
+      while (true) {
+        const { data } = await supabase
+          .from('product_variants')
+          .select('id, shopify_id')
+          .in('product_id', pBatch)
+          .range(from, from + 999);
+        if (data && data.length > 0) {
+          allInsertedVariants.push(...data);
+          if (data.length < 1000) break;
+          from += 1000;
+        } else {
+          break;
+        }
+      }
+    }
 
     const variantIdMap: Record<string, string> = {};
-    insertedVariants?.forEach(v => {
+    allInsertedVariants.forEach(v => {
       variantIdMap[v.shopify_id] = v.id;
     });
+
+    // 6b. Synchroniser les métachamps des variantes
+    let metafieldCount = 0;
+    try {
+      metafieldCount = await syncVariantMetafields(
+        supabase, shopId, shop.shopify_url, shop.shopify_token, variantIdMap
+      );
+      if (metafieldCount > 0) {
+        console.log(`Synced ${metafieldCount} metafield(s)`);
+      }
+    } catch (metafieldError) {
+      console.error('Error syncing metafields (non-blocking):', metafieldError);
+    }
 
     // 7. Récupérer les niveaux d'inventaire
     let locationIds: string[] = [];
@@ -347,6 +383,8 @@ export async function POST(request: Request) {
         variants: variantsToUpsert.length,
         inventoryLevels: inventoryToUpsert.length,
         locations: locationIds.length,
+        metafields: metafieldCount,
+        deduped: dedupCount,
       }
     });
   } catch (error) {

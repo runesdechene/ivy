@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { syncVariantMetafields, deduplicateLocalVariants } from '@/lib/shopify-metafields';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -255,6 +256,9 @@ export async function GET(request: NextRequest) {
           send(`📌 ${localVariantsCount} variante${localVariantsCount > 1 ? 's' : ''} locale${localVariantsCount > 1 ? 's' : ''}`, 'info');
         }
 
+        // 4b. Supprimer les variantes locales dupliquées
+        await deduplicateLocalVariants(supabase, [productUuid], send);
+
         // 5. Récupérer les coûts
         send('Récupération des coûts...', 'info');
         if (inventoryItemIds.length > 0) {
@@ -292,12 +296,19 @@ export async function GET(request: NextRequest) {
           .select('id, shopify_id, inventory_item_id')
           .eq('product_id', productUuid);
 
+        const variantIdMap: Record<string, string> = {};
         const inventoryItemToVariantUuid: Record<string, string> = {};
         dbVariants?.forEach((v: any) => {
+          variantIdMap[v.shopify_id] = v.id;
           if (v.inventory_item_id) {
             inventoryItemToVariantUuid[v.inventory_item_id] = v.id;
           }
         });
+
+        // Synchroniser les métachamps des variantes
+        await syncVariantMetafields(
+          supabase, shopId!, shop.shopify_url, shop.shopify_token, variantIdMap, send
+        );
 
         let levelsCount = 0;
         if (inventoryItemIds.length > 0) {
@@ -347,7 +358,7 @@ export async function GET(request: NextRequest) {
 
         const { data: updatedVariants } = await supabase
           .from('product_variants')
-          .select('id, shopify_id, title, sku, option1, option2, option3, cost, shopify_active, inventory_levels(quantity, location_id)')
+          .select('id, shopify_id, title, sku, option1, option2, option3, cost, shopify_active, inventory_levels(quantity, location_id), variant_metafields(namespace, key, value)')
           .eq('product_id', productUuid);
 
         const variants = (updatedVariants || []).map((variant: any) => {
@@ -376,6 +387,11 @@ export async function GET(request: NextRequest) {
               variant.option2 && { name: optionNames.option2_name || 'Option 2', value: variant.option2 },
               variant.option3 && { name: optionNames.option3_name || 'Option 3', value: variant.option3 },
             ].filter(Boolean),
+            metafields: (variant.variant_metafields || []).map((mf: { namespace: string; key: string; value: string }) => ({
+              namespace: mf.namespace,
+              key: mf.key,
+              value: mf.value,
+            })),
           };
         });
 

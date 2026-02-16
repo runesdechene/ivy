@@ -593,6 +593,7 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
                 <Table.Th>SKU</Table.Th>
                 <Table.Th style={{ textAlign: 'center' }}>État</Table.Th>
                 <Table.Th style={{ textAlign: 'right' }}>Coût</Table.Th>
+                <Table.Th>Métachamps</Table.Th>
                 <Table.Th style={{ textAlign: 'right' }}>Quantité</Table.Th>
               </Table.Tr>
             </Table.Thead>
@@ -634,6 +635,19 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
                     <Text size="sm" fw={500} c={(variant.cost || 0) > 0 ? 'blue' : 'orange'}>
                       {(variant.cost || 0) > 0 ? `${(variant.cost || 0).toFixed(2)} €` : '-'}
                     </Text>
+                  </Table.Td>
+                  <Table.Td>
+                    {variant.metafields && variant.metafields.length > 0 ? (
+                      <Group gap={4} wrap="wrap">
+                        {variant.metafields.map((mf, i) => (
+                          <Badge key={i} size="xs" variant="light" color="violet">
+                            {mf.key}: {mf.value}
+                          </Badge>
+                        ))}
+                      </Group>
+                    ) : (
+                      <Text size="xs" c="dimmed">-</Text>
+                    )}
                   </Table.Td>
                   <Table.Td className={styles.variantQuantity}>
                     <Group gap="xs" justify="flex-end" className={styles.quantityControls}>
