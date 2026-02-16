@@ -9,6 +9,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { useShop } from '@/context/ShopContext';
 import { useLocation } from '@/context/LocationContext';
 import { ProductCard, ProductData } from '@/components/Inventory';
+import { SortOptionsBar } from '@/components/Inventory/SortOptionsBar';
 import { getColorHex } from '@/utils/color-transformer';
 import styles from './order-detail.module.scss';
 
@@ -70,6 +71,7 @@ export default function OrderDetailPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedVariants, setSelectedVariants] = useState<Record<string, number>>({});
   const [skuFilter, setSkuFilter] = useState<string | null>(null);
+  const [modalSortOrder, setModalSortOrder] = useState<string[]>([]);
   
 
   // Charger la commande et ses articles
@@ -139,6 +141,7 @@ export default function OrderDetailPage() {
     setSelectedVariants({});
     setSearchQuery('');
     setSkuFilter(null);
+    setModalSortOrder([]);
     openAddModal();
   };
 
@@ -166,28 +169,78 @@ export default function OrderDetailPage() {
       .sort((a, b) => a.prefix.localeCompare(b.prefix));
   }, [products]);
 
-  // Filtrer par préfixe SKU et trier les variantes par taille
+  // Détecter les options de tous les produits affichés et initialiser le tri
+  const modalProductOptions = useMemo(() => {
+    const optionNames: string[] = [];
+    for (const product of products) {
+      for (const variant of product.variants) {
+        if (variant.options) {
+          for (const opt of variant.options) {
+            if (opt.name && !optionNames.includes(opt.name)) {
+              optionNames.push(opt.name);
+            }
+          }
+        }
+      }
+    }
+    // Taille en premier par défaut
+    const sizeIndex = optionNames.findIndex(opt =>
+      opt.toLowerCase().includes('taille') || opt.toLowerCase().includes('size')
+    );
+    if (sizeIndex > 0) {
+      const [sizeOpt] = optionNames.splice(sizeIndex, 1);
+      optionNames.unshift(sizeOpt);
+    }
+    return optionNames;
+  }, [products]);
+
+  // Synchroniser le sort order quand les options changent
+  useEffect(() => {
+    if (modalProductOptions.length > 0 && modalSortOrder.length === 0) {
+      setModalSortOrder(modalProductOptions);
+    }
+  }, [modalProductOptions, modalSortOrder.length]);
+
+  // Comparer deux valeurs d'option (tri spécial pour les tailles)
+  const compareOptionValues = useCallback((a: string, b: string, optionName: string) => {
+    const isSize = optionName.toLowerCase().includes('taille') || optionName.toLowerCase().includes('size');
+    if (isSize) {
+      const aIndex = SIZE_ORDER.indexOf(a.toUpperCase());
+      const bIndex = SIZE_ORDER.indexOf(b.toUpperCase());
+      if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+      if (aIndex !== -1) return -1;
+      if (bIndex !== -1) return 1;
+    }
+    return a.localeCompare(b, 'fr');
+  }, []);
+
+  // Filtrer par préfixe SKU et trier les variantes selon l'ordre choisi
   const displayedProducts = useMemo(() => {
     let result = [...products];
-    
+
     if (skuFilter) {
       result = result.filter(product =>
         product.variants.some(v => v.sku?.toUpperCase().startsWith(skuFilter))
       );
     }
-    
-    // Trier les variantes par taille
+
+    const sortKeys = modalSortOrder.length > 0 ? modalSortOrder : modalProductOptions;
+
     result = result.map(product => ({
       ...product,
       variants: [...product.variants].sort((a, b) => {
-        const sizeA = a.size || a.options?.find(o => o.name?.toLowerCase() === 'taille')?.value;
-        const sizeB = b.size || b.options?.find(o => o.name?.toLowerCase() === 'taille')?.value;
-        return getSizeIndex(sizeA) - getSizeIndex(sizeB);
+        for (const optName of sortKeys) {
+          const aVal = a.options?.find(o => o.name === optName)?.value || '';
+          const bVal = b.options?.find(o => o.name === optName)?.value || '';
+          const cmp = compareOptionValues(aVal, bVal, optName);
+          if (cmp !== 0) return cmp;
+        }
+        return 0;
       })
     }));
-    
+
     return result;
-  }, [products, skuFilter]);
+  }, [products, skuFilter, modalSortOrder, modalProductOptions, compareOptionValues]);
 
   // Rechercher les produits quand la query change
   useEffect(() => {
@@ -887,6 +940,13 @@ export default function OrderDetailPage() {
               </Badge>
             ))}
           </Group>
+        )}
+
+        {modalProductOptions.length > 1 && products.length > 0 && (
+          <SortOptionsBar
+            options={modalSortOrder.length > 0 ? modalSortOrder : modalProductOptions}
+            onReorder={setModalSortOrder}
+          />
         )}
 
         {searchQuery.length < 3 ? (

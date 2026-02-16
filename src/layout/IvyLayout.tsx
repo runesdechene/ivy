@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import styles from './IvyLayout.module.scss';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import clsx from 'clsx';
-import { Button } from '@mantine/core';
+import { Badge, Button } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconHome, IconPackage, IconTruck, IconChartBar, IconPrinter, IconShoppingCart, IconFileInvoice, IconArchive, IconRefresh, IconChecklist, IconHistory, IconCash, IconChartPie } from '@tabler/icons-react';
 import { LocationProvider } from '@/context/LocationContext';
@@ -20,7 +20,8 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
   const pathname = usePathname();
   const { currentShop } = useShop();
   const [syncing, setSyncing] = useState(false);
-  
+  const [orderCounts, setOrderCounts] = useState<{ atelier: number; stock: number }>({ atelier: 0, stock: 0 });
+
   const isCommandesSection = pathname.startsWith('/ivy/commandes');
   const isInventaireSection = pathname.startsWith('/ivy/inventaire');
   const isStandSection = pathname.startsWith('/ivy/stand');
@@ -48,10 +49,8 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
             : 'Aucune nouvelle commande',
           color: 'green',
         });
-        // Déclencher un refresh de la page si on est sur les commandes boutique
-        if (pathname.startsWith('/ivy/commandes/boutique')) {
-          window.dispatchEvent(new CustomEvent('orders-synced'));
-        }
+        // Déclencher un refresh des pages et des compteurs
+        window.dispatchEvent(new CustomEvent('orders-synced'));
       } else {
         throw new Error('Sync failed');
       }
@@ -66,6 +65,33 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
       setSyncing(false);
     }
   };
+
+  // Charger les compteurs de commandes actives
+  const fetchOrderCounts = useCallback(async () => {
+    if (!currentShop) return;
+    try {
+      const res = await fetch(`/api/orders/counts?shopId=${currentShop.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setOrderCounts({ atelier: data.atelier || 0, stock: data.stock || 0 });
+      }
+    } catch {
+      // Silencieux
+    }
+  }, [currentShop]);
+
+  useEffect(() => {
+    if (isCommandesSection) {
+      fetchOrderCounts();
+    }
+  }, [isCommandesSection, fetchOrderCounts]);
+
+  // Rafraîchir les compteurs après une sync
+  useEffect(() => {
+    const handler = () => fetchOrderCounts();
+    window.addEventListener('orders-synced', handler);
+    return () => window.removeEventListener('orders-synced', handler);
+  }, [fetchOrderCounts]);
 
   // Menu contextuel selon la section
   const commandesMenu = [
@@ -87,6 +113,7 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
           label: 'Commandes',
           icon: IconShoppingCart,
           exact: true,
+          badge: orderCounts.atelier > 0 ? orderCounts.atelier : null,
         },
         {
           href: '/ivy/commandes/boutique/suivi',
@@ -115,6 +142,7 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
           href: '/ivy/commandes/stock',
           label: 'Commandes',
           icon: IconTruck,
+          badge: orderCounts.stock > 0 ? orderCounts.stock : null,
         },
       ],
     },
@@ -228,6 +256,11 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
                       >
                         <Icon size={16} />
                         {item.label}
+                        {item.badge && (
+                          <Badge size="xs" variant="filled" color="orange" ml="auto">
+                            {item.badge}
+                          </Badge>
+                        )}
                       </Link>
                     </li>
                   );
