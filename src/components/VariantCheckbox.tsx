@@ -55,13 +55,15 @@ export const VariantCheckbox = ({
     loadCheckState();
 
     // Écouter les changements en temps réel
+    // Note: le filtre Supabase Realtime ne gère pas bien les IDs avec espaces/caractères spéciaux,
+    // donc on vérifie l'ID dans le callback pour éviter les faux positifs
     const channel = supabase
       .channel(`variant-checkbox-${variantId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'line_item_checks', filter: `id=eq.${variantId}` },
-        (payload) => {
-          if (payload.new && 'checked' in payload.new) {
+        (payload: any) => {
+          if (payload.new && payload.new.id === variantId && 'checked' in payload.new) {
             setChecked(payload.new.checked as boolean);
           }
         }
