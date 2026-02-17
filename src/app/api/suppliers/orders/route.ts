@@ -39,17 +39,22 @@ export async function GET(request: NextRequest) {
         .select('*', { count: 'exact', head: true })
         .eq('order_id', order.id);
 
-      // Compter les articles validés
-      const { count: validatedCount } = await supabase
+      // Récupérer les articles validés (count + total)
+      const { data: validatedItems } = await supabase
         .from('supplier_order_items')
-        .select('*', { count: 'exact', head: true })
+        .select('line_total, is_validated')
         .eq('order_id', order.id)
         .eq('is_validated', true);
+
+      const validatedCount = validatedItems?.length || 0;
+      const validatedSubtotal = validatedItems?.reduce((sum, item) => sum + (item.line_total || 0), 0) || 0;
+      const validatedTotalHt = validatedSubtotal + (order.balance_adjustment || 0);
 
       return {
         ...order,
         items_count: itemsCount || 0,
-        validated_count: validatedCount || 0,
+        validated_count: validatedCount,
+        total_ht: validatedTotalHt,
       };
     }));
 

@@ -10,7 +10,7 @@ import { useShop } from '@/context/ShopContext';
 import { useLocation } from '@/context/LocationContext';
 import { ProductCard, ProductData } from '@/components/Inventory';
 import { SortOptionsBar } from '@/components/Inventory/SortOptionsBar';
-import { getColorHex } from '@/utils/color-transformer';
+import { getColorHex, isColorOption, loadColorMappingsFromSupabase, areColorMappingsLoaded } from '@/utils/color-transformer';
 import styles from './order-detail.module.scss';
 
 // Ordre des tailles pour le tri
@@ -105,7 +105,10 @@ export default function OrderDetailPage() {
 
   useEffect(() => {
     fetchOrder();
-  }, [fetchOrder]);
+    if (currentShop && !areColorMappingsLoaded()) {
+      loadColorMappingsFromSupabase(currentShop.id);
+    }
+  }, [fetchOrder, currentShop]);
 
   // Charger les produits pour l'ajout (avec recherche)
   const fetchProducts = async (query: string) => {
@@ -588,8 +591,13 @@ export default function OrderDetailPage() {
     const totalTtc = totalHt * 1.2;
     const validatedCount = validatedItems.length;
     const progress = items.length > 0 ? (validatedCount / items.length) * 100 : 0;
-    
-    return { subtotal, totalHt, totalTtc, validatedCount, progress, totalItems: items.length };
+
+    // Total projeté = si toutes les cases étaient cochées
+    const projectedSubtotal = items.reduce((sum, item) => sum + item.line_total, 0);
+    const projectedHt = projectedSubtotal + balanceAdjustment;
+    const projectedTtc = projectedHt * 1.2;
+
+    return { subtotal, totalHt, totalTtc, validatedCount, progress, totalItems: items.length, projectedTtc };
   }, [items, balanceAdjustment]);
 
   if (loading) {
@@ -900,6 +908,12 @@ export default function OrderDetailPage() {
             <Text fw={700} size="lg">Total TTC</Text>
             <Text fw={700} size="xl" c="green">{totals.totalTtc.toFixed(2)} €</Text>
           </Group>
+          {totals.validatedCount < totals.totalItems && (
+            <Group justify="space-between">
+              <Text size="sm" c="dimmed">Total TTC projeté (si tout validé)</Text>
+              <Text size="sm" c="dimmed">{totals.projectedTtc.toFixed(2)} €</Text>
+            </Group>
+          )}
         </Stack>
       </Paper>
 
@@ -969,9 +983,14 @@ export default function OrderDetailPage() {
                 <div className={styles.variantsList}>
                   {product.variants.map((variant) => {
                     // Extraire la couleur de la variante
-                    const colorOption = variant.options?.find((o: any) => 
-                      o.name?.toLowerCase() === 'couleur' || o.name?.toLowerCase() === 'color'
-                    );
+                    // 1) Par nom d'option (Couleur / Color)
+                    let colorOption = variant.options?.find((o: any) => isColorOption(o.name));
+                    // 2) Fallback : par valeur d'option si c'est une couleur connue
+                    if (!colorOption) {
+                      colorOption = variant.options?.find((o: any) =>
+                        getColorHex(o.value) !== '#808080'
+                      );
+                    }
                     const colorHex = colorOption ? getColorHex(colorOption.value) : null;
                     
                     return (
@@ -991,6 +1010,9 @@ export default function OrderDetailPage() {
                           )}
                           <Text size="sm">{variant.title}</Text>
                           <Badge size="xs" variant="light">{variant.sku}</Badge>
+                          <Badge size="xs" variant="light" color={variant.quantity > 0 ? 'green' : 'red'}>
+                            stock: {variant.quantity}
+                          </Badge>
                         </Group>
                         <Group gap={4}>
                           <ActionIcon

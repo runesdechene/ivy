@@ -52,7 +52,11 @@ export async function GET(request: Request) {
             option1,
             option2,
             option3,
-            shopify_active
+            shopify_active,
+            inventory_levels(
+              quantity,
+              location_id
+            )
           )
         `)
         .eq('shop_id', shopId)
@@ -73,6 +77,10 @@ export async function GET(request: Request) {
           option1,
           option2,
           option3,
+          inventory_levels(
+            quantity,
+            location_id
+          ),
           product:products!inner(
             id,
             shopify_id,
@@ -159,15 +167,16 @@ export async function GET(request: Request) {
           // Récupérer toutes les variantes de ce produit
           productsData.push({
             ...product,
-            variants: [{ 
+            variants: [{
               id: v.id,
               supabase_id: v.id,
-              shopify_id: v.shopify_id, 
-              title: v.title, 
+              shopify_id: v.shopify_id,
+              title: v.title,
               sku: v.sku,
               option1: v.option1,
               option2: v.option2,
-              option3: v.option3
+              option3: v.option3,
+              inventory_levels: v.inventory_levels
             }]
           });
         } else if (product) {
@@ -182,7 +191,8 @@ export async function GET(request: Request) {
               sku: v.sku,
               option1: v.option1,
               option2: v.option2,
-              option3: v.option3
+              option3: v.option3,
+              inventory_levels: v.inventory_levels
             });
           }
         }
