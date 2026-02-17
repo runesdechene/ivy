@@ -1,0 +1,18 @@
+.pageContainer {
+  padding: 0;
+}
+
+.tableContainer {
+  overflow: hidden;
+}
+
+.tableRow {
+  &:hover {
+    background-color: var(--mantine-color-gray-0);
+  }
+}
+
+.skuTitle {
+  display: flex;
+  align-items: center;
+}

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Title, Text, Paper, Table, Button, Group, Badge, ActionIcon, Modal, NumberInput, Checkbox, Loader, Center, Stack, Textarea, Divider, Progress, TextInput, SimpleGrid } from '@mantine/core';
-import { IconArrowLeft, IconPlus, IconTrash, IconDeviceFloppy, IconCheck, IconLock, IconSearch, IconPackage, IconMinus, IconRefresh, IconTag, IconPrinter } from '@tabler/icons-react';
+import { IconArrowLeft, IconPlus, IconTrash, IconDeviceFloppy, IconCheck, IconLock, IconSearch, IconPackage, IconMinus, IconRefresh, IconTag, IconPrinter, IconChecklist } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useDisclosure } from '@mantine/hooks';
 import { useShop } from '@/context/ShopContext';
@@ -644,6 +644,14 @@ export default function OrderDetailPage() {
              order.status === 'produced' ? 'Produite' : 
              order.status === 'requested' ? 'Demandée' : 'Brouillon'}
           </Badge>
+          <Button
+            variant="light"
+            color="green"
+            leftSection={<IconChecklist size={18} />}
+            onClick={() => router.push(`/ivy/commandes/stock/${orderId}/feuillet`)}
+          >
+            Feuillet de commande
+          </Button>
           <Button
             variant="light"
             color="violet"
