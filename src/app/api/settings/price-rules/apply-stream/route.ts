@@ -158,16 +158,12 @@ export async function GET(request: NextRequest) {
         }
       };
 
-      // Heartbeat to keep the connection alive (every 15s)
+      // Heartbeat to keep the connection alive (every 10s)
+      // Uses a real data: message (not SSE comment) so it passes through Netlify's proxy
       const heartbeat = setInterval(() => {
         if (streamClosed) { clearInterval(heartbeat); return; }
-        try {
-          controller.enqueue(encoder.encode(`: keepalive\n\n`));
-        } catch {
-          streamClosed = true;
-          clearInterval(heartbeat);
-        }
-      }, 15000);
+        send('', 'keepalive');
+      }, 10000);
 
       try {
         send('🚀 Démarrage de l\'application des règles...', 'info');

@@ -11,6 +11,7 @@ import { notifications } from '@mantine/notifications';
 import { useShop } from '@/context/ShopContext';
 import { getColorHex, isColorOption, loadColorMappingsFromSupabase, areColorMappingsLoaded } from '@/utils/color-transformer';
 import { compareSizes } from '@/utils/size-helpers';
+import { SortOptionsBar } from '@/components/Inventory/SortOptionsBar';
 import styles from './feuillet.module.scss';
 
 const SIZE_ORDER = ['XXXS', 'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', '3XL', '4XL', '5XL'];
@@ -50,6 +51,7 @@ export default function FeuilletCommandePage() {
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState<SupplierOrder | null>(null);
   const [items, setItems] = useState<OrderItem[]>([]);
+  const [sortOrder, setSortOrder] = useState<string[]>(['Couleur', 'Taille']);
 
   const fetchOrder = useCallback(async () => {
     if (!currentShop || !orderId) return;
@@ -120,23 +122,31 @@ export default function FeuilletCommandePage() {
       }
     });
 
-    // Trier chaque groupe par couleur puis taille
+    // Trier chaque groupe selon sortOrder
     grouped.forEach((groups, sku) => {
       groups.sort((a, b) => {
-        const colorCompare = a.color.localeCompare(b.color);
-        if (colorCompare !== 0) return colorCompare;
-        const aIdx = SIZE_ORDER.indexOf(a.size.toUpperCase());
-        const bIdx = SIZE_ORDER.indexOf(b.size.toUpperCase());
-        if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
-        if (aIdx !== -1) return -1;
-        if (bIdx !== -1) return 1;
-        return a.size.localeCompare(b.size);
+        for (const criterion of sortOrder) {
+          if (criterion === 'Taille') {
+            const aIdx = SIZE_ORDER.indexOf(a.size.toUpperCase());
+            const bIdx = SIZE_ORDER.indexOf(b.size.toUpperCase());
+            let cmp = 0;
+            if (aIdx !== -1 && bIdx !== -1) cmp = aIdx - bIdx;
+            else if (aIdx !== -1) cmp = -1;
+            else if (bIdx !== -1) cmp = 1;
+            else cmp = a.size.localeCompare(b.size);
+            if (cmp !== 0) return cmp;
+          } else {
+            const cmp = a.color.localeCompare(b.color);
+            if (cmp !== 0) return cmp;
+          }
+        }
+        return 0;
       });
       grouped.set(sku, groups);
     });
 
     return grouped;
-  }, [items]);
+  }, [items, sortOrder]);
 
   const totals = useMemo(() => {
     const total = items.length;
@@ -257,6 +267,8 @@ export default function FeuilletCommandePage() {
         <Progress value={totals.progress} size="lg" color="green" />
       </Paper>
 
+      <SortOptionsBar options={sortOrder} onReorder={setSortOrder} />
+
       {variantsBySku.size === 0 ? (
         <Paper withBorder p="xl" radius="md">
           <Text c="dimmed" ta="center">
@@ -324,9 +336,14 @@ export default function FeuilletCommandePage() {
                                       }}
                                     />
                                   )}
-                                  <Text size="sm">
-                                    {group.color} - {group.size}
+                                  <Text size="sm" fw={500}>
+                                    {sortOrder[0] === 'Taille'
+                                      ? `${group.size} - ${group.color}`
+                                      : `${group.color} - ${group.size}`}
                                   </Text>
+                                  <Badge variant="filled" color="dark" size="lg" radius="sm" style={{ minWidth: 32, textAlign: 'center' }}>
+                                    {group.totalQuantity}
+                                  </Badge>
                                 </Group>
                               </Table.Td>
                               <Table.Td>
