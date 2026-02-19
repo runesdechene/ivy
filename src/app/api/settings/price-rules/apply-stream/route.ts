@@ -6,22 +6,17 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const UPDATE_INVENTORY_COST_MUTATION = `
-  mutation inventoryItemUpdate($id: ID!, $input: InventoryItemInput!) {
-    inventoryItemUpdate(id: $id, input: $input) {
-      inventoryItem {
-        id
-        unitCost {
-          amount
-        }
-      }
-      userErrors {
-        field
-        message
-      }
-    }
-  }
-`;
+const MUTATION_BATCH_SIZE = 10;
+
+function buildBatchCostMutation(items: { inventoryItemId: string; cost: string }[]): string {
+  const mutations = items.map((item, idx) =>
+    `u${idx}: inventoryItemUpdate(id: "${item.inventoryItemId}", input: {cost: "${item.cost}"}) {
+      inventoryItem { id }
+      userErrors { field message }
+    }`
+  ).join('\n  ');
+  return `mutation {\n  ${mutations}\n}`;
+}
 
 const GET_VARIANTS_BY_PRODUCT_TYPE_QUERY = `
   query getVariantsByProductType($query: String!, $cursor: String) {
@@ -244,100 +239,110 @@ export async function GET(request: NextRequest) {
           return;
         }
 
-        send(`✓ ${allVariants.length} variante(s) à traiter`, 'success');
+        send(`✓ ${allVariants.length} variante(s) récupérée(s)`, 'success');
         send('', 'info');
-        send('🔄 Application des modifications...', 'info');
+        send('📊 Calcul des coûts...', 'info');
 
         let updatedCount = 0;
         let errorCount = 0;
 
+        // Phase 1: Pré-calculer tous les coûts (local, pas d'API)
+        type VariantUpdate = { variant: any; cost: number; costParts: string[]; label: string; originalIndex: number };
+        const variantUpdates: VariantUpdate[] = [];
+
         for (let i = 0; i < allVariants.length; i++) {
+          const variant = allVariants[i];
+          const variantLabel = `${variant.sku || 'no-sku'} - ${variant.title || 'no-title'}`;
+
+          if (!variant.inventoryItem?.id) {
+            send(`  ⚠️ [${i + 1}/${allVariants.length}] ${variantLabel}: pas d'inventoryItem, ignoré`, 'warning');
+            console.log(`[apply-stream] Variant ${i} has no inventoryItem:`, JSON.stringify(variant).slice(0, 300));
+            errorCount++;
+            continue;
+          }
+
+          let cost = rule.base_price;
+          const metafields = variant.metafields?.nodes || [];
+          const selectedOptions = variant.selectedOptions || [];
+          const costParts: string[] = [`${rule.base_price}€`];
+
+          for (const modifier of rule.modifiers || []) {
+            const match = metafields.find(
+              (mf: any) =>
+                mf.namespace === modifier.metafield_namespace &&
+                mf.key === modifier.metafield_key &&
+                mf.value === modifier.metafield_value
+            );
+            if (match) {
+              cost += modifier.modifier_amount;
+              const sign = modifier.modifier_amount >= 0 ? '+' : '';
+              costParts.push(`${sign}${modifier.modifier_amount}€ (${modifier.metafield_value})`);
+            }
+          }
+
+          for (const optMod of rule.option_modifiers || []) {
+            const match = selectedOptions.find(
+              (opt: any) =>
+                opt.name.toLowerCase() === optMod.option_name.toLowerCase() &&
+                opt.value.toLowerCase() === optMod.option_value.toLowerCase()
+            );
+            if (match) {
+              cost += optMod.modifier_amount;
+              const sign = optMod.modifier_amount >= 0 ? '+' : '';
+              costParts.push(`${sign}${optMod.modifier_amount}€ (${optMod.option_value})`);
+            }
+          }
+
+          variantUpdates.push({ variant, cost, costParts, label: variantLabel, originalIndex: i });
+        }
+
+        send(`✓ ${variantUpdates.length} variante(s) à mettre à jour`, 'success');
+        send('', 'info');
+        send('🔄 Application par batch de ' + MUTATION_BATCH_SIZE + '...', 'info');
+
+        // Phase 2: Mutations par batch (10 mutations par requête GraphQL au lieu de 1)
+        const totalBatches = Math.ceil(variantUpdates.length / MUTATION_BATCH_SIZE);
+
+        for (let b = 0; b < variantUpdates.length; b += MUTATION_BATCH_SIZE) {
           if (streamClosed) {
-            console.log(`Stream closed by client at ${i}/${allVariants.length}`);
+            console.log(`Stream closed by client at batch ${Math.floor(b / MUTATION_BATCH_SIZE) + 1}`);
             break;
           }
 
-          const variant = allVariants[i];
-          const variantLabel = `${variant.sku || 'no-sku'} - ${variant.title || 'no-title'}`;
-          
+          const batch = variantUpdates.slice(b, b + MUTATION_BATCH_SIZE);
+          const batchNum = Math.floor(b / MUTATION_BATCH_SIZE) + 1;
+
           try {
-            // Safety check: skip variants without inventoryItem
-            if (!variant.inventoryItem?.id) {
-              send(`  ⚠️ [${i + 1}/${allVariants.length}] ${variantLabel}: pas d'inventoryItem, ignoré`, 'warning');
-              console.log(`[apply-stream] Variant ${i} has no inventoryItem:`, JSON.stringify(variant).slice(0, 300));
-              errorCount++;
-              continue;
-            }
-
-            // Calculer le coût
-            let cost = rule.base_price;
-            const metafields = variant.metafields?.nodes || [];
-            const selectedOptions = variant.selectedOptions || [];
-            const costParts: string[] = [`${rule.base_price}€`];
-            
-            // Appliquer les modificateurs de métachamps
-            for (const modifier of rule.modifiers || []) {
-              const match = metafields.find(
-                (mf: any) => 
-                  mf.namespace === modifier.metafield_namespace && 
-                  mf.key === modifier.metafield_key &&
-                  mf.value === modifier.metafield_value
-              );
-
-              if (match) {
-                cost += modifier.modifier_amount;
-                const sign = modifier.modifier_amount >= 0 ? '+' : '';
-                costParts.push(`${sign}${modifier.modifier_amount}€ (${modifier.metafield_value})`);
-              }
-            }
-
-            // Appliquer les modificateurs d'options (couleur, taille, etc.)
-            for (const optMod of rule.option_modifiers || []) {
-              const match = selectedOptions.find(
-                (opt: any) => 
-                  opt.name.toLowerCase() === optMod.option_name.toLowerCase() &&
-                  opt.value.toLowerCase() === optMod.option_value.toLowerCase()
-              );
-
-              if (match) {
-                cost += optMod.modifier_amount;
-                const sign = optMod.modifier_amount >= 0 ? '+' : '';
-                costParts.push(`${sign}${optMod.modifier_amount}€ (${optMod.option_value})`);
-              }
-            }
-
-            // Log before mutation for debugging
-            console.log(`[apply-stream] ${i + 1}/${allVariants.length} Updating ${variantLabel} → ${cost.toFixed(2)}€`);
-
-            // Mettre à jour sur Shopify via fetch direct
-            const updateResult = await shopifyGraphQL(
-              shopDomain, shopToken,
-              UPDATE_INVENTORY_COST_MUTATION,
-              {
-                id: variant.inventoryItem.id,
-                input: { cost: cost.toFixed(2) },
-              },
-              send
+            const batchQuery = buildBatchCostMutation(
+              batch.map(item => ({
+                inventoryItemId: item.variant.inventoryItem.id,
+                cost: item.cost.toFixed(2),
+              }))
             );
 
-            if (updateResult.data?.inventoryItemUpdate?.userErrors?.length > 0) {
-              const err = updateResult.data.inventoryItemUpdate.userErrors[0].message;
-              send(`  ❌ [${i + 1}/${allVariants.length}] ${variantLabel}: ${err}`, 'error');
-              errorCount++;
-            } else {
-              const calcStr = costParts.length > 1 ? ` (${costParts.join(' ')})` : '';
-              send(`  ✓ [${i + 1}/${allVariants.length}] ${variantLabel} → ${cost.toFixed(2)}€${calcStr}`, 'progress');
-              updatedCount++;
+            console.log(`[apply-stream] Batch ${batchNum}/${totalBatches} (${batch.length} variants)`);
+            const result = await shopifyGraphQL(shopDomain, shopToken, batchQuery, {}, send);
+
+            for (let idx = 0; idx < batch.length; idx++) {
+              const item = batch[idx];
+              const updateResult = result.data?.[`u${idx}`];
+
+              if (updateResult?.userErrors?.length > 0) {
+                const err = updateResult.userErrors[0].message;
+                send(`  ❌ [${item.originalIndex + 1}/${allVariants.length}] ${item.label}: ${err}`, 'error');
+                errorCount++;
+              } else {
+                const calcStr = item.costParts.length > 1 ? ` (${item.costParts.join(' ')})` : '';
+                send(`  ✓ [${item.originalIndex + 1}/${allVariants.length}] ${item.label} → ${item.cost.toFixed(2)}€${calcStr}`, 'progress');
+                updatedCount++;
+              }
             }
-
-            // Pause de 100ms entre chaque mutation
-            await new Promise(resolve => setTimeout(resolve, 100));
-
           } catch (err: any) {
-            console.error(`[apply-stream] CRASH at variant ${i + 1}/${allVariants.length} (${variantLabel}):`, err);
-            send(`  ❌ [${i + 1}/${allVariants.length}] ${variantLabel}: ${err?.message || String(err)}`, 'error');
-            errorCount++;
-            // Pause supplémentaire après une erreur
+            console.error(`[apply-stream] CRASH at batch ${batchNum}/${totalBatches}:`, err);
+            for (const item of batch) {
+              send(`  ❌ [${item.originalIndex + 1}/${allVariants.length}] ${item.label}: ${err?.message || String(err)}`, 'error');
+              errorCount++;
+            }
             await new Promise(resolve => setTimeout(resolve, 2000));
           }
         }
