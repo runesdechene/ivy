@@ -6,7 +6,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const MUTATION_BATCH_SIZE = 10;
+const MUTATION_BATCH_SIZE = 50;
 
 function buildBatchCostMutation(items: { inventoryItemId: string; cost: string }[]): string {
   const mutations = items.map((item, idx) =>
