@@ -12,16 +12,20 @@ export function useTerminalStream() {
       title?: string;
       onComplete?: (data?: Record<string, unknown>) => void;
       actions?: TerminalAction[];
+      noStartSync?: boolean;
+      noEndSync?: boolean;
     }
   ) => {
-    terminal.startSync(options?.title || 'Synchronisation');
+    if (!options?.noStartSync) {
+      terminal.startSync(options?.title || 'Synchronisation');
+    }
 
     try {
       const response = await fetch(url);
-      
+
       if (!response.body) {
         terminal.log('❌ Erreur: Pas de réponse du serveur', 'error');
-        terminal.endSync();
+        if (!options?.noEndSync) terminal.endSync();
         return false;
       }
 
@@ -50,7 +54,9 @@ export function useTerminalStream() {
             try {
               const data = JSON.parse(line.slice(6));
               if (data.message === 'DONE') {
-                terminal.endSync(options?.actions);
+                if (!options?.noEndSync) {
+                  terminal.endSync(options?.actions);
+                }
                 options?.onComplete?.(data);
                 return true;
               } else if (data.message) {
@@ -71,7 +77,9 @@ export function useTerminalStream() {
           try {
             const data = JSON.parse(line.slice(6));
             if (data.message === 'DONE') {
-              terminal.endSync(options?.actions);
+              if (!options?.noEndSync) {
+                terminal.endSync(options?.actions);
+              }
               options?.onComplete?.(data);
               return true;
             } else if (data.message) {
@@ -83,12 +91,14 @@ export function useTerminalStream() {
         }
       }
 
-      terminal.endSync(options?.actions);
+      if (!options?.noEndSync) {
+        terminal.endSync(options?.actions);
+      }
       options?.onComplete?.();
       return true;
     } catch (err) {
       terminal.log(`❌ Erreur: ${err}`, 'error');
-      terminal.endSync();
+      if (!options?.noEndSync) terminal.endSync();
       return false;
     }
   }, [terminal]);

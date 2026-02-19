@@ -89,7 +89,7 @@ interface MetafieldConfig {
 
 export default function PriceRulesPage() {
   const { currentShop } = useShop();
-  const { streamFromUrl, endSync } = useTerminalStream();
+  const { streamFromUrl, endSync, log: terminalLog, startSync } = useTerminalStream();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState<string | null>(null);
@@ -372,32 +372,62 @@ export default function PriceRulesPage() {
     if (!currentShop || !rule.id) return;
 
     setApplying(rule.id);
-    
-    await streamFromUrl(
-      `/api/settings/price-rules/apply-stream?shopId=${currentShop.id}&ruleId=${rule.id}`,
+
+    const actions = rule.product_type ? [
       {
-        title: `Appliquer sur Shopify: ${rule.sku}`,
-        onComplete: () => {
-          fetchData();
-          setApplying(null);
+        label: `Importer dans l'inventaire les prix (${rule.product_type})`,
+        color: 'green',
+        icon: <IconDownload size={14} />,
+        onClick: () => syncInventory(rule.product_type!),
+      },
+    ] : [
+      {
+        label: 'Importer dans l\'inventaire',
+        color: 'green',
+        icon: <IconDownload size={14} />,
+        onClick: () => syncInventory(),
+      },
+    ];
+
+    let cursor: string | null = null;
+    let offset = 0;
+    let totalUpdated = 0;
+    let totalErrors = 0;
+    let chunk = 0;
+
+    do {
+      const params = new URLSearchParams({
+        shopId: currentShop.id,
+        ruleId: rule.id,
+      });
+      if (cursor) params.set('cursor', cursor);
+      if (offset > 0) params.set('offset', offset.toString());
+
+      let nextCursor: string | null = null;
+
+      await streamFromUrl(`/api/settings/price-rules/apply-stream?${params}`, {
+        title: chunk === 0 ? `Appliquer sur Shopify: ${rule.sku}` : undefined,
+        noStartSync: chunk > 0,
+        noEndSync: true,
+        onComplete: (data) => {
+          nextCursor = (data?.nextCursor as string) || null;
+          offset = (data?.offset as number) || offset;
+          totalUpdated += (data?.updatedCount as number) || 0;
+          totalErrors += (data?.errorCount as number) || 0;
         },
-        actions: rule.product_type ? [
-          {
-            label: `Importer dans l'inventaire les prix (${rule.product_type})`,
-            color: 'green',
-            icon: <IconDownload size={14} />,
-            onClick: () => syncInventory(rule.product_type!),
-          },
-        ] : [
-          {
-            label: 'Importer dans l\'inventaire',
-            color: 'green',
-            icon: <IconDownload size={14} />,
-            onClick: () => syncInventory(),
-          },
-        ],
-      }
-    );
+      });
+
+      cursor = nextCursor;
+      chunk++;
+    } while (cursor);
+
+    terminalLog('', 'info');
+    terminalLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+    terminalLog(`✅ Total: ${totalUpdated} mise(s) à jour, ${totalErrors} erreur(s)`, 'success');
+    endSync(actions);
+
+    fetchData();
+    setApplying(null);
   };
   
   const syncInventory = async (productType?: string) => {
