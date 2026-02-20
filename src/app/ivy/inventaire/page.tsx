@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { 
+import {
   Title, Text, Paper, Stack, Group, SimpleGrid, Loader, Center,
-  Progress, Badge, ThemeIcon, Button, Menu
+  Progress, Badge, ThemeIcon, Button, Menu, Checkbox, NumberInput
 } from '@mantine/core';
 import {
   IconPackage, IconCurrencyEuro, IconPalette, IconRuler2,
@@ -14,7 +14,7 @@ import {
 import { notifications } from '@mantine/notifications';
 import { useShop } from '@/context/ShopContext';
 import { useLocation } from '@/context/LocationContext';
-import { generateInventoryCsv, generateSummaryCsv, downloadCsv } from '@/utils/csv-export';
+import { generateInventoryCsv, generateSummaryCsv, downloadCsv, type SaleValueOptions } from '@/utils/csv-export';
 import { printSummaryPdf, printDetailPdf } from '@/utils/pdf-export';
 import { getColorHex, loadColorMappingsFromSupabase } from '@/utils/color-transformer';
 
@@ -35,6 +35,8 @@ export default function InventaireDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [includeSaleValue, setIncludeSaleValue] = useState(false);
+  const [saleValueModifier, setSaleValueModifier] = useState<number>(0);
 
   const fetchStats = useCallback(async () => {
     if (!currentShop) return;
@@ -64,6 +66,8 @@ export default function InventaireDashboardPage() {
     fetchStats();
   }, [fetchStats]);
 
+  const saleValueOpts: SaleValueOptions = { include: includeSaleValue, modifier: saleValueModifier };
+
   const handleExportCsv = useCallback(async () => {
     if (!currentShop) return;
 
@@ -78,7 +82,7 @@ export default function InventaireDashboardPage() {
       if (!response.ok) throw new Error('Erreur API');
 
       const { products } = await response.json();
-      const csv = generateInventoryCsv(products);
+      const csv = generateInventoryCsv(products, saleValueOpts);
       const date = new Date().toISOString().slice(0, 10);
       const locationLabel = currentLocation?.name || 'tous';
       downloadCsv(csv, `inventaire_${locationLabel}_${date}.csv`);
@@ -91,7 +95,7 @@ export default function InventaireDashboardPage() {
     } finally {
       setExporting(false);
     }
-  }, [currentShop, currentLocation]);
+  }, [currentShop, currentLocation, saleValueOpts]);
 
   const handleExportSummary = useCallback(() => {
     if (!stats) return;
@@ -102,9 +106,10 @@ export default function InventaireDashboardPage() {
       stats.byProductType,
       stats.totalStock,
       stats.totalStockValue,
+      saleValueOpts,
     );
     downloadCsv(csv, `resume_inventaire_${locationLabel}_${date}.csv`);
-  }, [stats, currentLocation]);
+  }, [stats, currentLocation, saleValueOpts]);
 
   const handlePrintSummary = useCallback(() => {
     if (!stats) return;
@@ -113,8 +118,9 @@ export default function InventaireDashboardPage() {
       stats.totalStock,
       stats.totalStockValue,
       currentLocation?.name,
+      saleValueOpts,
     );
-  }, [stats, currentLocation]);
+  }, [stats, currentLocation, saleValueOpts]);
 
   const handlePrintDetail = useCallback(async () => {
     if (!currentShop) return;
@@ -130,7 +136,7 @@ export default function InventaireDashboardPage() {
       if (!response.ok) throw new Error('Erreur API');
 
       const { products } = await response.json();
-      printDetailPdf(products, currentLocation?.name);
+      printDetailPdf(products, currentLocation?.name, saleValueOpts);
     } catch (err) {
       notifications.show({
         title: 'Erreur',
@@ -140,7 +146,7 @@ export default function InventaireDashboardPage() {
     } finally {
       setExporting(false);
     }
-  }, [currentShop, currentLocation]);
+  }, [currentShop, currentLocation, saleValueOpts]);
 
   if (loading) {
     return (
@@ -196,6 +202,28 @@ export default function InventaireDashboardPage() {
               </Button>
             </Menu.Target>
             <Menu.Dropdown>
+              <div style={{ padding: '8px 12px' }}>
+                <Checkbox
+                  label="Inclure valeur de vente"
+                  checked={includeSaleValue}
+                  onChange={(e) => setIncludeSaleValue(e.currentTarget.checked)}
+                  size="xs"
+                />
+                {includeSaleValue && (
+                  <NumberInput
+                    label="Modulation"
+                    value={saleValueModifier}
+                    onChange={(v) => setSaleValueModifier(typeof v === 'number' ? v : 0)}
+                    suffix=" %"
+                    allowNegative
+                    step={5}
+                    size="xs"
+                    mt={8}
+                    styles={{ input: { width: 100 } }}
+                  />
+                )}
+              </div>
+              <Menu.Divider />
               <Menu.Label>CSV (tableur)</Menu.Label>
               <Menu.Item
                 leftSection={<IconFileSpreadsheet size={16} />}

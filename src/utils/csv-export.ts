@@ -1,3 +1,8 @@
+export interface SaleValueOptions {
+  include: boolean;
+  modifier: number; // pourcentage, ex: +10, -5, 0
+}
+
 interface CsvVariant {
   title: string;
   sku: string;
@@ -27,14 +32,17 @@ function getOptionValue(options: { name: string; value: string }[], targetName: 
   return opt?.value || '';
 }
 
-export function generateInventoryCsv(products: CsvProduct[]): string {
+export function generateInventoryCsv(products: CsvProduct[], saleValueOpts?: SaleValueOptions): string {
   const BOM = '\uFEFF';
+  const showSale = saleValueOpts?.include;
   const headers = [
     'Produit', 'Type', 'SKU', 'Variante', 'Couleur', 'Taille',
     'Quantité', 'Coût unitaire (€)', 'Valeur stock (€)',
+    ...(showSale ? ['Prix de vente (€)', 'Valeur vente (€)'] : []),
   ];
 
   const rows: string[] = [headers.join(';')];
+  const mod = 1 + (saleValueOpts?.modifier || 0) / 100;
 
   for (const product of products) {
     for (const variant of product.variants) {
@@ -64,6 +72,12 @@ export function generateInventoryCsv(products: CsvProduct[]): string {
         stockValue.toFixed(2).replace('.', ','),
       ];
 
+      if (showSale) {
+        const adjustedPrice = (variant.price || 0) * mod;
+        row.push(adjustedPrice.toFixed(2).replace('.', ','));
+        row.push((qty * adjustedPrice).toFixed(2).replace('.', ','));
+      }
+
       rows.push(row.join(';'));
     }
   }
@@ -79,28 +93,42 @@ export function generateSummaryCsv(
   byProductType: SummaryByType,
   totalStock: number,
   totalStockValue: number,
+  saleValueOpts?: SaleValueOptions,
 ): string {
   const BOM = '\uFEFF';
-  const headers = ['Type de produit', 'Unités', 'Coût stock (€)'];
+  const showSale = saleValueOpts?.include;
+  const mod = 1 + (saleValueOpts?.modifier || 0) / 100;
+  const headers = ['Type de produit', 'Unités', 'Coût stock (€)', ...(showSale ? ['Valeur vente (€)'] : [])];
   const rows: string[] = [headers.join(';')];
 
   const sortedTypes = Object.entries(byProductType).sort((a, b) => b[1].stock - a[1].stock);
+  let totalSaleValue = 0;
 
   for (const [type, data] of sortedTypes) {
-    rows.push([
+    const row = [
       escapeCsvField(type),
       data.stock.toString(),
       data.value.toFixed(2).replace('.', ','),
-    ].join(';'));
+    ];
+    if (showSale) {
+      const adjustedSale = data.saleValue * mod;
+      totalSaleValue += adjustedSale;
+      row.push(adjustedSale.toFixed(2).replace('.', ','));
+    }
+    rows.push(row.join(';'));
   }
 
   // Ligne vide + totaux
   rows.push('');
-  rows.push([
+  const totalRow = [
     'TOTAL',
     totalStock.toString(),
     totalStockValue.toFixed(2).replace('.', ','),
-  ].join(';'));
+  ];
+  if (showSale) {
+    totalRow.push(totalSaleValue.toFixed(2).replace('.', ','));
+  }
+  rows.push(totalRow.join(';'));
 
   return BOM + rows.join('\n');
 }

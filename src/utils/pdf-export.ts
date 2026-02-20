@@ -1,5 +1,10 @@
 import { printInIframe } from '@/utils/print-helpers';
 
+interface SaleValueOptions {
+  include: boolean;
+  modifier: number;
+}
+
 interface PdfVariant {
   title: string;
   sku: string;
@@ -51,17 +56,28 @@ export function printSummaryPdf(
   totalStock: number,
   totalStockValue: number,
   locationName?: string,
+  saleValueOpts?: SaleValueOptions,
 ) {
   const date = new Date().toLocaleDateString('fr-FR');
+  const showSale = saleValueOpts?.include;
+  const mod = 1 + (saleValueOpts?.modifier || 0) / 100;
   const sortedTypes = Object.entries(byProductType).sort((a, b) => b[1].stock - a[1].stock);
 
-  const tableRows = sortedTypes.map(([type, data]) => `
+  let totalSaleValue = 0;
+  const tableRows = sortedTypes.map(([type, data]) => {
+    const adjustedSale = data.saleValue * mod;
+    totalSaleValue += adjustedSale;
+    return `
     <tr>
       <td>${type}</td>
       <td class="right">${data.stock.toLocaleString('fr-FR')}</td>
       <td class="right">${fmt(data.value)} &euro;</td>
+      ${showSale ? `<td class="right">${fmt(adjustedSale)} &euro;</td>` : ''}
     </tr>
-  `).join('');
+  `;
+  }).join('');
+
+  const modLabel = saleValueOpts?.modifier ? ` (${saleValueOpts.modifier > 0 ? '+' : ''}${saleValueOpts.modifier}%)` : '';
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Inventaire - Résumé</title>
 <style>${BASE_STYLE}</style></head><body>
@@ -77,6 +93,10 @@ export function printSummaryPdf(
       <div class="card-label">Coût du stock</div>
       <div class="card-value">${fmt(totalStockValue)} &euro;</div>
     </div>
+    ${showSale ? `<div class="card">
+      <div class="card-label">Valeur de vente${modLabel}</div>
+      <div class="card-value">${fmt(totalSaleValue)} &euro;</div>
+    </div>` : ''}
   </div>
 
   <table>
@@ -84,6 +104,7 @@ export function printSummaryPdf(
       <th>Type de produit</th>
       <th class="right">Unités</th>
       <th class="right">Coût stock</th>
+      ${showSale ? `<th class="right">Valeur vente${modLabel}</th>` : ''}
     </tr></thead>
     <tbody>
       ${tableRows}
@@ -91,6 +112,7 @@ export function printSummaryPdf(
         <td>TOTAL</td>
         <td class="right">${totalStock.toLocaleString('fr-FR')}</td>
         <td class="right">${fmt(totalStockValue)} &euro;</td>
+        ${showSale ? `<td class="right">${fmt(totalSaleValue)} &euro;</td>` : ''}
       </tr>
     </tbody>
   </table>
@@ -99,18 +121,23 @@ export function printSummaryPdf(
   printInIframe({ content: html });
 }
 
-export function printDetailPdf(products: PdfProduct[], locationName?: string) {
+export function printDetailPdf(products: PdfProduct[], locationName?: string, saleValueOpts?: SaleValueOptions) {
   const date = new Date().toLocaleDateString('fr-FR');
+  const showSale = saleValueOpts?.include;
+  const mod = 1 + (saleValueOpts?.modifier || 0) / 100;
 
   let totalQty = 0;
   let totalCostValue = 0;
+  let totalSaleValue = 0;
 
   const tableRows = products.flatMap(product =>
     product.variants.map(variant => {
       const qty = Math.max(0, variant.quantity);
       const cost = variant.cost || 0;
+      const adjustedPrice = (variant.price || 0) * mod;
       totalQty += qty;
       totalCostValue += qty * cost;
+      totalSaleValue += qty * adjustedPrice;
 
       const couleur = getOptionValue(variant.options, 'couleur')
         || getOptionValue(variant.options, 'color')
@@ -130,9 +157,12 @@ export function printDetailPdf(products: PdfProduct[], locationName?: string) {
         <td>${taille}</td>
         <td class="right">${qty}</td>
         <td class="right">${fmt(cost)} &euro;</td>
+        ${showSale ? `<td class="right">${fmt(adjustedPrice)} &euro;</td>` : ''}
       </tr>`;
     })
   ).join('');
+
+  const modLabel = saleValueOpts?.modifier ? ` (${saleValueOpts.modifier > 0 ? '+' : ''}${saleValueOpts.modifier}%)` : '';
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Inventaire - Détail</title>
 <style>${BASE_STYLE}
@@ -151,6 +181,7 @@ export function printDetailPdf(products: PdfProduct[], locationName?: string) {
       <th>Taille</th>
       <th class="right">Qté</th>
       <th class="right">Coût</th>
+      ${showSale ? `<th class="right">Prix${modLabel}</th>` : ''}
     </tr></thead>
     <tbody>
       ${tableRows}
@@ -158,6 +189,7 @@ export function printDetailPdf(products: PdfProduct[], locationName?: string) {
         <td colspan="5">TOTAL</td>
         <td class="right">${totalQty.toLocaleString('fr-FR')}</td>
         <td class="right">${fmt(totalCostValue)} &euro;</td>
+        ${showSale ? `<td class="right">${fmt(totalSaleValue)} &euro;</td>` : ''}
       </tr>
     </tbody>
   </table>
