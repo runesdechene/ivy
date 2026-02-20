@@ -120,6 +120,7 @@ export async function GET(request: Request) {
             option2,
             option3,
             cost,
+            price,
             shopify_active,
             inventory_levels(
               quantity,
@@ -260,6 +261,7 @@ export async function GET(request: Request) {
           quantity,
           size,
           cost: variant.cost || 0,
+          price: variant.price || 0,
           shopifyActive: (product.status === 'local' || product.status === 'draft') ? false : (variant.shopify_active ?? true),
           options: [
             variant.option1 && { name: optionNames?.option1_name || 'Option 1', value: variant.option1 },

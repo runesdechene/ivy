@@ -2,15 +2,20 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { 
-  Title, Text, Paper, Stack, Group, SimpleGrid, Loader, Center, 
-  Progress, Badge, ThemeIcon
+  Title, Text, Paper, Stack, Group, SimpleGrid, Loader, Center,
+  Progress, Badge, ThemeIcon, Button, Menu
 } from '@mantine/core';
-import { 
-  IconPackage, IconCurrencyEuro, IconPalette, IconRuler2, 
-  IconChartBar, IconTrendingUp, IconMapPin
+import {
+  IconPackage, IconCurrencyEuro, IconPalette, IconRuler2,
+  IconChartBar, IconTrendingUp, IconMapPin, IconDownload,
+  IconFileSpreadsheet, IconChevronDown, IconListDetails,
+  IconPrinter
 } from '@tabler/icons-react';
+import { notifications } from '@mantine/notifications';
 import { useShop } from '@/context/ShopContext';
 import { useLocation } from '@/context/LocationContext';
+import { generateInventoryCsv, generateSummaryCsv, downloadCsv } from '@/utils/csv-export';
+import { printSummaryPdf, printDetailPdf } from '@/utils/pdf-export';
 import { getColorHex, loadColorMappingsFromSupabase } from '@/utils/color-transformer';
 
 interface Stats {
@@ -28,6 +33,7 @@ export default function InventaireDashboardPage() {
   const { currentShop } = useShop();
   const { currentLocation } = useLocation();
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [stats, setStats] = useState<Stats | null>(null);
 
   const fetchStats = useCallback(async () => {
@@ -57,6 +63,84 @@ export default function InventaireDashboardPage() {
   useEffect(() => {
     fetchStats();
   }, [fetchStats]);
+
+  const handleExportCsv = useCallback(async () => {
+    if (!currentShop) return;
+
+    setExporting(true);
+    try {
+      const params = new URLSearchParams({ shopId: currentShop.id });
+      if (currentLocation?.id) {
+        params.append('locationId', currentLocation.id);
+      }
+
+      const response = await fetch(`/api/products?${params}`);
+      if (!response.ok) throw new Error('Erreur API');
+
+      const { products } = await response.json();
+      const csv = generateInventoryCsv(products);
+      const date = new Date().toISOString().slice(0, 10);
+      const locationLabel = currentLocation?.name || 'tous';
+      downloadCsv(csv, `inventaire_${locationLabel}_${date}.csv`);
+    } catch (err) {
+      notifications.show({
+        title: 'Erreur',
+        message: 'Impossible d\'exporter l\'inventaire',
+        color: 'red',
+      });
+    } finally {
+      setExporting(false);
+    }
+  }, [currentShop, currentLocation]);
+
+  const handleExportSummary = useCallback(() => {
+    if (!stats) return;
+
+    const date = new Date().toISOString().slice(0, 10);
+    const locationLabel = currentLocation?.name || 'tous';
+    const csv = generateSummaryCsv(
+      stats.byProductType,
+      stats.totalStock,
+      stats.totalStockValue,
+    );
+    downloadCsv(csv, `resume_inventaire_${locationLabel}_${date}.csv`);
+  }, [stats, currentLocation]);
+
+  const handlePrintSummary = useCallback(() => {
+    if (!stats) return;
+    printSummaryPdf(
+      stats.byProductType,
+      stats.totalStock,
+      stats.totalStockValue,
+      currentLocation?.name,
+    );
+  }, [stats, currentLocation]);
+
+  const handlePrintDetail = useCallback(async () => {
+    if (!currentShop) return;
+
+    setExporting(true);
+    try {
+      const params = new URLSearchParams({ shopId: currentShop.id });
+      if (currentLocation?.id) {
+        params.append('locationId', currentLocation.id);
+      }
+
+      const response = await fetch(`/api/products?${params}`);
+      if (!response.ok) throw new Error('Erreur API');
+
+      const { products } = await response.json();
+      printDetailPdf(products, currentLocation?.name);
+    } catch (err) {
+      notifications.show({
+        title: 'Erreur',
+        message: 'Impossible de générer le PDF',
+        color: 'red',
+      });
+    } finally {
+      setExporting(false);
+    }
+  }, [currentShop, currentLocation]);
 
   if (loading) {
     return (
@@ -93,11 +177,55 @@ export default function InventaireDashboardPage() {
     <div>
       <Group justify="space-between" mb="xl">
         <Title order={2}>Tableau de bord inventaire</Title>
-        {currentLocation && (
-          <Badge variant="light" color="green" size="lg" leftSection={<IconMapPin size={14} />}>
-            {currentLocation.name}
-          </Badge>
-        )}
+        <Group gap="sm">
+          {currentLocation && (
+            <Badge variant="light" color="green" size="lg" leftSection={<IconMapPin size={14} />}>
+              {currentLocation.name}
+            </Badge>
+          )}
+          <Menu shadow="md" width={240}>
+            <Menu.Target>
+              <Button
+                variant="light"
+                leftSection={<IconDownload size={16} />}
+                rightSection={<IconChevronDown size={14} />}
+                loading={exporting}
+                size="sm"
+              >
+                Exporter
+              </Button>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Label>CSV (tableur)</Menu.Label>
+              <Menu.Item
+                leftSection={<IconFileSpreadsheet size={16} />}
+                onClick={handleExportSummary}
+              >
+                Résumé par type
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<IconListDetails size={16} />}
+                onClick={handleExportCsv}
+              >
+                Détail par variante
+              </Menu.Item>
+              <Menu.Divider />
+              <Menu.Label>PDF (impression)</Menu.Label>
+              <Menu.Item
+                leftSection={<IconPrinter size={16} />}
+                onClick={handlePrintSummary}
+              >
+                Résumé par type
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<IconPrinter size={16} />}
+                onClick={handlePrintDetail}
+              >
+                Détail par variante
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
+        </Group>
       </Group>
 
       {/* Cartes principales */}
