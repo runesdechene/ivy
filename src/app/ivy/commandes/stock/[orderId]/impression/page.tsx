@@ -3,9 +3,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Title, Text, Paper, Button, Group, Badge, Checkbox, Loader, Center, Progress, SimpleGrid, Stack, Divider } from '@mantine/core';
-import { IconArrowLeft, IconPrinter, IconCheck } from '@tabler/icons-react';
+import { IconArrowLeft, IconPrinter, IconCheck, IconPackage } from '@tabler/icons-react';
 import { useShop } from '@/context/ShopContext';
 import { getColorHex, loadColorMappingsFromSupabase } from '@/utils/color-transformer';
+import { SortOptionsBar } from '@/components/Inventory/SortOptionsBar';
 import styles from './impression.module.scss';
 
 interface OrderItem {
@@ -32,6 +33,13 @@ interface SupplierOrder {
 
 const SIZE_ORDER = ['XXXS', 'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', '3XL', '4XL', '5XL'];
 
+function getSizeIndex(size: string | null | undefined): number {
+  if (!size) return 999;
+  const upperSize = size.toUpperCase();
+  const index = SIZE_ORDER.indexOf(upperSize);
+  return index === -1 ? 999 : index;
+}
+
 export default function FeuilleImpressionPage() {
   const params = useParams();
   const router = useRouter();
@@ -40,6 +48,8 @@ export default function FeuilleImpressionPage() {
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState<SupplierOrder | null>(null);
   const [items, setItems] = useState<OrderItem[]>([]);
+
+  const [sortOrder, setSortOrder] = useState<string[]>(['Nom', 'Couleur', 'Taille']);
 
   // Charger la commande et ses articles
   const fetchOrder = useCallback(async () => {
@@ -70,24 +80,54 @@ export default function FeuilleImpressionPage() {
     fetchOrder();
   }, [fetchOrder]);
 
-  // Grouper les articles par produit/variante pour les vignettes
+  // Grouper les articles par SKU prefix, puis par produit/variante
   // Ne garder que les articles validés (is_validated = true)
-  const groupedItems = useMemo(() => {
-    const groups: Record<string, OrderItem[]> = {};
-    
-    // Filtrer uniquement les articles validés
+  const skuGroups = useMemo(() => {
+    const variantGroups: Record<string, OrderItem[]> = {};
+
     const validatedItems = items.filter(item => item.is_validated);
-    
+
     validatedItems.forEach(item => {
       const key = `${item.product_title}|${item.variant_title}|${item.sku}`;
-      if (!groups[key]) {
-        groups[key] = [];
+      if (!variantGroups[key]) {
+        variantGroups[key] = [];
       }
-      groups[key].push(item);
+      variantGroups[key].push(item);
     });
 
-    // Convertir en tableau et trier par taille
-    return Object.entries(groups)
+    const extractOptions = (variantTitle: string | null) => {
+      const parts = (variantTitle || '').split(' / ');
+      const color = parts.find(p => getSizeIndex(p.trim()) === 999) || '';
+      const size = parts.find(p => getSizeIndex(p.trim()) !== 999) || '';
+      return { color, size };
+    };
+
+    type VariantGroup = {
+      key: string;
+      items: OrderItem[];
+      product_title: string;
+      variant_title: string | null;
+      sku: string | null;
+      metafields: Record<string, string>;
+      quantity: number;
+      printedCount: number;
+    };
+
+    const compareByCriterion = (a: VariantGroup, b: VariantGroup, criterion: string): number => {
+      switch (criterion) {
+        case 'Nom':
+          return (a.product_title || '').localeCompare(b.product_title || '', 'fr');
+        case 'Couleur':
+          return extractOptions(a.variant_title).color.localeCompare(extractOptions(b.variant_title).color, 'fr');
+        case 'Taille':
+          return getSizeIndex(extractOptions(a.variant_title).size) - getSizeIndex(extractOptions(b.variant_title).size);
+        default:
+          return 0;
+      }
+    };
+
+    // Convertir en variant groups triés
+    const allVariantGroups: VariantGroup[] = Object.entries(variantGroups)
       .map(([key, groupItems]) => ({
         key,
         items: groupItems,
@@ -96,26 +136,33 @@ export default function FeuilleImpressionPage() {
         sku: groupItems[0].sku,
         metafields: groupItems[0].metafields || {},
         quantity: groupItems.length,
-        validatedCount: groupItems.length, // Tous sont validés par définition
         printedCount: groupItems.filter(i => i.is_printed).length,
-      }))
-      .sort((a, b) => {
-        // Trier par SKU puis par taille
-        const skuCompare = (a.sku || '').localeCompare(b.sku || '');
-        if (skuCompare !== 0) return skuCompare;
-        
-        const aSize = a.variant_title?.split('/').pop()?.trim() || '';
-        const bSize = b.variant_title?.split('/').pop()?.trim() || '';
-        
-        const aIndex = SIZE_ORDER.indexOf(aSize.toUpperCase());
-        const bIndex = SIZE_ORDER.indexOf(bSize.toUpperCase());
-        
-        if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
-        if (aIndex !== -1) return -1;
-        if (bIndex !== -1) return 1;
-        return (a.variant_title || '').localeCompare(b.variant_title || '');
+      }));
+
+    // Grouper par préfixe SKU
+    const byPrefix: Record<string, VariantGroup[]> = {};
+    allVariantGroups.forEach(vg => {
+      const prefix = vg.sku?.match(/^([A-Za-z]+)/)?.[1]?.toUpperCase() || 'AUTRES';
+      if (!byPrefix[prefix]) byPrefix[prefix] = [];
+      byPrefix[prefix].push(vg);
+    });
+
+    // Trier chaque groupe SKU selon les critères drag & drop
+    Object.keys(byPrefix).forEach(prefix => {
+      byPrefix[prefix].sort((a, b) => {
+        for (const criterion of sortOrder) {
+          const cmp = compareByCriterion(a, b, criterion);
+          if (cmp !== 0) return cmp;
+        }
+        return 0;
       });
-  }, [items]);
+    });
+
+    // Retourner trié par préfixe alphabétique
+    return Object.entries(byPrefix)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([prefix, groups]) => ({ prefix, groups }));
+  }, [items, sortOrder]);
 
   const totals = useMemo(() => {
     // Compter uniquement les articles validés
@@ -215,7 +262,7 @@ export default function FeuilleImpressionPage() {
         Vue détaillée pour l'atelier. Chaque vignette représente une variante à produire avec ses métachamps.
       </Text>
 
-      {groupedItems.length === 0 ? (
+      {skuGroups.length === 0 ? (
         <Paper withBorder p="xl" radius="md">
           <Text c="dimmed" ta="center">
             Aucun article validé à imprimer. Validez d'abord les articles sur la page de commande.
@@ -234,140 +281,145 @@ export default function FeuilleImpressionPage() {
             <Progress value={totals.progress} size="lg" color="teal" />
           </Paper>
 
-          {/* Vignettes des variantes */}
-          <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing="md">
-            {groupedItems.map((group) => {
-              const allPrinted = group.printedCount === group.quantity;
-              // Parser toutes les options du variant_title
-              const allOptions = group.variant_title?.split('/').map(part => part.trim()).filter(Boolean) || [];
+          {/* Tri par drag & drop */}
+          <Paper withBorder p="sm" radius="md" mb="md">
+            <SortOptionsBar options={sortOrder} onReorder={setSortOrder} />
+          </Paper>
 
-              return (
-                <Paper 
-                  key={group.key} 
-                  withBorder 
-                  radius="md" 
-                  p="md"
-                  className={allPrinted ? styles.validatedCard : styles.card}
-                  onClick={() => toggleGroupPrinted(group.items, !allPrinted)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <Stack gap="xs">
-                    {/* Header avec checkbox impression et quantité */}
-                    <Group justify="space-between">
-                      <Group gap="xs">
-                        <Checkbox
-                          checked={allPrinted}
-                          onChange={(e) => {
-                            e.stopPropagation();
-                            toggleGroupPrinted(group.items, e.currentTarget.checked);
-                          }}
-                          size="md"
-                          color="teal"
-                        />
-                        <Badge 
-                          size="lg" 
-                          variant={allPrinted ? 'filled' : 'light'}
-                          color={allPrinted ? 'teal' : 'orange'}
-                        >
-                          x{group.quantity}
-                        </Badge>
-                      </Group>
-                      {allPrinted && <IconCheck size={20} color="teal" />}
-                    </Group>
+          {/* Vignettes groupées par SKU */}
+          {skuGroups.map(({ prefix, groups }) => (
+            <div key={prefix}>
+              <Group gap="xs" mb="sm" mt="md" className={styles.skuGroupHeader}>
+                <IconPackage size={20} />
+                <Text fw={600} size="lg">{prefix}</Text>
+                <Badge variant="light">{groups.reduce((sum, g) => sum + g.quantity, 0)} article(s)</Badge>
+              </Group>
 
-                    <Divider />
+              <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing="md" mb="lg">
+                {groups.map((group) => {
+                  const allPrinted = group.printedCount === group.quantity;
+                  const allOptions = group.variant_title?.split('/').map(part => part.trim()).filter(Boolean) || [];
 
-                    {/* Infos produit */}
-                    <Text fw={600} size="sm" lineClamp={2}>
-                      {group.product_title}
-                    </Text>
-
-                    {/* SKU */}
-                    <Badge variant="light" color="gray" size="sm">
-                      {group.sku || 'Sans SKU'}
-                    </Badge>
-
-                    {/* Toutes les options (couleur, taille, impression, etc.) */}
-                    <Group gap="xs" wrap="wrap">
-                      {allOptions.map((option, idx) => {
-                        const colorHex = getColorHex(option);
-                        // Si c'est une couleur reconnue, afficher avec la pastille
-                        if (colorHex && colorHex !== '#808080') {
-                          return (
-                            <Group key={idx} gap={4}>
-                              <div
-                                style={{
-                                  width: 16,
-                                  height: 16,
-                                  borderRadius: '50%',
-                                  background: colorHex,
-                                  border: '1px solid #ddd',
-                                }}
-                              />
-                              <Text size="sm">{option}</Text>
-                            </Group>
-                          );
-                        }
-                        // Si c'est une taille (dernière option généralement), badge bleu
-                        if (idx === allOptions.length - 1 && /^(XXXS|XXS|XS|S|M|L|XL|XXL|2XL|3XL|4XL|5XL|\d+)$/i.test(option)) {
-                          return (
-                            <Badge key={idx} variant="filled" color="blue" size="lg">
-                              {option}
-                            </Badge>
-                          );
-                        }
-                        // Sinon, badge gris pour les autres options
-                        return (
-                          <Badge key={idx} variant="light" color="gray" size="sm">
-                            {option}
-                          </Badge>
-                        );
-                      })}
-                    </Group>
-
-                    {/* Métachamps */}
-                    {Object.keys(group.metafields).length > 0 && (
-                      <>
-                        <Divider label="Métachamps" labelPosition="center" />
-                        <Stack gap={4}>
-                          {Object.entries(group.metafields).map(([key, value]) => (
-                            <Group key={key} justify="space-between">
-                              <Text size="xs" c="dimmed">{key}</Text>
-                              <Badge variant="light" color="violet" size="sm">
-                                {value}
-                              </Badge>
-                            </Group>
-                          ))}
-                        </Stack>
-                      </>
-                    )}
-
-                    {/* Checkboxes individuelles d'impression si plusieurs articles */}
-                    {group.quantity > 1 && (
-                      <>
-                        <Divider label="Impression" labelPosition="center" />
-                        <Group gap={4} wrap="wrap">
-                          {group.items.map((item, idx) => (
+                  return (
+                    <Paper
+                      key={group.key}
+                      withBorder
+                      radius="md"
+                      p="md"
+                      className={allPrinted ? styles.validatedCard : styles.card}
+                      onClick={() => toggleGroupPrinted(group.items, !allPrinted)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <Stack gap="xs">
+                        <Group justify="space-between">
+                          <Group gap="xs">
                             <Checkbox
-                              key={item.id}
-                              checked={item.is_printed}
+                              checked={allPrinted}
                               onChange={(e) => {
                                 e.stopPropagation();
-                                togglePrinted(item.id, e.currentTarget.checked);
+                                toggleGroupPrinted(group.items, e.currentTarget.checked);
                               }}
-                              size="xs"
+                              size="md"
                               color="teal"
-                              label={`#${idx + 1}`}
                             />
-                          ))}
+                            <Badge
+                              size="lg"
+                              variant={allPrinted ? 'filled' : 'light'}
+                              color={allPrinted ? 'teal' : 'orange'}
+                            >
+                              x{group.quantity}
+                            </Badge>
+                          </Group>
+                          {allPrinted && <IconCheck size={20} color="teal" />}
                         </Group>
-                      </>
-                    )}
-                  </Stack>
-                </Paper>
-              );
-            })}
-          </SimpleGrid>
+
+                        <Divider />
+
+                        <Text fw={600} size="sm" lineClamp={2}>
+                          {group.product_title}
+                        </Text>
+
+                        <Badge variant="light" color="gray" size="sm">
+                          {group.sku || 'Sans SKU'}
+                        </Badge>
+
+                        <Group gap="xs" wrap="wrap">
+                          {allOptions.map((option, idx) => {
+                            const colorHex = getColorHex(option);
+                            if (colorHex && colorHex !== '#808080') {
+                              return (
+                                <Group key={idx} gap={4}>
+                                  <div
+                                    style={{
+                                      width: 16,
+                                      height: 16,
+                                      borderRadius: '50%',
+                                      background: colorHex,
+                                      border: '1px solid #ddd',
+                                    }}
+                                  />
+                                  <Text size="sm">{option}</Text>
+                                </Group>
+                              );
+                            }
+                            if (idx === allOptions.length - 1 && /^(XXXS|XXS|XS|S|M|L|XL|XXL|2XL|3XL|4XL|5XL|\d+)$/i.test(option)) {
+                              return (
+                                <Badge key={idx} variant="filled" color="blue" size="lg">
+                                  {option}
+                                </Badge>
+                              );
+                            }
+                            return (
+                              <Badge key={idx} variant="light" color="gray" size="sm">
+                                {option}
+                              </Badge>
+                            );
+                          })}
+                        </Group>
+
+                        {Object.keys(group.metafields).length > 0 && (
+                          <>
+                            <Divider label="Métachamps" labelPosition="center" />
+                            <Stack gap={4}>
+                              {Object.entries(group.metafields).map(([key, value]) => (
+                                <Group key={key} justify="space-between">
+                                  <Text size="xs" c="dimmed">{key}</Text>
+                                  <Badge variant="light" color="violet" size="sm">
+                                    {value}
+                                  </Badge>
+                                </Group>
+                              ))}
+                            </Stack>
+                          </>
+                        )}
+
+                        {group.quantity > 1 && (
+                          <>
+                            <Divider label="Impression" labelPosition="center" />
+                            <Group gap={4} wrap="wrap">
+                              {group.items.map((item, idx) => (
+                                <Checkbox
+                                  key={item.id}
+                                  checked={item.is_printed}
+                                  onChange={(e) => {
+                                    e.stopPropagation();
+                                    togglePrinted(item.id, e.currentTarget.checked);
+                                  }}
+                                  size="xs"
+                                  color="teal"
+                                  label={`#${idx + 1}`}
+                                />
+                              ))}
+                            </Group>
+                          </>
+                        )}
+                      </Stack>
+                    </Paper>
+                  );
+                })}
+              </SimpleGrid>
+            </div>
+          ))}
 
           {totals.printed === totals.total && totals.total > 0 && (
             <Paper withBorder p="md" radius="md" bg="teal.0" mt="lg">

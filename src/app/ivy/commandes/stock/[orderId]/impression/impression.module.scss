@@ -14,6 +14,13 @@
   }
 }
 
+.skuGroupHeader {
+  // Style du header de section SKU (CREATOR, CULTIVATOR, etc.)
+  padding: 15px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+}
+
 .validatedCard {
   background-color: var(--mantine-color-green-0);
   border: 2px solid var(--mantine-color-green-4);

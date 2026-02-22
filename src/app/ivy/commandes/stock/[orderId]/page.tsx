@@ -72,6 +72,9 @@ export default function OrderDetailPage() {
   const [selectedVariants, setSelectedVariants] = useState<Record<string, number>>({});
   const [skuFilter, setSkuFilter] = useState<string | null>(null);
   const [modalSortOrder, setModalSortOrder] = useState<string[]>([]);
+
+  // Tri des articles dans la liste principale (drag & drop)
+  const [sortOrder, setSortOrder] = useState<string[]>(['Nom', 'Couleur', 'Taille']);
   
 
   // Charger la commande et ses articles
@@ -548,39 +551,71 @@ export default function OrderDetailPage() {
     }
   };
 
-  // Grouper les articles par préfixe SKU, puis par variante identique
+  // Extraire couleur et taille depuis variant_title
+  const extractOptions = useCallback((variantTitle: string | null) => {
+    const parts = (variantTitle || '').split(' / ');
+    const color = parts.find(p => getSizeIndex(p.trim()) === 999) || '';
+    const size = parts.find(p => getSizeIndex(p.trim()) !== 999) || '';
+    return { color, size };
+  }, []);
+
+  // Comparer deux items selon un critère donné
+  const compareByCriterion = useCallback((itemA: OrderItem, itemB: OrderItem, criterion: string): number => {
+    switch (criterion) {
+      case 'Nom':
+        return (itemA.product_title || '').localeCompare(itemB.product_title || '', 'fr');
+      case 'Couleur': {
+        const colA = extractOptions(itemA.variant_title).color;
+        const colB = extractOptions(itemB.variant_title).color;
+        return colA.localeCompare(colB, 'fr');
+      }
+      case 'Taille': {
+        const sizeA = extractOptions(itemA.variant_title).size;
+        const sizeB = extractOptions(itemB.variant_title).size;
+        return getSizeIndex(sizeA) - getSizeIndex(sizeB);
+      }
+      default:
+        return 0;
+    }
+  }, [extractOptions]);
+
+  // Grouper les articles puis trier selon l'ordre de priorité choisi
   const groupedItems = useMemo(() => {
     const groups: Record<string, Array<{ key: string; items: OrderItem[] }>> = {};
-    
-    items.forEach(item => {
-      const prefix = item.sku?.match(/^([A-Za-z]+)/)?.[1]?.toUpperCase() || 'AUTRES';
-      if (!groups[prefix]) {
-        groups[prefix] = [];
-      }
-      
-      // Clé unique pour regrouper les variantes identiques
+
+    const addToGroup = (groupKey: string, item: OrderItem) => {
+      if (!groups[groupKey]) groups[groupKey] = [];
       const variantKey = `${item.variant_id || ''}_${item.sku || ''}_${item.variant_title || ''}`;
-      
-      // Chercher si ce groupe de variantes existe déjà
-      let variantGroup = groups[prefix].find(g => g.key === variantKey);
+      let variantGroup = groups[groupKey].find(g => g.key === variantKey);
       if (!variantGroup) {
         variantGroup = { key: variantKey, items: [] };
-        groups[prefix].push(variantGroup);
+        groups[groupKey].push(variantGroup);
       }
       variantGroup.items.push(item);
+    };
+
+    // Toujours grouper par préfixe SKU
+    items.forEach(item => {
+      const prefix = item.sku?.match(/^([A-Za-z]+)/)?.[1]?.toUpperCase() || 'AUTRES';
+      addToGroup(prefix, item);
     });
-    
-    // Trier chaque groupe par SKU
+
+    // Trier chaque groupe selon tous les critères dans l'ordre de priorité
     Object.keys(groups).forEach(key => {
       groups[key].sort((a, b) => {
-        const skuA = a.items[0]?.sku || '';
-        const skuB = b.items[0]?.sku || '';
-        return skuA.localeCompare(skuB);
+        const itemA = a.items[0];
+        const itemB = b.items[0];
+
+        for (const criterion of sortOrder) {
+          const cmp = compareByCriterion(itemA, itemB, criterion);
+          if (cmp !== 0) return cmp;
+        }
+        return 0;
       });
     });
-    
+
     return groups;
-  }, [items]);
+  }, [items, sortOrder, compareByCriterion]);
 
   // Calculer les totaux (UNIQUEMENT les items cochés)
   const totals = useMemo(() => {
@@ -658,7 +693,7 @@ export default function OrderDetailPage() {
             leftSection={<IconPrinter size={18} />}
             onClick={() => router.push(`/ivy/commandes/stock/${orderId}/impression`)}
           >
-            Vue détaillée
+            Feuillet de production
           </Button>
         </Group>
         
@@ -779,7 +814,14 @@ export default function OrderDetailPage() {
         />
       </Paper>
 
-      {/* Articles groupés par SKU */}
+      {/* Tri des articles par drag & drop */}
+      {items.length > 0 && (
+        <Paper withBorder p="sm" radius="md" mb="md">
+          <SortOptionsBar options={sortOrder} onReorder={setSortOrder} />
+        </Paper>
+      )}
+
+      {/* Articles */}
       {Object.keys(groupedItems).length > 0 ? (
         Object.entries(groupedItems).map(([prefix, variantGroups]) => (
           <Paper key={prefix} withBorder radius="md" mb="lg">
