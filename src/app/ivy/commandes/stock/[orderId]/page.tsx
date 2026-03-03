@@ -504,6 +504,41 @@ export default function OrderDetailPage() {
     }
   };
 
+  // Terminer sans ajouter au stock
+  const closeWithoutStock = async () => {
+    if (!currentShop || !order) return;
+    if (!confirm('Terminer cette commande sans ajouter au stock ?\n\nLes articles ne seront pas ajoutés à l\'inventaire.')) return;
+
+    setSaving(true);
+    try {
+      const response = await fetch('/api/suppliers/orders', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: order.id,
+          shopId: currentShop.id,
+          status: 'completed',
+          locationId: currentLocation?.id,
+          skipStock: true,
+        }),
+      });
+
+      if (response.ok) {
+        notifications.show({
+          title: 'Commande terminée',
+          message: 'La commande a été fermée sans ajout au stock',
+          color: 'green',
+        });
+        fetchOrder();
+      }
+    } catch (err) {
+      console.error('Error closing order:', err);
+      notifications.show({ title: 'Erreur', message: 'Erreur lors de la fermeture', color: 'red' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Changer le statut de la commande
   const changeStatus = async (newStatus: 'draft' | 'requested' | 'produced' | 'completed') => {
     if (!currentShop || !order) return;
@@ -841,6 +876,15 @@ export default function OrderDetailPage() {
                 loading={saving}
               >
                 Repasser en Demandée
+              </Button>
+              <Button
+                variant="light"
+                color="gray"
+                leftSection={<IconLock size={18} />}
+                onClick={() => closeWithoutStock()}
+                loading={saving}
+              >
+                Terminer sans stock
               </Button>
               <Button
                 color="green"

@@ -37,7 +37,8 @@ interface ProductCardProps {
 export function ProductCard({ product, onClick }: ProductCardProps) {
   // Statut produit : local/draft = plus actif sur Shopify
   const isLocal = product.status === 'LOCAL' || product.status === 'DRAFT';
-  const localVariantsCount = product.variants.filter(v => v.shopifyActive === false).length;
+  const localVariants = product.variants.filter(v => v.shopifyActive === false);
+  const localStock = localVariants.reduce((sum, v) => sum + Math.max(0, v.quantity), 0);
 
   // Métachamps manquants : comparer au minimum (parmi celles qui en ont) pour éviter les faux positifs recto/verso
   const shopifyVariants = product.variants.filter(v => v.shopifyActive !== false);
@@ -114,9 +115,9 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
                 <Badge size="xs" color="teal" variant="light">
                   Shopify
                 </Badge>
-                {localVariantsCount > 0 && (
+                {localVariants.length > 0 && (
                   <Badge size="xs" color="orange" variant="light">
-                    + {localVariantsCount} locale{localVariantsCount > 1 ? 's' : ''}
+                    + {localStock} locale{localStock > 1 ? 's' : ''}
                   </Badge>
                 )}
               </>

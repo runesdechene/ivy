@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, shopId, status, note, balance_adjustment, locationId, retry } = body;
+    const { id, shopId, status, note, balance_adjustment, locationId, retry, skipStock } = body;
 
     if (!id || !shopId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -141,9 +141,9 @@ export async function PUT(request: NextRequest) {
       updateData.total_ttc = totalTtc;
     }
 
-    // Stock operations (completed or retry)
+    // Stock operations (completed or retry) — skip if explicitly requested
     let stockResult: StockResult | null = null;
-    if (status === 'completed' || retry) {
+    if ((status === 'completed' && !skipStock) || retry) {
       stockResult = await addValidatedItemsToStock(id, shopId, locationId, !!retry);
     }
 
