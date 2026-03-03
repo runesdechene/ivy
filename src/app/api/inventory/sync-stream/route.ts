@@ -17,14 +17,26 @@ export async function GET(request: NextRequest) {
     return new Response('Missing shopId', { status: 400 });
   }
 
+  const encoder = new TextEncoder();
+  let streamClosed = false;
+
   const stream = new ReadableStream({
     async start(controller) {
-      const encoder = new TextEncoder();
-      
       const send = (message: string, type: string = 'info') => {
-        const data = JSON.stringify({ message, type, timestamp: new Date().toISOString() });
-        controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+        if (streamClosed) return;
+        try {
+          const data = JSON.stringify({ message, type, timestamp: new Date().toISOString() });
+          controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+        } catch {
+          streamClosed = true;
+        }
       };
+
+      // Heartbeat to keep the connection alive on Netlify (every 10s)
+      const heartbeat = setInterval(() => {
+        if (streamClosed) { clearInterval(heartbeat); return; }
+        send('', 'keepalive');
+      }, 10000);
 
       try {
         if (productType) {
@@ -517,6 +529,8 @@ export async function GET(request: NextRequest) {
       } catch (error) {
         send(`❌ Erreur: ${error}`, 'error');
       } finally {
+        clearInterval(heartbeat);
+        streamClosed = true;
         controller.close();
       }
     },
