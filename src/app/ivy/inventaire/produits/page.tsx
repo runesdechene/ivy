@@ -16,7 +16,7 @@ import styles from './inventory.module.scss';
 export default function InventoryPage() {
   const { currentShop } = useShop();
   const { currentLocation } = useLocation();
-  const { streamFromUrl } = useTerminalStream();
+  const { streamFromUrl, endSync, log: terminalLog } = useTerminalStream();
   const [products, setProducts] = useState<ProductData[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -74,29 +74,53 @@ export default function InventoryPage() {
   }, [fetchProducts]);
 
   // Synchroniser depuis Shopify (appelé après confirmation)
+  // Chunked en 3 phases (products → costs → levels) pour respecter le timeout Netlify
   const handleSyncFromShopify = async (productType?: string | null) => {
     if (!currentShop) return;
-    
+
     closeSyncModal();
     setSyncing(true);
-    
-    const params = new URLSearchParams({ shopId: currentShop.id });
+
+    const baseParams = new URLSearchParams({ shopId: currentShop.id });
     if (currentLocation?.id) {
-      params.append('locationId', currentLocation.id);
+      baseParams.append('locationId', currentLocation.id);
     }
     if (productType) {
-      params.append('productType', productType);
+      baseParams.append('productType', productType);
     }
-    
+
     const title = productType ? `Import: ${productType}` : 'Import Inventaire';
-    
-    await streamFromUrl(`/api/inventory/sync-stream?${params}`, {
-      title,
-      onComplete: async () => {
-        await fetchProducts();
-        setSyncing(false);
-      },
-    });
+
+    let phase: string | null = 'products';
+    let offset = 0;
+    let chunk = 0;
+
+    while (phase) {
+      const params = new URLSearchParams(baseParams);
+      params.set('phase', phase);
+      if (offset > 0) params.set('offset', offset.toString());
+
+      let nextPhase: string | null = null;
+      let nextOffset = 0;
+
+      await streamFromUrl(`/api/inventory/sync-stream?${params}`, {
+        title: chunk === 0 ? title : undefined,
+        noStartSync: chunk > 0,
+        noEndSync: true,
+        onComplete: (data) => {
+          nextPhase = (data?.nextPhase as string) || null;
+          nextOffset = (data?.nextOffset as number) || 0;
+        },
+      });
+
+      phase = nextPhase;
+      offset = nextOffset;
+      chunk++;
+    }
+
+    endSync();
+    await fetchProducts();
+    setSyncing(false);
   };
 
   // Extraire les types de produits uniques pour les filtres avec comptage
