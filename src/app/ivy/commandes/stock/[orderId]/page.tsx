@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Title, Text, Paper, Table, Button, Group, Badge, ActionIcon, Modal, NumberInput, Checkbox, Loader, Center, Stack, Textarea, Divider, Progress, TextInput, SimpleGrid } from '@mantine/core';
+import { Title, Text, Paper, Table, Button, Group, Badge, ActionIcon, Modal, NumberInput, Checkbox, Loader, Center, Stack, Textarea, Divider, Progress, TextInput, SimpleGrid, Tooltip } from '@mantine/core';
 import { IconArrowLeft, IconPlus, IconTrash, IconDeviceFloppy, IconCheck, IconLock, IconSearch, IconPackage, IconMinus, IconRefresh, IconTag, IconPrinter, IconChecklist } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useDisclosure } from '@mantine/hooks';
@@ -11,6 +11,7 @@ import { useLocation } from '@/context/LocationContext';
 import { ProductCard, ProductData } from '@/components/Inventory';
 import { SortOptionsBar } from '@/components/Inventory/SortOptionsBar';
 import { getColorHex, isColorOption, loadColorMappingsFromSupabase, areColorMappingsLoaded } from '@/utils/color-transformer';
+import { useTerminalStream } from '@/hooks/useTerminalStream';
 import styles from './order-detail.module.scss';
 
 // Ordre des tailles pour le tri
@@ -35,6 +36,16 @@ interface OrderItem {
   is_validated: boolean;
   validated_at: string | null;
   metafields?: Record<string, string>;
+  stock_status: 'added' | 'failed' | null;
+  stock_error: string | null;
+  stock_added_at: string | null;
+}
+
+interface StockResult {
+  added: number;
+  failed: number;
+  skipped: number;
+  errors: Array<{ sku: string; variant_title: string; error: string }>;
 }
 
 interface SupplierOrder {
@@ -56,6 +67,7 @@ export default function OrderDetailPage() {
   const orderId = params.orderId as string;
   const { currentShop } = useShop();
   const { currentLocation } = useLocation();
+  const { streamFromUrl } = useTerminalStream();
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -495,15 +507,42 @@ export default function OrderDetailPage() {
   // Changer le statut de la commande
   const changeStatus = async (newStatus: 'draft' | 'requested' | 'produced' | 'completed') => {
     if (!currentShop || !order) return;
-    
-    // Confirmation spéciale pour le statut "completed"
+
+    // For completed: use streaming endpoint with terminal
     if (newStatus === 'completed') {
       const validatedCount = items.filter(i => i.is_validated).length;
       if (!confirm(`Terminer cette commande ?\n\n${validatedCount} article(s) validé(s) seront ajoutés au stock et synchronisés vers Shopify.\n\nCette action est irréversible.`)) {
         return;
       }
+
+      const params = new URLSearchParams({
+        orderId,
+        shopId: currentShop.id,
+      });
+      if (currentLocation?.id) params.set('locationId', currentLocation.id);
+
+      setSaving(true);
+      try {
+        await streamFromUrl(`/api/suppliers/orders/stock-stream?${params}`, {
+          title: `Ajout au stock — ${order.order_number}`,
+          onComplete: () => {
+            fetchOrder();
+          },
+        });
+      } catch (err) {
+        console.error('Error streaming stock:', err);
+        notifications.show({
+          title: 'Erreur',
+          message: 'Erreur durant l\'ajout au stock',
+          color: 'red',
+        });
+      } finally {
+        setSaving(false);
+      }
+      return;
     }
-    
+
+    // For other statuses: regular PUT
     setSaving(true);
     try {
       const response = await fetch('/api/suppliers/orders', {
@@ -516,26 +555,20 @@ export default function OrderDetailPage() {
           locationId: currentLocation?.id,
         }),
       });
-      
+
       if (response.ok) {
         const statusLabels: Record<string, string> = {
           draft: 'Brouillon',
           requested: 'Demandée',
           produced: 'Produite',
-          completed: 'Terminée',
         };
-        
+
         notifications.show({
           title: 'Succès',
           message: `Commande passée en "${statusLabels[newStatus]}"`,
           color: 'green',
         });
-        
-        if (newStatus === 'completed') {
-          router.push('/ivy/commandes/stock');
-        } else {
-          fetchOrder();
-        }
+        fetchOrder();
       } else {
         throw new Error('Failed to update status');
       }
@@ -544,6 +577,37 @@ export default function OrderDetailPage() {
       notifications.show({
         title: 'Erreur',
         message: 'Impossible de changer le statut',
+        color: 'red',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Réessayer les articles échoués (streaming)
+  const retryFailedStock = async () => {
+    if (!currentShop || !order) return;
+
+    const params = new URLSearchParams({
+      orderId,
+      shopId: currentShop.id,
+      retryOnly: 'true',
+    });
+    if (currentLocation?.id) params.set('locationId', currentLocation.id);
+
+    setSaving(true);
+    try {
+      await streamFromUrl(`/api/suppliers/orders/stock-stream?${params}`, {
+        title: `Retry stock — ${order.order_number}`,
+        onComplete: () => {
+          fetchOrder();
+        },
+      });
+    } catch (err) {
+      console.error('Error retrying stock:', err);
+      notifications.show({
+        title: 'Erreur',
+        message: 'Impossible de réessayer',
         color: 'red',
       });
     } finally {
@@ -788,6 +852,17 @@ export default function OrderDetailPage() {
               </Button>
             </>
           )}
+
+          {isCompleted && items.some(i => i.stock_status === 'failed') && (
+            <Button
+              color="orange"
+              leftSection={<IconRefresh size={18} />}
+              onClick={retryFailedStock}
+              loading={saving}
+            >
+              Réessayer les échoués ({items.filter(i => i.stock_status === 'failed').length})
+            </Button>
+          )}
         </Group>
       </Group>
 
@@ -835,7 +910,7 @@ export default function OrderDetailPage() {
             <Table striped>
               <Table.Thead>
                 <Table.Tr>
-                  <Table.Th>Validé</Table.Th>
+                  <Table.Th>{isCompleted ? 'Stock' : 'Validé'}</Table.Th>
                   <Table.Th>Produit</Table.Th>
                   <Table.Th>SKU</Table.Th>
                   <Table.Th>Variante</Table.Th>
@@ -859,15 +934,32 @@ export default function OrderDetailPage() {
                     <Table.Tr key={variantGroup.key} className={allValidated ? styles.validatedRow : ''}>
                       <Table.Td>
                         <Group gap={4}>
-                          {variantGroup.items.map((item, idx) => (
-                            <Checkbox
-                              key={item.id}
-                              checked={item.is_validated}
-                              onChange={(e) => toggleValidation(item.id, e.currentTarget.checked)}
-                              disabled={isCompleted}
-                              size="sm"
-                            />
-                          ))}
+                          {isCompleted ? (
+                            variantGroup.items.map((item) => {
+                              if (item.stock_status === 'added') {
+                                return <Badge key={item.id} size="sm" color="green">Ajouté</Badge>;
+                              } else if (item.stock_status === 'failed') {
+                                return (
+                                  <Tooltip key={item.id} label={item.stock_error || 'Erreur inconnue'} multiline w={300}>
+                                    <Badge size="sm" color="red" style={{ cursor: 'help' }}>Échoué</Badge>
+                                  </Tooltip>
+                                );
+                              } else if (!item.is_validated) {
+                                return <Badge key={item.id} size="sm" color="gray" variant="light">Non validé</Badge>;
+                              } else {
+                                return <Badge key={item.id} size="sm" color="yellow">En attente</Badge>;
+                              }
+                            })
+                          ) : (
+                            variantGroup.items.map((item) => (
+                              <Checkbox
+                                key={item.id}
+                                checked={item.is_validated}
+                                onChange={(e) => toggleValidation(item.id, e.currentTarget.checked)}
+                                size="sm"
+                              />
+                            ))
+                          )}
                         </Group>
                       </Table.Td>
                       <Table.Td>{firstItem.product_title}</Table.Td>

@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, shopId, status, note, balance_adjustment, locationId } = body;
+    const { id, shopId, status, note, balance_adjustment, locationId, retry } = body;
 
     if (!id || !shopId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -141,57 +141,171 @@ export async function PUT(request: NextRequest) {
       updateData.total_ttc = totalTtc;
     }
 
-    // Si on passe en "completed", ajouter les articles validés au stock
-    if (status === 'completed') {
-      await addValidatedItemsToStock(id, shopId, locationId);
+    // Stock operations (completed or retry)
+    let stockResult: StockResult | null = null;
+    if (status === 'completed' || retry) {
+      stockResult = await addValidatedItemsToStock(id, shopId, locationId, !!retry);
     }
 
-    const { data: order, error } = await supabase
-      .from('supplier_orders')
-      .update(updateData)
-      .eq('id', id)
-      .eq('shop_id', shopId)
-      .select()
-      .single();
+    let order;
+    if (retry) {
+      // For retry, just fetch the current order without updating fields
+      const { data } = await supabase
+        .from('supplier_orders')
+        .select('*')
+        .eq('id', id)
+        .eq('shop_id', shopId)
+        .single();
+      order = data;
+    } else {
+      const { data, error } = await supabase
+        .from('supplier_orders')
+        .update(updateData)
+        .eq('id', id)
+        .eq('shop_id', shopId)
+        .select()
+        .single();
 
-    if (error) {
-      console.error('Error updating order:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) {
+        console.error('Error updating order:', error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      order = data;
     }
 
-    return NextResponse.json({ order });
+    return NextResponse.json({ order, ...(stockResult && { stockResult }) });
   } catch (error) {
     console.error('Error updating order:', error);
     return NextResponse.json({ error: 'Failed to update order' }, { status: 500 });
   }
 }
 
-// Ajouter les articles validés au stock local et synchroniser vers Shopify
-async function addValidatedItemsToStock(orderId: string, shopId: string, locationId?: string) {
+// --- Types ---
+
+interface StockResult {
+  added: number;
+  failed: number;
+  skipped: number;
+  errors: Array<{ sku: string; variant_title: string; error: string }>;
+}
+
+// --- Helpers stock ---
+
+async function batchMarkStatus(itemIds: string[], status: 'added' | 'failed', error: string | null) {
+  const updateData: Record<string, any> = {
+    stock_status: status,
+    stock_error: error,
+  };
+  if (status === 'added') {
+    updateData.stock_added_at = new Date().toISOString();
+    updateData.stock_error = null;
+  }
+  await supabase
+    .from('supplier_order_items')
+    .update(updateData)
+    .in('id', itemIds);
+}
+
+async function createVariantOnShopify(
+  shop: { shopify_url: string; shopify_token: string },
+  shopifyProductId: string,
+  variant: { id: string; option1: string | null; option2: string | null; option3: string | null; sku: string | null; price: number }
+): Promise<{ shopifyVariantId: string; inventoryItemId: string }> {
+  const variantBody: Record<string, any> = {
+    inventory_management: 'shopify',
+  };
+  if (variant.option1) variantBody.option1 = variant.option1;
+  if (variant.option2) variantBody.option2 = variant.option2;
+  if (variant.option3) variantBody.option3 = variant.option3;
+  if (variant.sku) variantBody.sku = variant.sku;
+  if (variant.price) variantBody.price = String(variant.price);
+
+  const response = await fetch(
+    `https://${shop.shopify_url}/admin/api/2024-01/products/${shopifyProductId}/variants.json`,
+    {
+      method: 'POST',
+      headers: {
+        'X-Shopify-Access-Token': shop.shopify_token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ variant: variantBody }),
+    }
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.errors ? JSON.stringify(errorData.errors) : `HTTP ${response.status}`);
+  }
+
+  const data = await response.json();
+  const created = data.variant;
+
+  // Update local DB with Shopify IDs
+  await supabase
+    .from('product_variants')
+    .update({
+      shopify_id: String(created.id),
+      inventory_item_id: String(created.inventory_item_id),
+      shopify_active: true,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', variant.id);
+
+  return {
+    shopifyVariantId: String(created.id),
+    inventoryItemId: String(created.inventory_item_id),
+  };
+}
+
+// --- Fonction principale stock ---
+
+async function addValidatedItemsToStock(
+  orderId: string,
+  shopId: string,
+  locationId?: string,
+  retryOnly?: boolean
+): Promise<StockResult> {
+  const result: StockResult = { added: 0, failed: 0, skipped: 0, errors: [] };
+
   try {
-    // Récupérer les articles validés de la commande
-    const { data: validatedItems } = await supabase
+    // Count already-added items (skipped)
+    const { count: alreadyAddedCount } = await supabase
       .from('supplier_order_items')
-      .select('variant_id, quantity')
+      .select('*', { count: 'exact', head: true })
+      .eq('order_id', orderId)
+      .eq('is_validated', true)
+      .eq('stock_status', 'added');
+
+    result.skipped = alreadyAddedCount || 0;
+
+    // Get items to process (exclude already added)
+    let query = supabase
+      .from('supplier_order_items')
+      .select('id, variant_id, quantity, sku, variant_title')
       .eq('order_id', orderId)
       .eq('is_validated', true);
 
-    if (!validatedItems || validatedItems.length === 0) {
-      console.log('No validated items to add to stock');
-      return;
+    if (retryOnly) {
+      query = query.eq('stock_status', 'failed');
+    } else {
+      query = query.or('stock_status.is.null,stock_status.eq.failed');
     }
 
-    // Grouper par variant_id et compter les quantités
-    const variantQuantities: Record<string, number> = {};
-    validatedItems.forEach(item => {
-      if (item.variant_id) {
-        variantQuantities[item.variant_id] = (variantQuantities[item.variant_id] || 0) + item.quantity;
-      }
-    });
+    const { data: validatedItems } = await query;
 
-    console.log('Adding to stock:', variantQuantities);
+    if (!validatedItems || validatedItems.length === 0) {
+      return result;
+    }
 
-    // Récupérer les infos du shop pour l'API Shopify
+    // Group by variant_id
+    const groups: Record<string, typeof validatedItems> = {};
+    for (const item of validatedItems) {
+      const key = item.variant_id || 'null';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(item);
+    }
+
+    // Get shop info
     const { data: shop } = await supabase
       .from('shops')
       .select('shopify_url, shopify_token')
@@ -199,23 +313,15 @@ async function addValidatedItemsToStock(orderId: string, shopId: string, locatio
       .single();
 
     if (!shop) {
-      console.error('Shop not found');
-      return;
+      for (const groupItems of Object.values(groups)) {
+        await batchMarkStatus(groupItems.map(i => i.id), 'failed', 'Shop non trouvé');
+        result.failed += groupItems.length;
+        result.errors.push({ sku: groupItems[0].sku || '', variant_title: groupItems[0].variant_title || '', error: 'Shop non trouvé' });
+      }
+      return result;
     }
 
-    // Récupérer les inventory_item_ids des variantes
-    const variantIds = Object.keys(variantQuantities);
-    const { data: variants } = await supabase
-      .from('product_variants')
-      .select('id, inventory_item_id')
-      .in('id', variantIds);
-
-    if (!variants) {
-      console.error('Variants not found');
-      return;
-    }
-
-    // Déterminer le location_id à utiliser
+    // Determine location
     let shopifyLocationId = locationId;
     if (!shopifyLocationId) {
       const { data: locations } = await supabase
@@ -224,42 +330,126 @@ async function addValidatedItemsToStock(orderId: string, shopId: string, locatio
         .eq('shop_id', shopId)
         .eq('active', true)
         .limit(1);
-      
       shopifyLocationId = locations?.[0]?.shopify_id;
     }
 
     if (!shopifyLocationId) {
-      console.error('No location found for stock update');
-      return;
+      for (const groupItems of Object.values(groups)) {
+        await batchMarkStatus(groupItems.map(i => i.id), 'failed', 'Aucun emplacement trouvé');
+        result.failed += groupItems.length;
+        result.errors.push({ sku: groupItems[0].sku || '', variant_title: groupItems[0].variant_title || '', error: 'Aucun emplacement trouvé' });
+      }
+      return result;
     }
 
-    // Mettre à jour le stock local et Shopify pour chaque variante
-    for (const variant of variants) {
-      const quantityToAdd = variantQuantities[variant.id];
-      
-      if (!variant.inventory_item_id || !quantityToAdd) continue;
+    // Process each variant group
+    for (const [variantKey, groupItems] of Object.entries(groups)) {
+      const totalQuantity = groupItems.reduce((sum, i) => sum + i.quantity, 0);
+      const itemIds = groupItems.map(i => i.id);
+      const sample = groupItems[0];
 
-      // 1. Mettre à jour le stock local dans Supabase
-      const { data: currentLevel } = await supabase
-        .from('inventory_levels')
-        .select('quantity')
-        .eq('variant_id', variant.id)
-        .eq('location_id', shopifyLocationId)
+      // Case 1: variant_id is NULL (link broken by ON DELETE SET NULL)
+      if (variantKey === 'null') {
+        await batchMarkStatus(itemIds, 'failed', 'Lien cassé — ajouter manuellement');
+        result.failed += groupItems.length;
+        result.errors.push({ sku: sample.sku || '', variant_title: sample.variant_title || '', error: 'Lien cassé — ajouter manuellement' });
+        continue;
+      }
+
+      // Case 2: Load variant + parent product
+      const { data: variant } = await supabase
+        .from('product_variants')
+        .select('id, shopify_id, shopify_active, inventory_item_id, option1, option2, option3, sku, price, product_id')
+        .eq('id', variantKey)
         .single();
 
-      const newQuantity = (currentLevel?.quantity || 0) + quantityToAdd;
+      if (!variant) {
+        await batchMarkStatus(itemIds, 'failed', 'Variante introuvable en base');
+        result.failed += groupItems.length;
+        result.errors.push({ sku: sample.sku || '', variant_title: sample.variant_title || '', error: 'Variante introuvable en base' });
+        continue;
+      }
 
-      await supabase
-        .from('inventory_levels')
-        .upsert({
-          variant_id: variant.id,
-          location_id: shopifyLocationId,
-          quantity: newQuantity,
-          synced_at: new Date().toISOString(),
-        }, { onConflict: 'variant_id,location_id' });
+      const { data: product } = await supabase
+        .from('products')
+        .select('id, shopify_id, status')
+        .eq('id', variant.product_id)
+        .single();
 
-      // 2. Synchroniser vers Shopify via l'API
+      if (!product) {
+        await batchMarkStatus(itemIds, 'failed', 'Produit introuvable en base');
+        result.failed += groupItems.length;
+        result.errors.push({ sku: sample.sku || '', variant_title: sample.variant_title || '', error: 'Produit introuvable en base' });
+        continue;
+      }
+
+      let inventoryItemId = variant.inventory_item_id;
+      const isShopifyReady = variant.shopify_active && inventoryItemId;
+
+      if (!isShopifyReady) {
+        if (product.shopify_id && product.status !== 'local') {
+          // Try to create variant on Shopify
+          try {
+            const created = await createVariantOnShopify(shop, product.shopify_id, variant);
+            inventoryItemId = created.inventoryItemId;
+          } catch (err: any) {
+            // Shopify creation failed → force fallback to IVY-only stock
+            inventoryItemId = null;
+          }
+        }
+
+        // IVY-only stock (truly local OR Shopify creation failed)
+        if (!inventoryItemId) {
+          try {
+            const { data: currentLevel } = await supabase
+              .from('inventory_levels')
+              .select('quantity')
+              .eq('variant_id', variant.id)
+              .eq('location_id', shopifyLocationId)
+              .single();
+
+            const newQuantity = (currentLevel?.quantity || 0) + totalQuantity;
+
+            await supabase
+              .from('inventory_levels')
+              .upsert({
+                variant_id: variant.id,
+                location_id: shopifyLocationId,
+                quantity: newQuantity,
+                synced_at: new Date().toISOString(),
+              }, { onConflict: 'variant_id,location_id' });
+
+            await batchMarkStatus(itemIds, 'added', null);
+            result.added += groupItems.length;
+          } catch (err: any) {
+            await batchMarkStatus(itemIds, 'failed', `Erreur stock local: ${err.message}`);
+            result.failed += groupItems.length;
+            result.errors.push({ sku: sample.sku || '', variant_title: sample.variant_title || '', error: `Erreur stock local: ${err.message}` });
+          }
+          continue;
+        }
+      }
+
+      // Adjust inventory (local DB + Shopify)
       try {
+        const { data: currentLevel } = await supabase
+          .from('inventory_levels')
+          .select('quantity')
+          .eq('variant_id', variant.id)
+          .eq('location_id', shopifyLocationId)
+          .single();
+
+        const newQuantity = (currentLevel?.quantity || 0) + totalQuantity;
+
+        await supabase
+          .from('inventory_levels')
+          .upsert({
+            variant_id: variant.id,
+            location_id: shopifyLocationId,
+            quantity: newQuantity,
+            synced_at: new Date().toISOString(),
+          }, { onConflict: 'variant_id,location_id' });
+
         const adjustResponse = await fetch(
           `https://${shop.shopify_url}/admin/api/2024-01/inventory_levels/adjust.json`,
           {
@@ -270,26 +460,35 @@ async function addValidatedItemsToStock(orderId: string, shopId: string, locatio
             },
             body: JSON.stringify({
               location_id: parseInt(shopifyLocationId),
-              inventory_item_id: parseInt(variant.inventory_item_id),
-              available_adjustment: quantityToAdd,
+              inventory_item_id: parseInt(inventoryItemId),
+              available_adjustment: totalQuantity,
             }),
           }
         );
 
         if (adjustResponse.ok) {
-          console.log(`Stock updated for variant ${variant.id}: +${quantityToAdd}`);
+          await batchMarkStatus(itemIds, 'added', null);
+          result.added += groupItems.length;
         } else {
           const errorData = await adjustResponse.json();
-          console.error(`Failed to update Shopify stock for variant ${variant.id}:`, errorData);
+          const errorMsg = typeof errorData.errors === 'string'
+            ? errorData.errors
+            : JSON.stringify(errorData.errors || errorData);
+          await batchMarkStatus(itemIds, 'failed', `Shopify: ${errorMsg}`);
+          result.failed += groupItems.length;
+          result.errors.push({ sku: sample.sku || '', variant_title: sample.variant_title || '', error: `Shopify: ${errorMsg}` });
         }
-      } catch (shopifyError) {
-        console.error(`Shopify API error for variant ${variant.id}:`, shopifyError);
+      } catch (err: any) {
+        await batchMarkStatus(itemIds, 'failed', `Erreur: ${err.message}`);
+        result.failed += groupItems.length;
+        result.errors.push({ sku: sample.sku || '', variant_title: sample.variant_title || '', error: `Erreur: ${err.message}` });
       }
     }
 
-    console.log('Stock update completed');
-  } catch (error) {
+    return result;
+  } catch (error: any) {
     console.error('Error adding items to stock:', error);
+    return result;
   }
 }
 
