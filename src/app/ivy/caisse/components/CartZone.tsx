@@ -1,7 +1,7 @@
 'use client';
 
 import { ActionIcon, Button, Switch, Text } from '@mantine/core';
-import { IconShoppingCart, IconTrash, IconTag } from '@tabler/icons-react';
+import { IconShoppingCart, IconTrash, IconTag, IconBuildingStore } from '@tabler/icons-react';
 import { CartItem, DiscountRule } from '../types';
 import styles from '../caisse.module.scss';
 
@@ -14,11 +14,14 @@ interface CartZoneProps {
   isRefund: boolean;
   discountEnabled: boolean;
   activeDiscountRule: DiscountRule | null;
+  standPriceEnabled: boolean;
+  standPriceAdjustment: number;
   onIncrementQuantity: (id: string) => void;
   onDecrementQuantity: (id: string) => void;
   onRemoveItem: (id: string) => void;
   onClearCart: () => void;
   onToggleDiscount: (enabled: boolean) => void;
+  onToggleStandPrice: (enabled: boolean) => void;
   onConfirm: () => void;
 }
 
@@ -31,11 +34,14 @@ export function CartZone({
   isRefund,
   discountEnabled,
   activeDiscountRule,
+  standPriceEnabled,
+  standPriceAdjustment,
   onIncrementQuantity,
   onDecrementQuantity,
   onRemoveItem,
   onClearCart,
   onToggleDiscount,
+  onToggleStandPrice,
   onConfirm,
 }: CartZoneProps) {
   const formatPrice = (price: number) => {
@@ -161,6 +167,22 @@ export function CartZone({
                 size="sm"
               />
             </div>
+
+            {/* Stand Price Toggle */}
+            {standPriceAdjustment !== 0 && (
+              <div className={styles.discountToggle}>
+                <div className={styles.discountName}>
+                  <IconBuildingStore size={16} />
+                  <span>Prix de stand ({standPriceAdjustment > 0 ? '+' : ''}{formatPrice(standPriceAdjustment)} € / article)</span>
+                </div>
+                <Switch
+                  checked={standPriceEnabled}
+                  onChange={(e) => onToggleStandPrice(e.currentTarget.checked)}
+                  color="orange"
+                  size="sm"
+                />
+              </div>
+            )}
 
             {/* Totals */}
             <div className={styles.cartTotals}>

@@ -14,6 +14,7 @@ interface UseCartReturn {
   clearCart: () => void;
   subtotal: number;
   totalDiscount: number;
+  standPriceTotal: number;
   total: number;
   itemsCount: number;
   isRefund: boolean;
@@ -23,6 +24,10 @@ interface UseCartReturn {
   setActiveDiscountRule: (rule: DiscountRule | null) => void;
   discountRules: DiscountRule[];
   setDiscountRules: (rules: DiscountRule[]) => void;
+  standPriceEnabled: boolean;
+  setStandPriceEnabled: (enabled: boolean) => void;
+  standPriceAdjustment: number;
+  setStandPriceAdjustment: (amount: number) => void;
 }
 
 export function useCart(): UseCartReturn {
@@ -30,6 +35,19 @@ export function useCart(): UseCartReturn {
   const [discountEnabled, setDiscountEnabled] = useState(true);
   const [activeDiscountRule, setActiveDiscountRule] = useState<DiscountRule | null>(null);
   const [discountRules, setDiscountRules] = useState<DiscountRule[]>([]);
+  const [standPriceEnabled, setStandPriceEnabled] = useState(false);
+  const [standPriceAdjustment, setStandPriceAdjustment] = useState(0);
+
+  // Restore stand price toggle from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('pos_standPriceEnabled');
+    if (saved === 'true') setStandPriceEnabled(true);
+  }, []);
+
+  // Persist stand price toggle
+  useEffect(() => {
+    localStorage.setItem('pos_standPriceEnabled', String(standPriceEnabled));
+  }, [standPriceEnabled]);
 
   const addItem = useCallback((newItem: Omit<CartItem, 'id' | 'quantity' | 'discountPercentage' | 'discountAmount'>) => {
     setItems(prev => {
@@ -84,42 +102,56 @@ export function useCart(): UseCartReturn {
     setItems([]);
   }, []);
 
-  // Recalculate discounts when items or rules change
+  // Apply stand price adjustment to each item's unit price (before discounts)
+  const itemsWithStandPrice = useMemo(() => {
+    if (!standPriceEnabled || standPriceAdjustment === 0) return items;
+    return items.map(item => ({
+      ...item,
+      price: item.price + standPriceAdjustment,
+    }));
+  }, [items, standPriceEnabled, standPriceAdjustment]);
+
+  // Recalculate discounts on stand-adjusted prices
   const itemsWithDiscounts = useMemo(() => {
     if (!discountEnabled || discountRules.length === 0) {
-      return items.map(item => ({
+      return itemsWithStandPrice.map(item => ({
         ...item,
         discountPercentage: 0,
         discountAmount: 0,
       }));
     }
-    
-    const result = evaluateDiscounts(items, discountRules, discountEnabled);
-    
+
+    const result = evaluateDiscounts(itemsWithStandPrice, discountRules, discountEnabled);
+
     // Set active rule if one was applied
     if (result.appliedRules.length > 0 && !activeDiscountRule) {
       setActiveDiscountRule(result.appliedRules[0]);
     }
-    
-    return applyDiscountsToCart(items, result);
-  }, [items, discountRules, discountEnabled]);
+
+    return applyDiscountsToCart(itemsWithStandPrice, result);
+  }, [itemsWithStandPrice, discountRules, discountEnabled]);
 
   const subtotal = useMemo(() => {
-    return items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  }, [items]);
+    return itemsWithStandPrice.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  }, [itemsWithStandPrice]);
 
   const totalDiscount = useMemo(() => {
     if (!discountEnabled) return 0;
     return itemsWithDiscounts.reduce((sum, item) => sum + item.discountAmount, 0);
   }, [itemsWithDiscounts, discountEnabled]);
 
-  const total = useMemo(() => {
-    return subtotal - totalDiscount;
-  }, [subtotal, totalDiscount]);
-
   const itemsCount = useMemo(() => {
     return items.reduce((sum, item) => sum + Math.abs(item.quantity), 0);
   }, [items]);
+
+  const standPriceTotal = useMemo(() => {
+    if (!standPriceEnabled || standPriceAdjustment === 0) return 0;
+    return standPriceAdjustment * itemsCount;
+  }, [standPriceEnabled, standPriceAdjustment, itemsCount]);
+
+  const total = useMemo(() => {
+    return subtotal - totalDiscount;
+  }, [subtotal, totalDiscount]);
 
   const isRefund = useMemo(() => {
     return total < 0;
@@ -135,6 +167,7 @@ export function useCart(): UseCartReturn {
     clearCart,
     subtotal,
     totalDiscount,
+    standPriceTotal,
     total,
     itemsCount,
     isRefund,
@@ -144,5 +177,9 @@ export function useCart(): UseCartReturn {
     setActiveDiscountRule,
     discountRules,
     setDiscountRules,
+    standPriceEnabled,
+    setStandPriceEnabled,
+    standPriceAdjustment,
+    setStandPriceAdjustment,
   };
 }

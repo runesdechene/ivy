@@ -293,6 +293,10 @@
     color: var(--mantine-color-green-7);
   }
 
+  &.standPrice {
+    color: var(--mantine-color-orange-7);
+  }
+
   &.grandTotal {
     font-size: 1.2rem;
     font-weight: 700;

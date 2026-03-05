@@ -29,6 +29,21 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
     });
     return initial;
   });
+  // État local pour les coûts et prix modifiés
+  const [costs, setCosts] = useState<Record<string, number>>(() => {
+    const initial: Record<string, number> = {};
+    product.variants.forEach(v => {
+      initial[v.id] = v.cost || 0;
+    });
+    return initial;
+  });
+  const [prices, setPrices] = useState<Record<string, number>>(() => {
+    const initial: Record<string, number> = {};
+    product.variants.forEach(v => {
+      initial[v.id] = v.price || 0;
+    });
+    return initial;
+  });
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [resetModalOpened, { open: openResetModal, close: closeResetModal }] = useDisclosure(false);
@@ -302,8 +317,12 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
 
   // Vérifier si des modifications ont été faites
   const hasChanges = useMemo(() => {
-    return product.variants.some(v => quantities[v.id] !== v.quantity);
-  }, [product.variants, quantities]);
+    return product.variants.some(v =>
+      quantities[v.id] !== v.quantity ||
+      costs[v.id] !== (v.cost || 0) ||
+      prices[v.id] !== (v.price || 0)
+    );
+  }, [product.variants, quantities, costs, prices]);
 
   // Calculer le nouveau total
   const newTotalQuantity = useMemo(() => {
@@ -349,10 +368,16 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
     try {
       // Préparer les modifications (seulement les variantes modifiées)
       const changes = product.variants
-        .filter(v => quantities[v.id] !== v.quantity)
+        .filter(v =>
+          quantities[v.id] !== v.quantity ||
+          costs[v.id] !== (v.cost || 0) ||
+          prices[v.id] !== (v.price || 0)
+        )
         .map(v => ({
           variantId: v.id,
           quantity: quantities[v.id],
+          cost: costs[v.id],
+          price: prices[v.id],
         }));
 
       if (changes.length === 0) {
@@ -395,6 +420,8 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
           variants: product.variants.map(v => ({
             ...v,
             quantity: quantities[v.id],
+            cost: costs[v.id],
+            price: prices[v.id],
           })),
           sizeBreakdown: product.variants.reduce((acc, v) => {
             if (v.size) {
@@ -697,6 +724,7 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
                 <Table.Th>SKU</Table.Th>
                 <Table.Th style={{ textAlign: 'center' }}>État</Table.Th>
                 <Table.Th style={{ textAlign: 'right' }}>Coût</Table.Th>
+                <Table.Th style={{ textAlign: 'right' }}>Prix</Table.Th>
                 <Table.Th>Métachamps</Table.Th>
                 <Table.Th style={{ textAlign: 'right' }}>Quantité</Table.Th>
               </Table.Tr>
@@ -736,9 +764,28 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
                     </Badge>
                   </Table.Td>
                   <Table.Td style={{ textAlign: 'right' }}>
-                    <Text size="sm" fw={500} c={(variant.cost || 0) > 0 ? 'blue' : 'orange'}>
-                      {(variant.cost || 0) > 0 ? `${(variant.cost || 0).toFixed(2)} €` : '-'}
-                    </Text>
+                    <NumberInput
+                      value={costs[variant.id] || 0}
+                      onChange={(val) => setCosts(prev => ({ ...prev, [variant.id]: typeof val === 'number' ? val : 0 }))}
+                      min={0}
+                      decimalScale={2}
+                      fixedDecimalScale
+                      hideControls
+                      suffix=" €"
+                      styles={{ input: { width: 90, textAlign: 'right', fontSize: '0.85rem' } }}
+                    />
+                  </Table.Td>
+                  <Table.Td style={{ textAlign: 'right' }}>
+                    <NumberInput
+                      value={prices[variant.id] || 0}
+                      onChange={(val) => setPrices(prev => ({ ...prev, [variant.id]: typeof val === 'number' ? val : 0 }))}
+                      min={0}
+                      decimalScale={2}
+                      fixedDecimalScale
+                      hideControls
+                      suffix=" €"
+                      styles={{ input: { width: 90, textAlign: 'right', fontSize: '0.85rem' } }}
+                    />
                   </Table.Td>
                   <Table.Td>
                     {variant.metafields && variant.metafields.length > 0 ? (

@@ -65,6 +65,25 @@ export default function CaissePage() {
     loadDiscountRules();
   }, [currentShop?.id]);
 
+  // Load stand price adjustment
+  useEffect(() => {
+    if (!currentShop?.id) return;
+
+    const loadStandAdjustment = async () => {
+      const { data } = await supabase
+        .from('pos_stand_adjustment')
+        .select('amount')
+        .eq('shop_id', currentShop.id)
+        .single();
+
+      if (data && data.amount !== 0) {
+        cart.setStandPriceAdjustment(data.amount);
+      }
+    };
+
+    loadStandAdjustment();
+  }, [currentShop?.id]);
+
   const handleAddToCart = useCallback((item: Parameters<typeof cart.addItem>[0]) => {
     cart.addItem(item);
     // Reset selection after adding to cart
@@ -180,11 +199,14 @@ export default function CaissePage() {
         isRefund={cart.isRefund}
         discountEnabled={cart.discountEnabled}
         activeDiscountRule={cart.activeDiscountRule}
+        standPriceEnabled={cart.standPriceEnabled}
+        standPriceAdjustment={cart.standPriceAdjustment}
         onIncrementQuantity={cart.incrementQuantity}
         onDecrementQuantity={cart.decrementQuantity}
         onRemoveItem={cart.removeItem}
         onClearCart={cart.clearCart}
         onToggleDiscount={cart.setDiscountEnabled}
+        onToggleStandPrice={cart.setStandPriceEnabled}
         onConfirm={() => setPaymentModalOpen(true)}
       />
 

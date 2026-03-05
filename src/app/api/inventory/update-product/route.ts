@@ -4,6 +4,8 @@ import { createServerClient } from '@/supabase/client';
 interface VariantChange {
   variantId: string;
   quantity: number;
+  cost?: number;
+  price?: number;
 }
 
 export async function POST(request: Request) {
@@ -109,6 +111,17 @@ export async function POST(request: Request) {
           }, {
             onConflict: 'variant_id,location_id',
           });
+
+        // Mettre à jour cost/price si fournis
+        if (change.cost !== undefined || change.price !== undefined) {
+          const updates: Record<string, number> = {};
+          if (change.cost !== undefined) updates.cost = change.cost;
+          if (change.price !== undefined) updates.price = change.price;
+          await supabase
+            .from('product_variants')
+            .update(updates)
+            .eq('id', variant.id);
+        }
 
         results.push({
           variantId: change.variantId,

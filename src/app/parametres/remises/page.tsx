@@ -97,6 +97,10 @@ export default function RemisesPage() {
   const [saving, setSaving] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
+  // Stand price adjustment state
+  const [standAdjustment, setStandAdjustment] = useState<number>(0);
+  const [savingStand, setSavingStand] = useState(false);
+
   // Form state
   const [formName, setFormName] = useState('');
   const [formDescription, setFormDescription] = useState('');
@@ -105,7 +109,7 @@ export default function RemisesPage() {
   const [formIsActive, setFormIsActive] = useState(true);
   const [formIsCombinable, setFormIsCombinable] = useState(false);
 
-  // Load rules
+  // Load rules + stand adjustment
   useEffect(() => {
     if (!currentShop?.id) return;
 
@@ -130,8 +134,52 @@ export default function RemisesPage() {
       setLoading(false);
     };
 
+    const loadStandAdjustment = async () => {
+      const { data } = await supabase
+        .from('pos_stand_adjustment')
+        .select('amount')
+        .eq('shop_id', currentShop.id)
+        .single();
+
+      if (data) {
+        setStandAdjustment(data.amount);
+      }
+    };
+
     loadRules();
+    loadStandAdjustment();
   }, [currentShop?.id]);
+
+  const handleSaveStandAdjustment = async () => {
+    if (!currentShop?.id) return;
+    setSavingStand(true);
+    try {
+      const { error } = await supabase
+        .from('pos_stand_adjustment')
+        .upsert({
+          shop_id: currentShop.id,
+          amount: standAdjustment,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'shop_id' });
+
+      if (error) throw error;
+
+      notifications.show({
+        title: 'Succès',
+        message: 'Compensation prix de stand mise à jour',
+        color: 'green',
+      });
+    } catch (error) {
+      console.error('Error saving stand adjustment:', error);
+      notifications.show({
+        title: 'Erreur',
+        message: 'Impossible de sauvegarder la compensation',
+        color: 'red',
+      });
+    } finally {
+      setSavingStand(false);
+    }
+  };
 
   const openCreateModal = () => {
     setEditingRule(null);
@@ -313,6 +361,38 @@ export default function RemisesPage() {
           </Button>
         </Group>
       </Group>
+
+      {/* Compensation prix sur stand */}
+      <Card withBorder padding="md">
+        <Group justify="space-between" align="flex-start" mb="sm">
+          <div>
+            <Text fw={600} size="lg">Compensation prix sur stand</Text>
+            <Text c="dimmed" size="sm">
+              Montant ajouté (+) ou retiré (−) par article quand le mode &quot;Prix de stand&quot; est activé en caisse.
+            </Text>
+          </div>
+        </Group>
+        <Group align="flex-end">
+          <NumberInput
+            label="Montant par article"
+            description="Ex: 2 pour +2€, -1.50 pour −1.50€"
+            value={standAdjustment}
+            onChange={(val) => setStandAdjustment(typeof val === 'number' ? val : 0)}
+            decimalScale={2}
+            step={0.5}
+            suffix=" €"
+            styles={{ input: { fontWeight: 600, fontSize: '1.1rem' } }}
+            w={220}
+          />
+          <Button
+            onClick={handleSaveStandAdjustment}
+            loading={savingStand}
+            variant="light"
+          >
+            Enregistrer
+          </Button>
+        </Group>
+      </Card>
 
       {rules.length === 0 ? (
         <Alert color="blue" title="Aucune règle de remise">

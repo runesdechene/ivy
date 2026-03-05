@@ -23,6 +23,7 @@ export interface ProductData {
     quantity: number;
     size: string | null;
     cost?: number;
+    price?: number;
     shopifyActive?: boolean;
     options: Array<{ name: string; value: string }>;
     metafields?: Array<{ namespace: string; key: string; value: string }>;
