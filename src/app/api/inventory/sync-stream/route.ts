@@ -173,7 +173,7 @@ async function phaseProducts(
 
   // Fetch all products from Shopify
   let allProducts: any[] = [];
-  let baseUrl = `https://${shop.shopify_url}/admin/api/2024-01/products.json?status=active&limit=250`;
+  let baseUrl = `https://${shop.shopify_url}/admin/api/2024-01/products.json?limit=250`;
   if (productType) baseUrl += `&product_type=${encodeURIComponent(productType)}`;
   let currentUrl = baseUrl;
   let hasMorePages = true;
@@ -199,7 +199,19 @@ async function phaseProducts(
     }
   }
 
-  send(`✓ ${allProducts.length} produits récupérés`, 'success');
+  // Log des statuts pour debug
+  const statusCounts: Record<string, number> = {};
+  for (const p of allProducts) {
+    statusCounts[p.status] = (statusCounts[p.status] || 0) + 1;
+  }
+  const statusSummary = Object.entries(statusCounts).map(([s, c]) => `${s}: ${c}`).join(', ');
+  send(`✓ ${allProducts.length} produits récupérés (${statusSummary})`, 'success');
+
+  // Exclure brouillons, archivés, et produits taggés no-ivy
+  allProducts = allProducts.filter(p =>
+    p.status !== 'draft' && p.status !== 'archived' &&
+    !(p.tags && (p.tags as string).split(',').map((t: string) => t.trim().toLowerCase()).includes('no-ivy'))
+  );
 
   // Upsert products
   send('', 'info');
@@ -211,7 +223,7 @@ async function phaseProducts(
     title: p.title,
     handle: p.handle,
     image_url: p.image?.src || p.images?.[0]?.src || null,
-    status: p.status,
+    status: (p.status === 'draft' || p.status === 'archived') ? p.status : 'active',
     product_type: p.product_type || null,
     option1_name: p.options?.[0]?.name || null,
     option2_name: p.options?.[1]?.name || null,

@@ -66,7 +66,7 @@ export async function POST(request: Request) {
 
     // 2. Récupérer TOUS les produits depuis Shopify (avec pagination)
     const allProducts: any[] = [];
-    let currentUrl = `https://${shop.shopify_url}/admin/api/2024-01/products.json?status=active&limit=250`;
+    let currentUrl = `https://${shop.shopify_url}/admin/api/2024-01/products.json?limit=250`;
     let hasMorePages = true;
 
     while (hasMorePages) {
@@ -99,14 +99,21 @@ export async function POST(request: Request) {
 
     console.log(`Fetched ${allProducts.length} products from Shopify`);
 
+    // Exclure brouillons, archivés, et produits taggés no-ivy
+    const filteredProducts = allProducts.filter((p: any) =>
+      p.status !== 'draft' && p.status !== 'archived' &&
+      !(p.tags && (p.tags as string).split(',').map((t: string) => t.trim().toLowerCase()).includes('no-ivy'))
+    );
+    console.log(`After filtering: ${filteredProducts.length} products (excluded ${allProducts.length - filteredProducts.length})`);
+
     // 3. Batch upsert des produits
-    const productsToUpsert = allProducts.map((product: any) => ({
+    const productsToUpsert = filteredProducts.map((product: any) => ({
       shop_id: shopId,
       shopify_id: product.id.toString(),
       title: product.title,
       handle: product.handle,
       image_url: product.image?.src || product.images?.[0]?.src || null,
-      status: product.status,
+      status: (product.status === 'draft' || product.status === 'archived') ? product.status : 'active',
       option1_name: product.options?.[0]?.name || null,
       option2_name: product.options?.[1]?.name || null,
       option3_name: product.options?.[2]?.name || null,
@@ -131,7 +138,7 @@ export async function POST(request: Request) {
     });
 
     // 4b. Marquer les produits absents de Shopify comme locaux + leurs variantes
-    const activeShopifyProductIds = allProducts.map((p: any) => p.id.toString());
+    const activeShopifyProductIds = filteredProducts.map((p: any) => p.id.toString());
     if (activeShopifyProductIds.length > 0) {
       const { data: localRows } = await supabase
         .from('products')
@@ -172,7 +179,7 @@ export async function POST(request: Request) {
     const inventoryItemIds: number[] = [];
     const inventoryItemToVariantShopifyId: Record<string, string> = {};
 
-    for (const product of allProducts) {
+    for (const product of filteredProducts) {
       const productId = productIdMap[product.id.toString()];
       if (!productId) continue;
 
