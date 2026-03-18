@@ -190,15 +190,50 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Log all successful movements
+    // Log movements — aggregate by variant + day (no transaction-level granularity)
     if (movementsToLog.length > 0) {
-      const { error: logError } = await supabase
-        .from('stock_movements')
-        .insert(movementsToLog);
-
-      if (logError) {
-        console.error('Error logging stock movements:', logError);
+      // Group by variant_id to aggregate quantities
+      const aggregated = new Map<string, typeof movementsToLog[0]>();
+      for (const m of movementsToLog) {
+        const existing = aggregated.get(m.variant_id);
+        if (existing) {
+          existing.quantity += m.quantity;
+        } else {
+          aggregated.set(m.variant_id, { ...m });
+        }
       }
+
+      // Upsert: if a row already exists for this variant + today, add to it
+      for (const movement of aggregated.values()) {
+        const today = new Date().toISOString().split('T')[0];
+
+        let existingQuery = supabase
+          .from('stock_movements')
+          .select('id, quantity')
+          .eq('shop_id', movement.shop_id)
+          .eq('variant_id', movement.variant_id)
+          .eq('moved_on', today);
+
+        if (movement.location_id) {
+          existingQuery = existingQuery.eq('location_id', movement.location_id);
+        } else {
+          existingQuery = existingQuery.is('location_id', null);
+        }
+
+        const { data: existing } = await existingQuery.maybeSingle();
+
+        if (existing) {
+          await supabase
+            .from('stock_movements')
+            .update({ quantity: existing.quantity + movement.quantity })
+            .eq('id', existing.id);
+        } else {
+          await supabase
+            .from('stock_movements')
+            .insert({ ...movement, moved_on: today });
+        }
+      }
+
     }
 
     const allSuccess = results.every(r => r.success);

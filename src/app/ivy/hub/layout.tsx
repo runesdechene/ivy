@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { ActionIcon, Tooltip } from '@mantine/core';
+import { ActionIcon, Tooltip, Text } from '@mantine/core';
 import { IconArrowLeft } from '@tabler/icons-react';
 import { LocationProvider } from '@/context/LocationContext';
 import { LocationSelector } from '@/components/LocationSelector/LocationSelector';
@@ -34,6 +34,9 @@ function CaisseLayoutContent({
       <main className={styles.caisseMain}>
         {children}
       </main>
+      <Text size="xs" c="dimmed" ta="center" py={4} style={{ opacity: 0.5 }}>
+        Outil interne de gestion de stock — Ne constitue pas un système d'enregistrement des ventes
+      </Text>
     </div>
   );
 }

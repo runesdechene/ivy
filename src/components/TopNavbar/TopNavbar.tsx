@@ -17,7 +17,7 @@ export function TopNavbar() {
   const isCommandesSection = pathname.startsWith('/ivy/commandes');
   const isInventaireSection = pathname.startsWith('/ivy/inventaire');
   const isStandSection = pathname.startsWith('/ivy/stand');
-  const isCaisseSection = pathname.startsWith('/ivy/caisse');
+  const isHubSection = pathname.startsWith('/ivy/hub');
 
   const handleLogout = async () => {
     try {
@@ -70,12 +70,12 @@ export function TopNavbar() {
             Inventaire
           </Button>
           <Button
-            variant={isCaisseSection ? 'filled' : 'subtle'}
+            variant={isHubSection ? 'filled' : 'subtle'}
             color="orange"
-            onClick={() => router.push('/ivy/caisse')}
+            onClick={() => router.push('/ivy/hub')}
             size="md"
             leftSection={<IconPackage size={18} />}
-            className={isCaisseSection ? styles.activeButton : styles.inactiveButton}
+            className={isHubSection ? styles.activeButton : styles.inactiveButton}
           >
             HUB de stand
           </Button>

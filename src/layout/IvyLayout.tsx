@@ -25,7 +25,7 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
   const isCommandesSection = pathname.startsWith('/ivy/commandes');
   const isInventaireSection = pathname.startsWith('/ivy/inventaire');
   const isStandSection = pathname.startsWith('/ivy/stand');
-  const isCaisseSection = pathname.startsWith('/ivy/caisse');
+  const isHubSection = pathname.startsWith('/ivy/hub');
 
   const handleSync = async () => {
     if (!currentShop || syncing) return;
@@ -202,8 +202,8 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
       ? standMenu
       : inventaireMenu;
 
-  // Section Caisse : pas de sidebar, layout plein écran
-  if (isCaisseSection) {
+  // Section HUB : pas de sidebar, layout plein écran
+  if (isHubSection) {
     return <div className={styles.fullscreen}>{children}</div>;
   }
 

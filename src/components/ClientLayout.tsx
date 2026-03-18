@@ -21,11 +21,11 @@ export function ClientLayout({ theme, children }: ClientLayoutProps) {
   const pathname = usePathname();
   const isAuthPage = pathname === '/login' || pathname === '/signup' || pathname === '/onboarding';
   const isIvySection = pathname.startsWith('/ivy');
-  const isCaisseSection = pathname.startsWith('/ivy/caisse');
+  const isHubSection = pathname.startsWith('/ivy/hub');
   const isParametresPage = pathname.startsWith('/parametres');
 
-  // La section Caisse a son propre layout sans TopNavbar
-  const showTopNavbar = !isAuthPage && !isCaisseSection;
+  // La section HUB a son propre layout sans TopNavbar
+  const showTopNavbar = !isAuthPage && !isHubSection;
 
   return (
     <MantineProvider theme={theme}>
@@ -36,7 +36,7 @@ export function ClientLayout({ theme, children }: ClientLayoutProps) {
             {showTopNavbar && <TopNavbar />}
             {isAuthPage ? (
               children
-            ) : isCaisseSection ? (
+            ) : isHubSection ? (
               children
             ) : isParametresPage ? (
               <ParametresLayout>{children}</ParametresLayout>

@@ -144,7 +144,7 @@ export function StockZone({
           loading={processing}
           onClick={onConfirm}
         >
-          Valider les mouvements
+          Mettre à jour le stock
         </Button>
       </div>
     </div>
