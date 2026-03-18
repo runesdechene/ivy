@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { Title, Paper, Stack, Table, Text, Group, Box, Select, Loader, Center, Badge, Button } from '@mantine/core';
+import { Title, Paper, Stack, Table, Text, Group, Box, Select, Loader, Center, Badge, Button, NumberInput, Divider } from '@mantine/core';
 import { IconFileInvoice, IconCheck, IconX } from '@tabler/icons-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -11,6 +11,7 @@ import { supabase } from '@/supabase/client';
 import { encodeFirestoreId } from '@/utils/firebase-helpers';
 import { getColorFromVariant, getSizeFromVariant } from '@/utils/variant-helpers';
 import { transformColor, loadColorMappingsFromSupabase } from '@/utils/color-transformer';
+import { useMonthlyBalance } from '@/hooks/useMonthlyBalance';
 import styles from './facturation.module.scss';
 
 interface LineItem {
@@ -59,6 +60,7 @@ export default function FacturationBoutiquePage() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
   const [billingStatus, setBillingStatus] = useState<MonthlyBillingStatus>({ is_invoiced: false, is_paid: false });
+  const { balance: monthlyBalance, updateBalance: updateMonthlyBalance } = useMonthlyBalance(selectedMonth);
 
   const fetchData = useCallback(async () => {
     if (!currentShop) return;
@@ -244,8 +246,12 @@ export default function FacturationBoutiquePage() {
     return itemsCost + (itemsCost > 0 ? handlingFee : 0);
   };
 
-  const calculateMonthlyTotal = (monthOrders: Order[]): number => {
+  const calculateMonthlySubtotal = (monthOrders: Order[]): number => {
     return monthOrders.reduce((sum, order) => sum + calculateOrderCost(order), 0);
+  };
+
+  const calculateMonthlyTotal = (monthOrders: Order[]): number => {
+    return calculateMonthlySubtotal(monthOrders) + monthlyBalance;
   };
 
   if (loading) {
@@ -406,7 +412,7 @@ export default function FacturationBoutiquePage() {
               <Table.Tfoot>
                 <Table.Tr style={{ backgroundColor: 'var(--mantine-color-gray-1)' }}>
                   <Table.Td colSpan={3}>
-                    <Text fw={600}>Total du mois</Text>
+                    <Text fw={600}>Sous-total du mois</Text>
                   </Table.Td>
                   <Table.Td style={{ textAlign: 'right' }}>
                     <Text fw={600}>
@@ -434,8 +440,34 @@ export default function FacturationBoutiquePage() {
                     </Text>
                   </Table.Td>
                   <Table.Td style={{ textAlign: 'right' }}>
+                    <Text fw={600}>
+                      {calculateMonthlySubtotal(currentMonthOrders).toFixed(2)} €
+                    </Text>
+                  </Table.Td>
+                </Table.Tr>
+                <Table.Tr>
+                  <Table.Td colSpan={5}>
+                    <Text fw={600}>Balance (ajustement)</Text>
+                  </Table.Td>
+                  <Table.Td style={{ textAlign: 'right' }}>
+                    <NumberInput
+                      value={monthlyBalance}
+                      onChange={(value) => updateMonthlyBalance(Number(value) || 0)}
+                      decimalScale={2}
+                      prefix={monthlyBalance >= 0 ? '+' : ''}
+                      suffix=" €"
+                      size="xs"
+                      style={{ width: 140, marginLeft: 'auto' }}
+                    />
+                  </Table.Td>
+                </Table.Tr>
+                <Table.Tr style={{ backgroundColor: 'var(--mantine-color-blue-0)' }}>
+                  <Table.Td colSpan={5}>
+                    <Text fw={700} size="lg">Total du mois</Text>
+                  </Table.Td>
+                  <Table.Td style={{ textAlign: 'right' }}>
                     <Text fw={700} c="blue" size="lg">
-                      {calculateMonthlyTotal(currentMonthOrders).toFixed(2)} €
+                      {calculateMonthlyTotal(currentMonthOrders).toFixed(2)} € HT
                     </Text>
                   </Table.Td>
                 </Table.Tr>
