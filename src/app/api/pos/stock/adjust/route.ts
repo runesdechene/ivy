@@ -190,7 +190,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Log movements — aggregate by variant + day (no transaction-level granularity)
+    // Log movements — aggregate by variant + day (daily totals only)
     if (movementsToLog.length > 0) {
       // Group by variant_id to aggregate quantities
       const aggregated = new Map<string, typeof movementsToLog[0]>();

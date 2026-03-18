@@ -3,4 +3,4 @@
 ALTER TABLE stock_movements DROP COLUMN IF EXISTS created_at;
 
 -- Add a comment documenting the intent
-COMMENT ON TABLE stock_movements IS 'Inventory daily usage tracking. NOT a sales record. Stores only daily aggregates per variant (one row per variant per day). No transaction-level granularity, no timestamps, no prices.';
+COMMENT ON TABLE stock_movements IS 'Inventory daily usage tracking. Stores only daily aggregates per variant (one row per variant per day). No granularity beyond daily totals, no timestamps, no prices.';
