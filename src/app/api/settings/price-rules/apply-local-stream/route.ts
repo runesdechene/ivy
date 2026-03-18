@@ -76,9 +76,8 @@ export async function GET(request: NextRequest) {
         // Récupérer les commandes en cours (non expédiées, non annulées, non remboursées)
         const { data: orders, error: ordersError } = await supabase
           .from('orders')
-          .select('id, name, line_items')
+          .select('id, name, line_items, tags')
           .eq('shop_id', shopId)
-          .neq('display_fulfillment_status', 'FULFILLED')
           .is('cancelled_at', null)
           .neq('display_financial_status', 'REFUNDED');
 
@@ -88,12 +87,20 @@ export async function GET(request: NextRequest) {
           return;
         }
 
-        send(`  └─ ${orders.length} commande(s) à analyser`, 'info');
+        // Exclude batch (stock) orders — they have their own apply-stock-stream
+        const clientOrders = orders.filter(o => {
+          const tags = o.tags;
+          if (Array.isArray(tags)) return !tags.some(t => t.toLowerCase().includes('batch'));
+          if (typeof tags === 'string') return !tags.toLowerCase().includes('batch');
+          return true;
+        });
+
+        send(`  └─ ${clientOrders.length} commande(s) client à analyser`, 'info');
 
         let totalUpdated = 0;
         let totalOrders = 0;
 
-        for (const order of orders) {
+        for (const order of clientOrders) {
           const lineItems = order.line_items || [];
           let orderUpdated = false;
           const updatedLineItems = [...lineItems];

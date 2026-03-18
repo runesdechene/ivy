@@ -98,6 +98,8 @@ export default function PriceRulesPage() {
   const [applyingAllShopify, setApplyingAllShopify] = useState(false);
   const [applyingAllLocal, setApplyingAllLocal] = useState(false);
   const [applyingAllIvy, setApplyingAllIvy] = useState(false);
+  const [applyingStock, setApplyingStock] = useState<string | null>(null);
+  const [applyingAllStock, setApplyingAllStock] = useState(false);
   
   const [rules, setRules] = useState<PriceRule[]>([]);
   const [metafields, setMetafields] = useState<MetafieldConfig[]>([]);
@@ -188,15 +190,15 @@ export default function PriceRulesPage() {
     setFormSku(rule.sku || '');
     setFormLocalOnly(rule.local_only || false);
     setFormModifiers(rule.modifiers.map(m => ({
-      namespace: m.metafield_namespace || m.namespace,
-      key: m.metafield_key || m.key,
-      value: m.metafield_value || m.value,
-      amount: m.modifier_amount || m.amount,
+      namespace: m.metafield_namespace ?? m.namespace,
+      key: m.metafield_key ?? m.key,
+      value: m.metafield_value ?? m.value,
+      amount: m.modifier_amount ?? m.amount ?? 0,
     })));
     setFormOptionModifiers((rule.option_modifiers || []).map(m => ({
-      optionName: m.option_name || m.optionName,
-      optionValue: m.option_value || m.optionValue,
-      amount: m.modifier_amount || m.amount,
+      optionName: m.option_name ?? m.optionName,
+      optionValue: m.option_value ?? m.optionValue,
+      amount: m.modifier_amount ?? m.amount ?? 0,
     })));
     openModal();
   };
@@ -210,15 +212,15 @@ export default function PriceRulesPage() {
     setFormSku('');
     setFormLocalOnly(rule.local_only || false);
     setFormModifiers(rule.modifiers.map(m => ({
-      namespace: m.metafield_namespace || m.namespace,
-      key: m.metafield_key || m.key,
-      value: m.metafield_value || m.value,
-      amount: m.modifier_amount || m.amount,
+      namespace: m.metafield_namespace ?? m.namespace,
+      key: m.metafield_key ?? m.key,
+      value: m.metafield_value ?? m.value,
+      amount: m.modifier_amount ?? m.amount ?? 0,
     })));
     setFormOptionModifiers((rule.option_modifiers || []).map(m => ({
-      optionName: m.option_name || m.optionName,
-      optionValue: m.option_value || m.optionValue,
-      amount: m.modifier_amount || m.amount,
+      optionName: m.option_name ?? m.optionName,
+      optionValue: m.option_value ?? m.optionValue,
+      amount: m.modifier_amount ?? m.amount ?? 0,
     })));
     openModal();
   };
@@ -248,6 +250,31 @@ export default function PriceRulesPage() {
     setFormModifiers(formModifiers.filter((_, i) => i !== index));
   };
 
+  // Drag-and-drop state for modifier reordering
+  const [dragModIdx, setDragModIdx] = useState<number | null>(null);
+  const [dragOverModIdx, setDragOverModIdx] = useState<number | null>(null);
+
+  const handleModDrop = (targetIdx: number, list: 'meta' | 'option') => {
+    if (dragModIdx === null || dragModIdx === targetIdx) {
+      setDragModIdx(null);
+      setDragOverModIdx(null);
+      return;
+    }
+    if (list === 'meta') {
+      const next = [...formModifiers];
+      const [moved] = next.splice(dragModIdx, 1);
+      next.splice(targetIdx, 0, moved);
+      setFormModifiers(next);
+    } else {
+      const next = [...formOptionModifiers];
+      const [moved] = next.splice(dragModIdx, 1);
+      next.splice(targetIdx, 0, moved);
+      setFormOptionModifiers(next);
+    }
+    setDragModIdx(null);
+    setDragOverModIdx(null);
+  };
+
   const addOptionModifier = () => {
     if (!newOptionName || !newOptionValue) {
       notifications.show({
@@ -271,6 +298,7 @@ export default function PriceRulesPage() {
   const removeOptionModifier = (index: number) => {
     setFormOptionModifiers(formOptionModifiers.filter((_, i) => i !== index));
   };
+
 
   const saveRule = async () => {
     if (!currentShop || !formProductType.trim()) {
@@ -542,6 +570,54 @@ export default function PriceRulesPage() {
     );
   };
 
+  // Appliquer une règle aux commandes de stock (batch)
+  const applyRuleStock = async (rule: PriceRule) => {
+    if (!currentShop || !rule.id) return;
+
+    setApplyingStock(rule.id);
+
+    await streamFromUrl(
+      `/api/settings/price-rules/apply-stock-stream?shopId=${currentShop.id}&ruleId=${rule.id}`,
+      {
+        title: `Commandes de stock: ${rule.sku}`,
+        onComplete: () => {
+          fetchData();
+          setApplyingStock(null);
+        },
+      }
+    );
+  };
+
+  // Appliquer toutes les règles actives aux commandes de stock (batch)
+  const applyAllStock = async () => {
+    if (!currentShop) return;
+
+    const activeRules = rules.filter(r => r.is_active);
+    if (activeRules.length === 0) {
+      notifications.show({
+        title: 'Attention',
+        message: 'Aucune règle active à appliquer',
+        color: 'orange',
+      });
+      return;
+    }
+
+    setApplyingAllStock(true);
+
+    // Apply each rule sequentially
+    for (const rule of activeRules) {
+      await streamFromUrl(
+        `/api/settings/price-rules/apply-stock-stream?shopId=${currentShop.id}&ruleId=${rule.id}`,
+        {
+          title: `Stock: ${rule.sku}`,
+        }
+      );
+    }
+
+    fetchData();
+    setApplyingAllStock(false);
+  };
+
   // Appliquer toutes les règles actives sur Ivy (variantes Supabase)
   const applyAllIvy = async () => {
     if (!currentShop) return;
@@ -683,9 +759,19 @@ export default function PriceRulesPage() {
                 variant="light"
                 onClick={applyAllLocal}
                 loading={applyingAllLocal}
-                disabled={applyingAllShopify || applyingAllIvy}
+                disabled={applyingAllShopify || applyingAllIvy || applyingAllStock}
               >
                 Appliquer aux commandes
+              </Button>
+              <Button
+                leftSection={applyingAllStock ? <Loader size={14} /> : <IconPlayerPlay size={16} />}
+                color="violet"
+                variant="light"
+                onClick={applyAllStock}
+                loading={applyingAllStock}
+                disabled={applyingAllShopify || applyingAllIvy || applyingAllLocal}
+              >
+                Appliquer aux commandes de stock
               </Button>
               {rules.some(r => r.is_active && r.local_only) && (
                 <Button
@@ -900,6 +986,18 @@ export default function PriceRulesPage() {
                                   </Button>
                                 </Tooltip>
                               )}
+                              <Tooltip label="Met à jour les coûts dans les commandes de stock (batch)">
+                                <Button
+                                  leftSection={applyingStock === rule.id ? <Loader size={14} /> : <IconPlayerPlay size={16} />}
+                                  color="violet"
+                                  variant="light"
+                                  onClick={() => applyRuleStock(rule)}
+                                  loading={applyingStock === rule.id}
+                                  disabled={!rule.is_active}
+                                >
+                                  Commandes de stock
+                                </Button>
+                              </Tooltip>
                               {!rule.local_only && (
                                 <Tooltip label="Appliquer sur Shopify (met à jour le coût des variantes)">
                                   <Button
@@ -997,6 +1095,7 @@ export default function PriceRulesPage() {
               <Table mb="md">
                 <Table.Thead>
                   <Table.Tr>
+                    <Table.Th style={{ width: 30 }}></Table.Th>
                     <Table.Th>Métachamp</Table.Th>
                     <Table.Th>Valeur</Table.Th>
                     <Table.Th>Majoration</Table.Th>
@@ -1005,7 +1104,23 @@ export default function PriceRulesPage() {
                 </Table.Thead>
                 <Table.Tbody>
                   {formModifiers.map((mod, index) => (
-                    <Table.Tr key={index}>
+                    <Table.Tr
+                      key={index}
+                      draggable
+                      onDragStart={() => setDragModIdx(index)}
+                      onDragOver={(e) => { e.preventDefault(); setDragOverModIdx(index); }}
+                      onDragLeave={() => setDragOverModIdx(null)}
+                      onDrop={() => handleModDrop(index, 'meta')}
+                      onDragEnd={() => { setDragModIdx(null); setDragOverModIdx(null); }}
+                      style={{
+                        opacity: dragModIdx === index ? 0.4 : 1,
+                        outline: dragOverModIdx === index ? '2px dashed var(--mantine-color-orange-5)' : 'none',
+                        cursor: 'grab',
+                      }}
+                    >
+                      <Table.Td style={{ width: 30 }}>
+                        <IconGripVertical size={14} color="var(--mantine-color-gray-5)" />
+                      </Table.Td>
                       <Table.Td>{getMetafieldLabel(mod.namespace, mod.key)}</Table.Td>
                       <Table.Td>{mod.value}</Table.Td>
                       <Table.Td>{mod.amount >= 0 ? '+' : ''}{mod.amount.toFixed(2)} €</Table.Td>
@@ -1081,6 +1196,7 @@ export default function PriceRulesPage() {
               <Table mb="md">
                 <Table.Thead>
                   <Table.Tr>
+                    <Table.Th style={{ width: 30 }}></Table.Th>
                     <Table.Th>Option</Table.Th>
                     <Table.Th>Valeur</Table.Th>
                     <Table.Th>Majoration</Table.Th>
@@ -1089,7 +1205,23 @@ export default function PriceRulesPage() {
                 </Table.Thead>
                 <Table.Tbody>
                   {formOptionModifiers.map((mod, index) => (
-                    <Table.Tr key={index}>
+                    <Table.Tr
+                      key={index}
+                      draggable
+                      onDragStart={() => setDragModIdx(index)}
+                      onDragOver={(e) => { e.preventDefault(); setDragOverModIdx(index); }}
+                      onDragLeave={() => setDragOverModIdx(null)}
+                      onDrop={() => handleModDrop(index, 'option')}
+                      onDragEnd={() => { setDragModIdx(null); setDragOverModIdx(null); }}
+                      style={{
+                        opacity: dragModIdx === index ? 0.4 : 1,
+                        outline: dragOverModIdx === index ? '2px dashed var(--mantine-color-orange-5)' : 'none',
+                        cursor: 'grab',
+                      }}
+                    >
+                      <Table.Td style={{ width: 30 }}>
+                        <IconGripVertical size={14} color="var(--mantine-color-gray-5)" />
+                      </Table.Td>
                       <Table.Td>{mod.optionName}</Table.Td>
                       <Table.Td>{mod.optionValue}</Table.Td>
                       <Table.Td>{mod.amount >= 0 ? '+' : ''}{mod.amount.toFixed(2)} €</Table.Td>

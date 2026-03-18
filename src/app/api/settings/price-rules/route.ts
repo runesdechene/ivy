@@ -177,7 +177,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Mettre à jour les modificateurs si fournis
-    if (modifiers !== undefined) {
+    if (modifiers !== undefined && modifiers.length > 0) {
       // Supprimer les anciens modificateurs
       await supabase
         .from('price_rule_modifiers')
@@ -201,7 +201,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Mettre à jour les modificateurs d'options si fournis
-    if (optionModifiers !== undefined) {
+    if (optionModifiers !== undefined && optionModifiers.length > 0) {
       // Supprimer les anciens
       await supabase
         .from('price_rule_option_modifiers')

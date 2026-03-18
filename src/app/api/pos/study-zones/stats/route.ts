@@ -27,151 +27,174 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Zone not found' }, { status: 404 });
   }
 
-  // Get sales in date range
-  let salesQuery = supabase
-    .from('pos_sales')
-    .select('id, seller_id, total_amount, subtotal, discount_amount, items_count, is_refund, created_at')
-    .eq('shop_id', shopId)
-    .gte('created_at', `${zone.date_from}T00:00:00`)
-    .lte('created_at', `${zone.date_to}T23:59:59`);
-
+  // Resolve locationId — could be a Shopify numeric ID, need the Supabase UUID
+  let resolvedLocationId = locationId;
   if (locationId) {
-    salesQuery = salesQuery.eq('location_id', locationId);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(locationId);
+    if (!isUuid) {
+      const { data: loc } = await supabase
+        .from('locations')
+        .select('id')
+        .eq('shopify_id', locationId)
+        .single();
+      resolvedLocationId = loc?.id || null;
+    }
   }
 
-  const { data: sales, error: salesError } = await salesQuery;
+  // Get stock movements in date range
+  let query = supabase
+    .from('stock_movements')
+    .select('variant_id, product_title, variant_title, quantity, moved_on')
+    .eq('shop_id', shopId)
+    .gte('moved_on', zone.date_from)
+    .lte('moved_on', zone.date_to);
 
-  if (salesError) {
-    return NextResponse.json({ error: salesError.message }, { status: 500 });
+  if (resolvedLocationId) {
+    query = query.eq('location_id', resolvedLocationId);
   }
 
-  const allSales = sales || [];
-  const actualSales = allSales.filter(s => !s.is_refund);
-  const refunds = allSales.filter(s => s.is_refund);
+  const { data: movements, error: movementsError } = await query;
 
-  // Get sale items for product stats
-  const saleIds = allSales.map(s => s.id);
-  let items: any[] = [];
+  if (movementsError) {
+    return NextResponse.json({ error: movementsError.message }, { status: 500 });
+  }
 
-  if (saleIds.length > 0) {
-    // Batch fetch in chunks of 100 to avoid URL length limits
-    for (let i = 0; i < saleIds.length; i += 100) {
-      const chunk = saleIds.slice(i, i + 100);
-      const { data: itemsData } = await supabase
-        .from('pos_sale_items')
-        .select('sale_id, product_title, variant_title, quantity, unit_price, total_price')
-        .in('sale_id', chunk);
+  const allMovements = movements || [];
 
-      if (itemsData) {
-        items = [...items, ...itemsData];
+  // Total items out / return
+  const totalItemsOut = allMovements
+    .filter(m => m.quantity < 0)
+    .reduce((sum, m) => sum + Math.abs(m.quantity), 0);
+  const totalItemsReturn = allMovements
+    .filter(m => m.quantity > 0)
+    .reduce((sum, m) => sum + m.quantity, 0);
+
+  // Top products (by quantity out)
+  const productMap = new Map<string, number>();
+  for (const m of allMovements) {
+    if (m.quantity < 0) {
+      const key = m.product_title;
+      productMap.set(key, (productMap.get(key) || 0) + Math.abs(m.quantity));
+    }
+  }
+  const topProducts = Array.from(productMap.entries())
+    .map(([name, quantity]) => ({ name, quantity }))
+    .sort((a, b) => b.quantity - a.quantity);
+
+  // Top variants (by quantity out)
+  const variantMap = new Map<string, number>();
+  for (const m of allMovements) {
+    if (m.quantity < 0) {
+      const key = `${m.product_title} — ${m.variant_title || 'Default'}`;
+      variantMap.set(key, (variantMap.get(key) || 0) + Math.abs(m.quantity));
+    }
+  }
+  const topVariants = Array.from(variantMap.entries())
+    .map(([name, quantity]) => ({ name, quantity }))
+    .sort((a, b) => b.quantity - a.quantity)
+    .slice(0, 20);
+
+  // Top options grouped by option name (Couleur, Taille, etc.)
+  // First, get product option names for all variants involved
+  const variantIds = [...new Set(allMovements.filter(m => m.quantity < 0).map(m => m.variant_id))];
+  const optionsByCategory = new Map<string, Map<string, number>>();
+
+  if (variantIds.length > 0) {
+    // Fetch variants with their options and parent product option names
+    for (let i = 0; i < variantIds.length; i += 100) {
+      const chunk = variantIds.slice(i, i + 100);
+      const { data: variants } = await supabase
+        .from('product_variants')
+        .select('id, option1, option2, option3, product:products(option1_name, option2_name, option3_name)')
+        .in('id', chunk);
+
+      if (variants) {
+        // Build a map of variantId -> options
+        const variantOptionsMap = new Map<string, { options: [string | null, string | null, string | null]; names: [string | null, string | null, string | null] }>();
+        for (const v of variants) {
+          const product = Array.isArray(v.product) ? v.product[0] : v.product;
+          variantOptionsMap.set(v.id, {
+            options: [v.option1, v.option2, v.option3],
+            names: [product?.option1_name || null, product?.option2_name || null, product?.option3_name || null],
+          });
+        }
+
+        // Count options per category from movements
+        for (const m of allMovements) {
+          if (m.quantity < 0) {
+            const variantData = variantOptionsMap.get(m.variant_id);
+            if (!variantData) continue;
+
+            for (let j = 0; j < 3; j++) {
+              const optionName = variantData.names[j];
+              const optionValue = variantData.options[j];
+              if (optionName && optionValue) {
+                if (!optionsByCategory.has(optionName)) {
+                  optionsByCategory.set(optionName, new Map());
+                }
+                const categoryMap = optionsByCategory.get(optionName)!;
+                categoryMap.set(optionValue, (categoryMap.get(optionValue) || 0) + Math.abs(m.quantity));
+              }
+            }
+          }
+        }
       }
     }
   }
 
-  // Get sellers
-  const { data: sellers } = await supabase
-    .from('pos_sellers')
-    .select('id, name, initials, color')
-    .eq('shop_id', shopId);
+  // Convert to sorted arrays per category
+  const topOptionsByCategory: Array<{ category: string; options: Array<{ name: string; quantity: number }> }> = [];
+  for (const [category, valuesMap] of optionsByCategory) {
+    const options = Array.from(valuesMap.entries())
+      .map(([name, quantity]) => ({ name, quantity }))
+      .sort((a, b) => b.quantity - a.quantity);
+    topOptionsByCategory.push({ category, options });
+  }
 
-  const sellersMap = new Map((sellers || []).map(s => [s.id, s]));
-
-  // --- Compute stats ---
-
-  // Revenue
-  const totalRevenue = actualSales.reduce((sum, s) => sum + Number(s.total_amount), 0);
-  const totalRefunds = refunds.reduce((sum, s) => sum + Math.abs(Number(s.total_amount)), 0);
-  const totalDiscount = actualSales.reduce((sum, s) => sum + Number(s.discount_amount || 0), 0);
-  const totalItemsSold = actualSales.reduce((sum, s) => sum + s.items_count, 0);
-  const averageCart = actualSales.length > 0 ? totalRevenue / actualSales.length : 0;
-
-  // Top products
-  const productMap = new Map<string, { quantity: number; revenue: number }>();
-  for (const item of items) {
-    if (item.quantity > 0) {
-      const key = item.product_title;
-      const existing = productMap.get(key) || { quantity: 0, revenue: 0 };
-      productMap.set(key, {
-        quantity: existing.quantity + item.quantity,
-        revenue: existing.revenue + Number(item.total_price),
-      });
+  // Top names (group products sharing first 5 chars — e.g. "Morri" groups all Morrigan products)
+  const nameMap = new Map<string, { fullName: string; quantity: number }>();
+  for (const m of allMovements) {
+    if (m.quantity < 0) {
+      const prefix = m.product_title.slice(0, 5).toLowerCase();
+      const existing = nameMap.get(prefix);
+      if (existing) {
+        existing.quantity += Math.abs(m.quantity);
+      } else {
+        // Use the product_title up to the first separator as display name
+        const displayName = m.product_title.split('|')[0].split('—')[0].trim();
+        nameMap.set(prefix, { fullName: displayName, quantity: Math.abs(m.quantity) });
+      }
     }
   }
-  const topProducts = Array.from(productMap.entries())
-    .map(([name, data]) => ({ name, ...data }))
+  const topNames = Array.from(nameMap.values())
     .sort((a, b) => b.quantity - a.quantity);
 
-  // Top variants (color/size breakdown)
-  const variantMap = new Map<string, { quantity: number; revenue: number }>();
-  for (const item of items) {
-    if (item.quantity > 0) {
-      const key = `${item.product_title} — ${item.variant_title || 'Default'}`;
-      const existing = variantMap.get(key) || { quantity: 0, revenue: 0 };
-      variantMap.set(key, {
-        quantity: existing.quantity + item.quantity,
-        revenue: existing.revenue + Number(item.total_price),
-      });
+  // Movements by day
+  const dayMap = new Map<string, { itemsOut: number; itemsReturn: number }>();
+  for (const m of allMovements) {
+    const day = m.moved_on;
+    const existing = dayMap.get(day) || { itemsOut: 0, itemsReturn: 0 };
+    if (m.quantity < 0) {
+      existing.itemsOut += Math.abs(m.quantity);
+    } else {
+      existing.itemsReturn += m.quantity;
     }
+    dayMap.set(day, existing);
   }
-  const topVariants = Array.from(variantMap.entries())
-    .map(([name, data]) => ({ name, ...data }))
-    .sort((a, b) => b.quantity - a.quantity)
-    .slice(0, 20);
-
-  // Seller leaderboard
-  const sellerMap = new Map<string, { salesCount: number; revenue: number; itemsSold: number }>();
-  for (const sale of actualSales) {
-    if (sale.seller_id) {
-      const existing = sellerMap.get(sale.seller_id) || { salesCount: 0, revenue: 0, itemsSold: 0 };
-      sellerMap.set(sale.seller_id, {
-        salesCount: existing.salesCount + 1,
-        revenue: existing.revenue + Number(sale.total_amount),
-        itemsSold: existing.itemsSold + sale.items_count,
-      });
-    }
-  }
-  const sellerLeaderboard = Array.from(sellerMap.entries())
-    .map(([sellerId, data]) => {
-      const seller = sellersMap.get(sellerId);
-      return {
-        sellerId,
-        name: seller?.name || 'Inconnu',
-        initials: seller?.initials || null,
-        color: seller?.color || null,
-        ...data,
-      };
-    })
-    .sort((a, b) => b.revenue - a.revenue);
-
-  // Sales by day
-  const dayMap = new Map<string, { salesCount: number; revenue: number; itemsSold: number }>();
-  for (const sale of actualSales) {
-    const day = sale.created_at.split('T')[0];
-    const existing = dayMap.get(day) || { salesCount: 0, revenue: 0, itemsSold: 0 };
-    dayMap.set(day, {
-      salesCount: existing.salesCount + 1,
-      revenue: existing.revenue + Number(sale.total_amount),
-      itemsSold: existing.itemsSold + sale.items_count,
-    });
-  }
-  const salesByDay = Array.from(dayMap.entries())
+  const movementsByDay = Array.from(dayMap.entries())
     .map(([date, data]) => ({ date, ...data }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
   return NextResponse.json({
     zone,
     summary: {
-      salesCount: actualSales.length,
-      refundsCount: refunds.length,
-      totalRevenue,
-      totalRefunds,
-      totalDiscount,
-      totalItemsSold,
-      averageCart,
+      totalItemsOut,
+      totalItemsReturn,
     },
     topProducts,
     topVariants,
-    sellerLeaderboard,
-    salesByDay,
+    topOptionsByCategory,
+    topNames,
+    movementsByDay,
   });
 }

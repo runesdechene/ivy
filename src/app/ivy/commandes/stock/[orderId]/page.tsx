@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Title, Text, Paper, Table, Button, Group, Badge, ActionIcon, Modal, NumberInput, Checkbox, Loader, Center, Stack, Textarea, Divider, Progress, TextInput, SimpleGrid, Tooltip } from '@mantine/core';
 import { IconArrowLeft, IconPlus, IconTrash, IconDeviceFloppy, IconCheck, IconLock, IconSearch, IconPackage, IconMinus, IconRefresh, IconTag, IconPrinter, IconChecklist } from '@tabler/icons-react';
@@ -465,6 +465,40 @@ export default function OrderDetailPage() {
       setSaving(false);
     }
   };
+
+  // Auto-save balance adjustment with debounce
+  const initialBalanceRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (initialBalanceRef.current === null && order) {
+      initialBalanceRef.current = order.balance_adjustment || 0;
+    }
+  }, [order]);
+
+  useEffect(() => {
+    if (!currentShop || !order) return;
+    if (initialBalanceRef.current === null) return;
+    if (balanceAdjustment === initialBalanceRef.current) return;
+
+    const timer = setTimeout(async () => {
+      try {
+        await fetch('/api/suppliers/orders', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: order.id,
+            shopId: currentShop.id,
+            note,
+            balance_adjustment: balanceAdjustment,
+          }),
+        });
+        initialBalanceRef.current = balanceAdjustment;
+      } catch (err) {
+        console.error('Auto-save balance failed:', err);
+      }
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [balanceAdjustment, currentShop, order, note]);
 
   // Sauvegarder les modifications de la commande
   const saveOrder = async () => {
@@ -1075,7 +1109,6 @@ export default function OrderDetailPage() {
               decimalScale={2}
               prefix={balanceAdjustment >= 0 ? '+' : ''}
               suffix=" €"
-              disabled={isCompleted}
               style={{ width: 200 }}
             />
             <Text fw={600}>{balanceAdjustment >= 0 ? '+' : ''}{balanceAdjustment.toFixed(2)} €</Text>

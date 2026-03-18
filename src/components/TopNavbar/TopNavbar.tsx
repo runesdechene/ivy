@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { Button, Group, Text, ActionIcon, Tooltip } from '@mantine/core';
-import { IconLogout, IconSettings, IconCash, IconBuildingStore, IconTent, IconUser } from '@tabler/icons-react';
+import { IconLogout, IconSettings, IconPackage, IconBuildingStore, IconTent, IconUser } from '@tabler/icons-react';
 import Image from 'next/image';
 import { APP_VERSION } from '@/config/version';
 import { ShopSelector } from '@/components/ShopSelector';
@@ -58,7 +58,7 @@ export function TopNavbar() {
             leftSection={<IconTent size={18} />}
             className={isStandSection ? styles.activeButton : styles.inactiveButton}
           >
-            Commandes stand
+            Festivals
           </Button>
           <Button
             variant={isInventaireSection ? 'filled' : 'subtle'}
@@ -74,10 +74,10 @@ export function TopNavbar() {
             color="orange"
             onClick={() => router.push('/ivy/caisse')}
             size="md"
-            leftSection={<IconCash size={18} />}
+            leftSection={<IconPackage size={18} />}
             className={isCaisseSection ? styles.activeButton : styles.inactiveButton}
           >
-            Caisse
+            HUB de stand
           </Button>
         </Group>
       </Group>

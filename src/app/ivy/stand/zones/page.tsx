@@ -16,10 +16,7 @@ import {
   Table,
   Badge,
   ActionIcon,
-  Avatar,
   Paper,
-  Progress,
-  Tooltip,
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { notifications } from '@mantine/notifications';
@@ -27,21 +24,14 @@ import {
   IconPlus,
   IconTrash,
   IconChartBar,
-  IconTrophy,
-  IconShoppingCart,
-  IconCash,
-  IconUsers,
+  IconPackage,
   IconArrowLeft,
   IconCalendar,
+  IconArrowDown,
+  IconArrowUp,
 } from '@tabler/icons-react';
-import { createClient } from '@supabase/supabase-js';
 import { useShop } from '@/context/ShopContext';
 import { useLocation } from '@/context/LocationContext';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 interface StudyZone {
   id: string;
@@ -54,26 +44,14 @@ interface StudyZone {
 interface ZoneStats {
   zone: StudyZone;
   summary: {
-    salesCount: number;
-    refundsCount: number;
-    totalRevenue: number;
-    totalRefunds: number;
-    totalDiscount: number;
-    totalItemsSold: number;
-    averageCart: number;
+    totalItemsOut: number;
+    totalItemsReturn: number;
   };
-  topProducts: Array<{ name: string; quantity: number; revenue: number }>;
-  topVariants: Array<{ name: string; quantity: number; revenue: number }>;
-  sellerLeaderboard: Array<{
-    sellerId: string;
-    name: string;
-    initials: string | null;
-    color: string | null;
-    salesCount: number;
-    revenue: number;
-    itemsSold: number;
-  }>;
-  salesByDay: Array<{ date: string; salesCount: number; revenue: number; itemsSold: number }>;
+  topProducts: Array<{ name: string; quantity: number }>;
+  topVariants: Array<{ name: string; quantity: number }>;
+  topOptionsByCategory: Array<{ category: string; options: Array<{ name: string; quantity: number }> }>;
+  topNames: Array<{ fullName: string; quantity: number }>;
+  movementsByDay: Array<{ date: string; itemsOut: number; itemsReturn: number }>;
 }
 
 export default function StudyZonesPage() {
@@ -90,9 +68,6 @@ export default function StudyZonesPage() {
   const [formName, setFormName] = useState('');
   const [formDateRange, setFormDateRange] = useState<[string | null, string | null]>([null, null]);
   const [creating, setCreating] = useState(false);
-
-  const formatPrice = (price: number) =>
-    price.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const formatDate = (dateStr: string) =>
     new Date(dateStr).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -183,9 +158,29 @@ export default function StudyZonesPage() {
       if (res.ok) {
         const data = await res.json();
         setZoneStats(data);
+      } else {
+        // Show empty stats instead of error
+        setZoneStats({
+          zone,
+          summary: { totalItemsOut: 0, totalItemsReturn: 0 },
+          topProducts: [],
+          topVariants: [],
+          topOptionsByCategory: [],
+          topNames: [],
+          movementsByDay: [],
+        });
       }
     } catch (err) {
       console.error('Error loading stats:', err);
+      setZoneStats({
+        zone,
+        summary: { totalItemsOut: 0, totalItemsReturn: 0 },
+        topProducts: [],
+        topVariants: [],
+        topOptionsByCategory: [],
+        topNames: [],
+        movementsByDay: [],
+      });
     } finally {
       setLoadingStats(false);
     }
@@ -221,101 +216,32 @@ export default function StudyZonesPage() {
         ) : zoneStats ? (
           <>
             {/* Summary cards */}
-            <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
+            <SimpleGrid cols={{ base: 1, sm: 2 }}>
               <Card withBorder padding="lg">
                 <Group justify="space-between" align="flex-start">
                   <div>
-                    <Text size="sm" c="dimmed" tt="uppercase" fw={600}>Ventes</Text>
-                    <Text size="xl" fw={700} mt="xs">{zoneStats.summary.salesCount}</Text>
-                    {zoneStats.summary.refundsCount > 0 && (
-                      <Text size="xs" c="red">{zoneStats.summary.refundsCount} remboursement(s)</Text>
-                    )}
+                    <Text size="sm" c="dimmed" tt="uppercase" fw={600}>Articles sortis</Text>
+                    <Text size="xl" fw={700} mt="xs">{zoneStats.summary.totalItemsOut}</Text>
                   </div>
-                  <IconShoppingCart size={28} color="var(--mantine-color-blue-5)" />
+                  <IconArrowDown size={28} color="var(--mantine-color-orange-5)" />
                 </Group>
               </Card>
 
               <Card withBorder padding="lg">
                 <Group justify="space-between" align="flex-start">
                   <div>
-                    <Text size="sm" c="dimmed" tt="uppercase" fw={600}>Chiffre d'affaires</Text>
-                    <Text size="xl" fw={700} mt="xs" c="green">{formatPrice(zoneStats.summary.totalRevenue)} €</Text>
-                    {zoneStats.summary.totalDiscount > 0 && (
-                      <Text size="xs" c="dimmed">dont {formatPrice(zoneStats.summary.totalDiscount)} € de remises</Text>
-                    )}
+                    <Text size="sm" c="dimmed" tt="uppercase" fw={600}>Retours</Text>
+                    <Text size="xl" fw={700} mt="xs">{zoneStats.summary.totalItemsReturn}</Text>
                   </div>
-                  <IconCash size={28} color="var(--mantine-color-green-5)" />
-                </Group>
-              </Card>
-
-              <Card withBorder padding="lg">
-                <Group justify="space-between" align="flex-start">
-                  <div>
-                    <Text size="sm" c="dimmed" tt="uppercase" fw={600}>Articles vendus</Text>
-                    <Text size="xl" fw={700} mt="xs">{zoneStats.summary.totalItemsSold}</Text>
-                  </div>
-                  <IconChartBar size={28} color="var(--mantine-color-orange-5)" />
-                </Group>
-              </Card>
-
-              <Card withBorder padding="lg">
-                <Group justify="space-between" align="flex-start">
-                  <div>
-                    <Text size="sm" c="dimmed" tt="uppercase" fw={600}>Panier moyen</Text>
-                    <Text size="xl" fw={700} mt="xs">{formatPrice(zoneStats.summary.averageCart)} €</Text>
-                  </div>
-                  <IconCash size={28} color="var(--mantine-color-violet-5)" />
+                  <IconArrowUp size={28} color="var(--mantine-color-blue-5)" />
                 </Group>
               </Card>
             </SimpleGrid>
 
-            {/* Seller leaderboard */}
-            {zoneStats.sellerLeaderboard.length > 0 && (
-              <Card withBorder padding="lg">
-                <Group mb="md">
-                  <IconTrophy size={20} color="var(--mantine-color-yellow-6)" />
-                  <Text fw={600}>Classement vendeurs</Text>
-                </Group>
-                <Stack gap="sm">
-                  {zoneStats.sellerLeaderboard.map((seller, i) => {
-                    const maxRevenue = zoneStats.sellerLeaderboard[0]?.revenue || 1;
-                    return (
-                      <Group key={seller.sellerId} gap="sm" wrap="nowrap">
-                        <Text fw={700} size="lg" w={24} ta="center" c={i === 0 ? 'yellow.6' : 'dimmed'}>
-                          {i + 1}
-                        </Text>
-                        <Avatar
-                          size="sm"
-                          radius="xl"
-                          style={{ backgroundColor: seller.color || 'var(--mantine-color-gray-5)' }}
-                        >
-                          {seller.initials || seller.name.charAt(0).toUpperCase()}
-                        </Avatar>
-                        <div style={{ flex: 1 }}>
-                          <Group justify="space-between" mb={4}>
-                            <Text size="sm" fw={500}>{seller.name}</Text>
-                            <Group gap="xs">
-                              <Badge variant="light" size="sm">{seller.salesCount} vente(s)</Badge>
-                              <Badge variant="light" color="green" size="sm">{formatPrice(seller.revenue)} €</Badge>
-                            </Group>
-                          </Group>
-                          <Progress
-                            value={(seller.revenue / maxRevenue) * 100}
-                            size="sm"
-                            color={i === 0 ? 'yellow' : i === 1 ? 'gray' : 'orange'}
-                          />
-                        </div>
-                      </Group>
-                    );
-                  })}
-                </Stack>
-              </Card>
-            )}
-
             <SimpleGrid cols={{ base: 1, md: 2 }}>
               {/* Top products */}
               <Card withBorder padding="lg">
-                <Text fw={600} mb="md">Produits les plus vendus</Text>
+                <Text fw={600} mb="md">Produits les plus sortis</Text>
                 {zoneStats.topProducts.length === 0 ? (
                   <Text c="dimmed" size="sm">Aucune donnée</Text>
                 ) : (
@@ -323,8 +249,7 @@ export default function StudyZonesPage() {
                     <Table.Thead>
                       <Table.Tr>
                         <Table.Th>Produit</Table.Th>
-                        <Table.Th style={{ textAlign: 'right' }}>Qté</Table.Th>
-                        <Table.Th style={{ textAlign: 'right' }}>CA</Table.Th>
+                        <Table.Th style={{ textAlign: 'right' }}>Quantité</Table.Th>
                       </Table.Tr>
                     </Table.Thead>
                     <Table.Tbody>
@@ -333,9 +258,6 @@ export default function StudyZonesPage() {
                           <Table.Td><Text size="sm">{p.name}</Text></Table.Td>
                           <Table.Td style={{ textAlign: 'right' }}>
                             <Badge variant="light" size="sm">{p.quantity}</Badge>
-                          </Table.Td>
-                          <Table.Td style={{ textAlign: 'right' }}>
-                            <Text size="sm" fw={500}>{formatPrice(p.revenue)} €</Text>
                           </Table.Td>
                         </Table.Tr>
                       ))}
@@ -346,7 +268,7 @@ export default function StudyZonesPage() {
 
               {/* Top variants */}
               <Card withBorder padding="lg">
-                <Text fw={600} mb="md">Variantes les plus vendues</Text>
+                <Text fw={600} mb="md">Variantes les plus sorties</Text>
                 {zoneStats.topVariants.length === 0 ? (
                   <Text c="dimmed" size="sm">Aucune donnée</Text>
                 ) : (
@@ -354,8 +276,7 @@ export default function StudyZonesPage() {
                     <Table.Thead>
                       <Table.Tr>
                         <Table.Th>Variante</Table.Th>
-                        <Table.Th style={{ textAlign: 'right' }}>Qté</Table.Th>
-                        <Table.Th style={{ textAlign: 'right' }}>CA</Table.Th>
+                        <Table.Th style={{ textAlign: 'right' }}>Quantité</Table.Th>
                       </Table.Tr>
                     </Table.Thead>
                     <Table.Tbody>
@@ -365,9 +286,6 @@ export default function StudyZonesPage() {
                           <Table.Td style={{ textAlign: 'right' }}>
                             <Badge variant="light" size="sm">{v.quantity}</Badge>
                           </Table.Td>
-                          <Table.Td style={{ textAlign: 'right' }}>
-                            <Text size="sm" fw={500}>{formatPrice(v.revenue)} €</Text>
-                          </Table.Td>
                         </Table.Tr>
                       ))}
                     </Table.Tbody>
@@ -376,27 +294,77 @@ export default function StudyZonesPage() {
               </Card>
             </SimpleGrid>
 
-            {/* Sales by day */}
-            {zoneStats.salesByDay.length > 0 && (
+            {/* Options by category (Couleur, Taille, etc.) + Top names */}
+            <SimpleGrid cols={{ base: 1, md: zoneStats.topOptionsByCategory.length + (zoneStats.topNames.length > 0 ? 1 : 0) > 3 ? 2 : zoneStats.topOptionsByCategory.length + (zoneStats.topNames.length > 0 ? 1 : 0) }}>
+              {zoneStats.topOptionsByCategory.map((cat, i) => (
+                <Card key={i} withBorder padding="lg">
+                  <Text fw={600} mb="md">{cat.category}</Text>
+                  <Table>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>{cat.category}</Table.Th>
+                        <Table.Th style={{ textAlign: 'right' }}>Quantité</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {cat.options.map((o, j) => (
+                        <Table.Tr key={j}>
+                          <Table.Td><Text size="sm">{o.name}</Text></Table.Td>
+                          <Table.Td style={{ textAlign: 'right' }}>
+                            <Badge variant="light" size="sm">{o.quantity}</Badge>
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                </Card>
+              ))}
+
+              {/* Top names (grouped by prefix) */}
+              {zoneStats.topNames.length > 0 && (
+                <Card withBorder padding="lg">
+                  <Text fw={600} mb="md">Fragments les plus sortis</Text>
+                  <Table>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>Nom</Table.Th>
+                        <Table.Th style={{ textAlign: 'right' }}>Quantité</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {zoneStats.topNames.map((n, i) => (
+                        <Table.Tr key={i}>
+                          <Table.Td><Text size="sm">{n.fullName}</Text></Table.Td>
+                          <Table.Td style={{ textAlign: 'right' }}>
+                            <Badge variant="light" size="sm">{n.quantity}</Badge>
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                </Card>
+              )}
+            </SimpleGrid>
+
+            {/* Movements by day */}
+            {zoneStats.movementsByDay.length > 0 && (
               <Card withBorder padding="lg">
-                <Text fw={600} mb="md">Ventes par jour</Text>
+                <Text fw={600} mb="md">Mouvements par jour</Text>
                 <Table>
                   <Table.Thead>
                     <Table.Tr>
                       <Table.Th>Date</Table.Th>
-                      <Table.Th style={{ textAlign: 'right' }}>Ventes</Table.Th>
-                      <Table.Th style={{ textAlign: 'right' }}>Articles</Table.Th>
-                      <Table.Th style={{ textAlign: 'right' }}>CA</Table.Th>
+                      <Table.Th style={{ textAlign: 'right' }}>Sorties</Table.Th>
+                      <Table.Th style={{ textAlign: 'right' }}>Retours</Table.Th>
                     </Table.Tr>
                   </Table.Thead>
                   <Table.Tbody>
-                    {zoneStats.salesByDay.map((day, i) => (
+                    {zoneStats.movementsByDay.map((day, i) => (
                       <Table.Tr key={i}>
                         <Table.Td>{formatDate(day.date)}</Table.Td>
-                        <Table.Td style={{ textAlign: 'right' }}>{day.salesCount}</Table.Td>
-                        <Table.Td style={{ textAlign: 'right' }}>{day.itemsSold}</Table.Td>
+                        <Table.Td style={{ textAlign: 'right' }}>{day.itemsOut}</Table.Td>
                         <Table.Td style={{ textAlign: 'right' }}>
-                          <Text fw={500}>{formatPrice(day.revenue)} €</Text>
+                          {day.itemsReturn > 0 ? `+${day.itemsReturn}` : '—'}
                         </Table.Td>
                       </Table.Tr>
                     ))}
@@ -419,7 +387,7 @@ export default function StudyZonesPage() {
         <div>
           <Title order={2}>Zones d'étude</Title>
           <Text c="dimmed" size="sm">
-            Créez des zones d'étude pour analyser les ventes sur une période donnée
+            Créez des zones d'étude pour analyser les mouvements de stock sur une période
           </Text>
         </div>
         <Button leftSection={<IconPlus size={16} />} onClick={() => setCreateModalOpen(true)}>
@@ -434,7 +402,7 @@ export default function StudyZonesPage() {
               <IconChartBar size={48} color="var(--mantine-color-gray-4)" />
               <Text c="dimmed">Aucune zone d'étude créée</Text>
               <Text c="dimmed" size="sm">
-                Créez une zone pour analyser vos ventes sur une période (festival, marché, etc.)
+                Créez une zone pour analyser vos mouvements de stock sur une période (festival, marché, etc.)
               </Text>
             </Stack>
           </Center>

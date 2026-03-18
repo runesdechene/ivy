@@ -34,6 +34,19 @@
   flex: 1;
   height: 100%;
   overflow: hidden;
+  position: relative;
+}
+
+.columnToggles {
+  position: absolute;
+  top: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 0.5rem 1rem;
 }
 
 .selectionZone {
@@ -68,13 +81,16 @@
 }
 
 .columnHeader {
-  padding: 0.75rem;
+  padding: 0.5rem;
   background: var(--mantine-color-orange-6);
   color: white;
   font-weight: 600;
   font-size: 0.85rem;
-  text-align: center;
   text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.125rem;
 }
 
 .columnContent {
@@ -125,6 +141,42 @@
     opacity: 0.7;
     background: var(--mantine-color-yellow-0);
   }
+}
+
+.columnHeaderLabel {
+  flex: 1;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.columnArrow {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0 0.25rem;
+  line-height: 1;
+  flex-shrink: 0;
+
+  &:hover {
+    color: white;
+  }
+}
+
+.columnDisabled {
+  opacity: 0.5;
+}
+
+.columnEmpty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem 0.5rem;
 }
 
 .colorSwatch {
@@ -179,6 +231,11 @@
   &.refundItem {
     background: var(--mantine-color-red-0);
     border: 1px solid var(--mantine-color-red-3);
+  }
+
+  &.returnItem {
+    background: var(--mantine-color-blue-0);
+    border: 1px solid var(--mantine-color-blue-3);
   }
 }
 
@@ -349,4 +406,17 @@
 .emptyCartIcon {
   font-size: 3rem;
   margin-bottom: 1rem;
+}
+
+.movementQuantity {
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.quantityOut {
+  color: var(--mantine-color-red-6);
+}
+
+.quantityReturn {
+  color: var(--mantine-color-blue-6);
 }

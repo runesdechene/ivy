@@ -7,7 +7,7 @@ import Link from 'next/link';
 import clsx from 'clsx';
 import { Badge, Button } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconHome, IconPackage, IconTruck, IconChartBar, IconPrinter, IconShoppingCart, IconFileInvoice, IconArchive, IconRefresh, IconChecklist, IconHistory, IconCash, IconChartPie } from '@tabler/icons-react';
+import { IconHome, IconPackage, IconTruck, IconChartBar, IconPrinter, IconShoppingCart, IconFileInvoice, IconArchive, IconRefresh, IconChecklist, IconChartPie } from '@tabler/icons-react';
 import { LocationProvider } from '@/context/LocationContext';
 import { LocationSelector } from '@/components/LocationSelector';
 import { useShop } from '@/context/ShopContext';
@@ -179,18 +179,13 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
 
   const standMenu = [
     {
-      title: 'Commandes stand',
+      title: 'Festivals',
       items: [
         {
           href: '/ivy/stand',
           label: 'Tableau de bord',
           icon: IconHome,
           exact: true,
-        },
-        {
-          href: '/ivy/stand/historique',
-          label: 'Historique',
-          icon: IconHistory,
         },
         {
           href: '/ivy/stand/zones',

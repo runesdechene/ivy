@@ -10,11 +10,11 @@ import {
   SimpleGrid,
   Loader,
   Center,
-  RingProgress,
 } from '@mantine/core';
-import { IconCash, IconReceipt, IconUsers, IconTrendingUp } from '@tabler/icons-react';
+import { IconPackage, IconArrowDown, IconArrowUp, IconCalendar } from '@tabler/icons-react';
 import { createClient } from '@supabase/supabase-js';
 import { useShop } from '@/context/ShopContext';
+import { useLocation } from '@/context/LocationContext';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,18 +22,15 @@ const supabase = createClient(
 );
 
 interface DashboardStats {
-  todaySalesCount: number;
-  todayRevenue: number;
-  todayRefundsCount: number;
-  todayRefundsAmount: number;
-  todayItemsSold: number;
-  todayAverageCart: number;
-  weekRevenue: number;
-  monthRevenue: number;
+  todayItemsOut: number;
+  todayItemsReturn: number;
+  weekItemsOut: number;
+  monthItemsOut: number;
 }
 
-export default function StandDashboardPage() {
+export default function FestivalDashboardPage() {
   const { currentShop } = useShop();
+  const { currentLocation } = useLocation();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -44,60 +41,55 @@ export default function StandDashboardPage() {
       setLoading(true);
 
       const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-      const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7).toISOString();
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      const today = now.toISOString().split('T')[0];
+      const weekAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7).toISOString().split('T')[0];
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
 
-      // Today's sales
-      const { data: todaySales } = await supabase
-        .from('pos_sales')
-        .select('total_amount, items_count, is_refund, discount_amount')
-        .eq('shop_id', currentShop.id)
-        .gte('created_at', todayStart);
+      // Resolve location ID (could be Shopify numeric ID, need UUID)
+      let resolvedLocationId: string | null = currentLocation?.id || null;
+      if (resolvedLocationId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(resolvedLocationId)) {
+        const { data: loc } = await supabase
+          .from('locations')
+          .select('id')
+          .eq('shopify_id', resolvedLocationId)
+          .single();
+        resolvedLocationId = loc?.id || null;
+      }
 
-      // Week sales
-      const { data: weekSales } = await supabase
-        .from('pos_sales')
-        .select('total_amount, is_refund')
-        .eq('shop_id', currentShop.id)
-        .eq('is_refund', false)
-        .gte('created_at', weekStart);
+      const fetchMovements = async (from: string) => {
+        let query = supabase
+          .from('stock_movements')
+          .select('quantity')
+          .eq('shop_id', currentShop!.id)
+          .gte('moved_on', from);
 
-      // Month sales
-      const { data: monthSales } = await supabase
-        .from('pos_sales')
-        .select('total_amount, is_refund')
-        .eq('shop_id', currentShop.id)
-        .eq('is_refund', false)
-        .gte('created_at', monthStart);
+        if (resolvedLocationId) {
+          query = query.eq('location_id', resolvedLocationId);
+        }
 
-      const sales = todaySales || [];
-      const actualSales = sales.filter(s => !s.is_refund);
-      const refunds = sales.filter(s => s.is_refund);
+        const { data } = await query;
+        const movements = data || [];
+        const itemsOut = movements.filter(m => m.quantity < 0).reduce((sum, m) => sum + Math.abs(m.quantity), 0);
+        const itemsReturn = movements.filter(m => m.quantity > 0).reduce((sum, m) => sum + m.quantity, 0);
+        return { itemsOut, itemsReturn };
+      };
 
-      const todayRevenue = actualSales.reduce((sum, s) => sum + s.total_amount, 0);
-      const todayItemsSold = actualSales.reduce((sum, s) => sum + s.items_count, 0);
+      const todayData = await fetchMovements(today);
+      const weekData = await fetchMovements(weekAgo);
+      const monthData = await fetchMovements(monthStart);
 
       setStats({
-        todaySalesCount: actualSales.length,
-        todayRevenue,
-        todayRefundsCount: refunds.length,
-        todayRefundsAmount: refunds.reduce((sum, s) => sum + Math.abs(s.total_amount), 0),
-        todayItemsSold,
-        todayAverageCart: actualSales.length > 0 ? todayRevenue / actualSales.length : 0,
-        weekRevenue: (weekSales || []).reduce((sum, s) => sum + s.total_amount, 0),
-        monthRevenue: (monthSales || []).reduce((sum, s) => sum + s.total_amount, 0),
+        todayItemsOut: todayData.itemsOut,
+        todayItemsReturn: todayData.itemsReturn,
+        weekItemsOut: weekData.itemsOut,
+        monthItemsOut: monthData.itemsOut,
       });
 
       setLoading(false);
     };
 
     loadStats();
-  }, [currentShop?.id]);
-
-  const formatPrice = (price: number) => {
-    return price.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
+  }, [currentShop?.id, currentLocation?.id]);
 
   if (loading) {
     return (
@@ -112,28 +104,27 @@ export default function StandDashboardPage() {
   return (
     <Stack gap="lg">
       <div>
-        <Title order={2}>Tableau de bord — Commandes stand</Title>
+        <Title order={2}>Tableau de bord — Festivals</Title>
         <Text c="dimmed" size="sm">
-          Vue d'ensemble des ventes effectuées en caisse
+          Vue d'ensemble des mouvements de stock
         </Text>
       </div>
 
-      {/* Today stats */}
       <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
         <Card withBorder padding="lg">
           <Group justify="space-between" align="flex-start">
             <div>
               <Text size="sm" c="dimmed" tt="uppercase" fw={600}>
-                Ventes aujourd'hui
+                Sorties aujourd'hui
               </Text>
               <Text size="xl" fw={700} mt="xs">
-                {stats.todaySalesCount}
+                {stats.todayItemsOut}
               </Text>
               <Text size="sm" c="dimmed">
-                {stats.todayItemsSold} article{stats.todayItemsSold > 1 ? 's' : ''} vendu{stats.todayItemsSold > 1 ? 's' : ''}
+                article{stats.todayItemsOut > 1 ? 's' : ''}
               </Text>
             </div>
-            <IconReceipt size={32} color="var(--mantine-color-blue-5)" />
+            <IconArrowDown size={32} color="var(--mantine-color-orange-5)" />
           </Group>
         </Card>
 
@@ -141,49 +132,50 @@ export default function StandDashboardPage() {
           <Group justify="space-between" align="flex-start">
             <div>
               <Text size="sm" c="dimmed" tt="uppercase" fw={600}>
-                CA aujourd'hui
-              </Text>
-              <Text size="xl" fw={700} mt="xs" c="green">
-                {formatPrice(stats.todayRevenue)} €
-              </Text>
-              {stats.todayRefundsCount > 0 && (
-                <Text size="sm" c="red">
-                  {stats.todayRefundsCount} remboursement{stats.todayRefundsCount > 1 ? 's' : ''} (−{formatPrice(stats.todayRefundsAmount)} €)
-                </Text>
-              )}
-            </div>
-            <IconCash size={32} color="var(--mantine-color-green-5)" />
-          </Group>
-        </Card>
-
-        <Card withBorder padding="lg">
-          <Group justify="space-between" align="flex-start">
-            <div>
-              <Text size="sm" c="dimmed" tt="uppercase" fw={600}>
-                Panier moyen
+                Retours aujourd'hui
               </Text>
               <Text size="xl" fw={700} mt="xs">
-                {formatPrice(stats.todayAverageCart)} €
-              </Text>
-            </div>
-            <IconTrendingUp size={32} color="var(--mantine-color-orange-5)" />
-          </Group>
-        </Card>
-
-        <Card withBorder padding="lg">
-          <Group justify="space-between" align="flex-start">
-            <div>
-              <Text size="sm" c="dimmed" tt="uppercase" fw={600}>
-                CA cette semaine
-              </Text>
-              <Text size="xl" fw={700} mt="xs">
-                {formatPrice(stats.weekRevenue)} €
+                {stats.todayItemsReturn}
               </Text>
               <Text size="sm" c="dimmed">
-                Ce mois : {formatPrice(stats.monthRevenue)} €
+                article{stats.todayItemsReturn > 1 ? 's' : ''}
               </Text>
             </div>
-            <IconCash size={32} color="var(--mantine-color-violet-5)" />
+            <IconArrowUp size={32} color="var(--mantine-color-blue-5)" />
+          </Group>
+        </Card>
+
+        <Card withBorder padding="lg">
+          <Group justify="space-between" align="flex-start">
+            <div>
+              <Text size="sm" c="dimmed" tt="uppercase" fw={600}>
+                Cette semaine
+              </Text>
+              <Text size="xl" fw={700} mt="xs">
+                {stats.weekItemsOut}
+              </Text>
+              <Text size="sm" c="dimmed">
+                article{stats.weekItemsOut > 1 ? 's' : ''} sorti{stats.weekItemsOut > 1 ? 's' : ''}
+              </Text>
+            </div>
+            <IconCalendar size={32} color="var(--mantine-color-violet-5)" />
+          </Group>
+        </Card>
+
+        <Card withBorder padding="lg">
+          <Group justify="space-between" align="flex-start">
+            <div>
+              <Text size="sm" c="dimmed" tt="uppercase" fw={600}>
+                Ce mois
+              </Text>
+              <Text size="xl" fw={700} mt="xs">
+                {stats.monthItemsOut}
+              </Text>
+              <Text size="sm" c="dimmed">
+                article{stats.monthItemsOut > 1 ? 's' : ''} sorti{stats.monthItemsOut > 1 ? 's' : ''}
+              </Text>
+            </div>
+            <IconPackage size={32} color="var(--mantine-color-green-5)" />
           </Group>
         </Card>
       </SimpleGrid>

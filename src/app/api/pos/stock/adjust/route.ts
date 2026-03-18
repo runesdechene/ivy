@@ -23,6 +23,8 @@ async function resolveVariantId(variantId: string): Promise<string | null> {
 interface StockAdjustment {
   variantId: string;
   quantity: number; // Negative to decrease, positive to increase
+  productTitle?: string;
+  variantTitle?: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -56,6 +58,14 @@ export async function POST(request: NextRequest) {
     }
 
     const results: { variantId: string; success: boolean; error?: string }[] = [];
+    const movementsToLog: {
+      shop_id: string;
+      location_id: string | null;
+      variant_id: string;
+      product_title: string;
+      variant_title: string | null;
+      quantity: number;
+    }[] = [];
 
     for (const item of items) {
       try {
@@ -112,7 +122,6 @@ export async function POST(request: NextRequest) {
 
         // Sync with Shopify
         if (variant.inventory_item_id && locationId) {
-          // Get Shopify location ID (locationId might already be a Shopify ID)
           const isLocationUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(locationId);
           let shopifyLocationId = locationId;
           if (isLocationUuid) {
@@ -154,6 +163,18 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        // Queue movement for logging
+        if (item.productTitle) {
+          movementsToLog.push({
+            shop_id: shopId,
+            location_id: locationId || null,
+            variant_id: resolvedVariantId,
+            product_title: item.productTitle,
+            variant_title: item.variantTitle || null,
+            quantity: item.quantity,
+          });
+        }
+
         results.push({
           variantId: item.variantId,
           success: true,
@@ -166,6 +187,17 @@ export async function POST(request: NextRequest) {
           success: false,
           error: 'Processing error',
         });
+      }
+    }
+
+    // Log all successful movements
+    if (movementsToLog.length > 0) {
+      const { error: logError } = await supabase
+        .from('stock_movements')
+        .insert(movementsToLog);
+
+      if (logError) {
+        console.error('Error logging stock movements:', logError);
       }
     }
 

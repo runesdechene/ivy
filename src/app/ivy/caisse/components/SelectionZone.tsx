@@ -1,77 +1,78 @@
 'use client';
 
-import { useEffect } from 'react';
-import { Loader, Center } from '@mantine/core';
-import { SelectedProduct, VariantOption, CartItem } from '../types';
+import { useEffect, useState } from 'react';
+import { Loader, Center, Text } from '@mantine/core';
+import { StockMovement, VariantOption } from '../types';
+import { ColumnKey, ColumnValue } from '../hooks/useProductSelection';
 import { getColorHex } from '@/utils/color-transformer';
 import styles from '../caisse.module.scss';
 
-// Vérifie si le nom de l'option correspond à une couleur
-function isColorOptionName(optionName: string | null | undefined): boolean {
-  if (!optionName) return false;
-  const lower = optionName.toLowerCase();
+function isColorColumn(label: string): boolean {
+  const lower = label.toLowerCase();
   return lower.includes('couleur') || lower.includes('color');
 }
 
 interface SelectionZoneProps {
   loading: boolean;
-  productTypes: VariantOption[];
-  products: (SelectedProduct & { stock: number })[];
-  colorOptions: VariantOption[];
-  sizeOptions: VariantOption[];
-  option3Options: VariantOption[];
-  selection: {
-    type: string | null;
-    product: SelectedProduct | null;
-    color: string | null;
-    size: string | null;
-    option3: string | null;
-  };
+  columnOrder: ColumnKey[];
+  setColumnOrder: (order: ColumnKey[]) => void;
+  activeColumns: ColumnKey[];
+  selections: Record<ColumnKey, string | null>;
+  selectColumn: (key: ColumnKey, value: string) => void;
+  getValuesForColumn: (key: ColumnKey) => ColumnValue[];
+  getColumnLabel: (key: ColumnKey) => string;
   selectedVariant: VariantOption | null;
-  onSelectType: (type: string) => void;
-  onSelectProduct: (product: SelectedProduct) => void;
-  onSelectColor: (color: string) => void;
-  onSelectSize: (size: string) => void;
-  onSelectOption3: (option3: string) => void;
-  onAddToCart: (item: Omit<CartItem, 'id' | 'quantity' | 'discountPercentage' | 'discountAmount'>) => void;
+  selectedProduct: { id: string; title: string; productType: string } | null;
+  onAddMovement: (item: Omit<StockMovement, 'quantity'>) => void;
 }
 
 export function SelectionZone({
   loading,
-  productTypes,
-  products,
-  colorOptions,
-  sizeOptions,
-  option3Options,
-  selection,
+  columnOrder,
+  setColumnOrder,
+  activeColumns,
+  selections,
+  selectColumn,
+  getValuesForColumn,
+  getColumnLabel,
   selectedVariant,
-  onSelectType,
-  onSelectProduct,
-  onSelectColor,
-  onSelectSize,
-  onSelectOption3,
-  onAddToCart,
+  selectedProduct,
+  onAddMovement,
 }: SelectionZoneProps) {
-  // Auto-add to cart when variant is fully selected
+  // Auto-add movement when variant is fully selected
   useEffect(() => {
-    if (selectedVariant && selection.product) {
-      onAddToCart({
+    if (selectedVariant && selectedProduct) {
+      const optionParts: string[] = [];
+      for (const key of columnOrder) {
+        if (key.startsWith('opt') && selections[key]) {
+          optionParts.push(selections[key]!);
+        }
+      }
+
+      onAddMovement({
         variantId: selectedVariant.variantId!,
-        productId: selection.product.id,
-        productTitle: selection.product.title,
-        productType: selection.product.productType,
-        variantTitle: `${selection.color} / ${selection.size}${selection.option3 ? ` / ${selection.option3}` : ''}`,
-        options: {
-          color: selection.color || undefined,
-          size: selection.size || undefined,
-          option3: selection.option3 || undefined,
-        },
-        price: selectedVariant.price || 0,
-        cost: selectedVariant.cost || 0,
+        productId: selectedProduct.id,
+        productTitle: selectedProduct.title,
+        productType: selectedProduct.productType,
+        variantTitle: optionParts.join(' / '),
+        options: {},
         stock: selectedVariant.stock,
       });
     }
   }, [selectedVariant]);
+
+  // Move column left/right in the full columnOrder
+  const moveColumn = (colKey: ColumnKey, direction: 'left' | 'right') => {
+    const idx = columnOrder.indexOf(colKey);
+    if (idx === -1) return;
+
+    const targetIdx = direction === 'left' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= columnOrder.length) return;
+
+    const newOrder = [...columnOrder];
+    [newOrder[idx], newOrder[targetIdx]] = [newOrder[targetIdx], newOrder[idx]];
+    setColumnOrder(newOrder);
+  };
 
   if (loading) {
     return (
@@ -85,130 +86,76 @@ export function SelectionZone({
 
   return (
     <div className={styles.selectionZone}>
-      {/* Type Column */}
-      <div className={styles.column}>
-        <div className={styles.columnHeader}>Type</div>
-        <div className={styles.columnContent}>
-          {productTypes.map(typeOption => (
-            <button
-              key={typeOption.value}
-              className={`${styles.optionButton} ${selection.type === typeOption.value ? styles.selected : ''} ${typeOption.stock <= 0 ? styles.outOfStock : ''}`}
-              onClick={() => onSelectType(typeOption.value)}
-            >
-              <span>{typeOption.value}</span>
-              <span className={styles.stockCount}>({typeOption.stock})</span>
-            </button>
-          ))}
-        </div>
-      </div>
+      {activeColumns.map((colKey, position) => {
+        const label = getColumnLabel(colKey);
+        const values = getValuesForColumn(colKey);
+        const selectedValue = selections[colKey];
+        const isColor = isColorColumn(label);
+        const isFirst = position === 0;
+        const isLast = position === activeColumns.length - 1;
 
-      {/* Product Column */}
-      {selection.type && (
-        <div className={styles.column}>
-          <div className={styles.columnHeader}>Produit</div>
-          <div className={styles.columnContent}>
-            {products.map(product => (
-              <button
-                key={product.id}
-                className={`${styles.optionButton} ${selection.product?.id === product.id ? styles.selected : ''} ${product.stock <= 0 ? styles.outOfStock : ''}`}
-                onClick={() => onSelectProduct(product)}
-              >
-                <span>{product.title}</span>
-                <span className={styles.stockCount}>({product.stock})</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+        // Column is active if the immediately previous visible column has a selection
+        const previousFilled = position === 0 || !!selections[activeColumns[position - 1]];
 
-      {/* Option1 Column */}
-      {selection.product && colorOptions.length > 0 && (
-        <div className={styles.column}>
-          <div className={styles.columnHeader}>
-            {selection.product.option1Name || 'Option 1'}
-          </div>
-          <div className={styles.columnContent}>
-            {colorOptions.map(option => {
-              // Afficher la bulle de couleur si le nom de l'option contient "couleur" ou "color"
-              const isColorColumn = isColorOptionName(selection.product?.option1Name);
-              const hex = isColorColumn ? getColorHex(option.value) : null;
-              const isOutOfStock = option.stock <= 0;
-              return (
+        return (
+          <div
+            key={colKey}
+            className={`${styles.column} ${(!previousFilled && position > 0) ? styles.columnDisabled : ''}`}
+          >
+            <div className={styles.columnHeader}>
+              {!isFirst && (
                 <button
-                  key={option.value}
-                  className={`${styles.optionButton} ${selection.color === option.value ? styles.selected : ''} ${isOutOfStock ? styles.outOfStock : ''}`}
-                  onClick={() => onSelectColor(option.value)}
+                  className={styles.columnArrow}
+                  onClick={(e) => { e.stopPropagation(); moveColumn(colKey, 'left'); }}
                 >
-                  {hex && (
-                    <div 
-                      className={styles.colorSwatch} 
-                      style={{ backgroundColor: hex }}
-                    />
-                  )}
-                  <span>{option.value}</span>
-                  <span className={styles.stockCount}>({option.stock})</span>
+                  ‹
                 </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Option2 Column */}
-      {selection.color && sizeOptions.length > 0 && (
-        <div className={styles.column}>
-          <div className={styles.columnHeader}>
-            {selection.product?.option2Name || 'Option 2'}
-          </div>
-          <div className={styles.columnContent}>
-            {sizeOptions.map(option => {
-              const isColorColumn = isColorOptionName(selection.product?.option2Name);
-              const hex = isColorColumn ? getColorHex(option.value) : null;
-              const isOutOfStock = option.stock <= 0;
-              return (
+              )}
+              <span className={styles.columnHeaderLabel}>{label}</span>
+              {!isLast && (
                 <button
-                  key={option.value}
-                  className={`${styles.optionButton} ${selection.size === option.value ? styles.selected : ''} ${isOutOfStock ? styles.outOfStock : ''}`}
-                  onClick={() => onSelectSize(option.value)}
+                  className={styles.columnArrow}
+                  onClick={(e) => { e.stopPropagation(); moveColumn(colKey, 'right'); }}
                 >
-                  {hex && (
-                    <div 
-                      className={styles.colorSwatch} 
-                      style={{ backgroundColor: hex }}
-                    />
-                  )}
-                  <span>{option.value}</span>
-                  <span className={styles.stockCount}>({option.stock})</span>
+                  ›
                 </button>
-              );
-            })}
+              )}
+            </div>
+            <div className={styles.columnContent}>
+              {(!previousFilled && position > 0) ? (
+                <div className={styles.columnEmpty}>
+                  <Text size="xs" c="dimmed" ta="center">—</Text>
+                </div>
+              ) : values.length === 0 ? (
+                <div className={styles.columnEmpty}>
+                  <Text size="xs" c="dimmed" ta="center">—</Text>
+                </div>
+              ) : (
+                values.map(item => {
+                  const hex = isColor ? getColorHex(item.label) : null;
+                  const isOutOfStock = item.stock <= 0;
+                  return (
+                    <button
+                      key={item.value}
+                      className={`${styles.optionButton} ${selectedValue === item.value ? styles.selected : ''} ${isOutOfStock ? styles.outOfStock : ''}`}
+                      onClick={() => selectColumn(colKey, item.value)}
+                    >
+                      {hex && (
+                        <div
+                          className={styles.colorSwatch}
+                          style={{ backgroundColor: hex }}
+                        />
+                      )}
+                      <span>{item.label}</span>
+                      <span className={styles.stockCount}>({item.stock})</span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
           </div>
-        </div>
-      )}
-
-      {/* Option3 Column */}
-      {selection.size && option3Options.length > 0 && (
-        <div className={styles.column}>
-          <div className={styles.columnHeader}>
-            {selection.product?.option3Name || 'Option'}
-          </div>
-          <div className={styles.columnContent}>
-            {option3Options.map(option => {
-              const isOutOfStock = option.stock <= 0;
-              return (
-                <button
-                  key={option.value}
-                  className={`${styles.optionButton} ${selection.option3 === option.value ? styles.selected : ''} ${isOutOfStock ? styles.outOfStock : ''}`}
-                  onClick={() => onSelectOption3(option.value)}
-                >
-                  <span>{option.value}</span>
-                  <span className={styles.stockCount}>({option.stock})</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+        );
+      })}
     </div>
   );
 }
