@@ -36,6 +36,7 @@ interface OrderItem {
   is_validated: boolean;
   validated_at: string | null;
   metafields?: Record<string, string>;
+  line_adjustment: number;
   stock_status: 'added' | 'failed' | null;
   stock_error: string | null;
   stock_added_at: string | null;
@@ -499,6 +500,49 @@ export default function OrderDetailPage() {
 
     return () => clearTimeout(timer);
   }, [balanceAdjustment, currentShop, order, note]);
+
+  // Update line adjustment for a variant group (all items with same variant)
+  const adjustmentTimers = useRef<Record<string, NodeJS.Timeout>>({});
+
+  const updateLineAdjustment = useCallback((variantKey: string, adjustment: number) => {
+    if (!currentShop) return;
+
+    // Find all item IDs matching this variant group key
+    const itemIds = items
+      .filter(i => `${i.variant_id || ''}_${i.sku || ''}_${i.variant_title || ''}` === variantKey)
+      .map(i => i.id);
+
+    if (itemIds.length === 0) return;
+
+    // Update local state immediately
+    setItems(prev => prev.map(item =>
+      itemIds.includes(item.id)
+        ? { ...item, line_adjustment: adjustment, line_total: (item.unit_price + adjustment) * item.quantity }
+        : item
+    ));
+
+    // Debounce save to DB
+    if (adjustmentTimers.current[variantKey]) {
+      clearTimeout(adjustmentTimers.current[variantKey]);
+    }
+
+    adjustmentTimers.current[variantKey] = setTimeout(async () => {
+      try {
+        await fetch(`/api/suppliers/orders/${orderId}/items`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            shopId: currentShop.id,
+            action: 'update_line_adjustment',
+            itemIds,
+            lineAdjustment: adjustment,
+          }),
+        });
+      } catch (err) {
+        console.error('Error saving line adjustment:', err);
+      }
+    }, 800);
+  }, [items, currentShop, orderId]);
 
   // Sauvegarder les modifications de la commande
   const saveOrder = async () => {
@@ -995,6 +1039,7 @@ export default function OrderDetailPage() {
                   <Table.Th>Métachamps</Table.Th>
                   <Table.Th style={{ textAlign: 'right' }}>Qté</Table.Th>
                   <Table.Th style={{ textAlign: 'right' }}>Coût unit.</Table.Th>
+                  <Table.Th style={{ textAlign: 'right', width: 110 }}>Ajust.</Table.Th>
                   <Table.Th style={{ textAlign: 'right' }}>Total validé</Table.Th>
                   {!isCompleted && <Table.Th style={{ width: 50 }}></Table.Th>}
                 </Table.Tr>
@@ -1064,7 +1109,27 @@ export default function OrderDetailPage() {
                         </Text>
                       </Table.Td>
                       <Table.Td style={{ textAlign: 'right' }}>{firstItem.unit_price.toFixed(2)} €</Table.Td>
-                      <Table.Td style={{ textAlign: 'right', fontWeight: 600 }}>{validatedTotal.toFixed(2)} €</Table.Td>
+                      <Table.Td style={{ textAlign: 'right' }}>
+                        <NumberInput
+                          value={firstItem.line_adjustment || 0}
+                          onChange={(value) => {
+                            const adj = Number(value) || 0;
+                            updateLineAdjustment(variantGroup.key, adj);
+                          }}
+                          decimalScale={2}
+                          step={0.5}
+                          suffix=" €"
+                          size="xs"
+                          style={{ width: 100, marginLeft: 'auto' }}
+                          styles={{ input: { textAlign: 'right' } }}
+                        />
+                      </Table.Td>
+                      <Table.Td style={{ textAlign: 'right', fontWeight: 600 }}>
+                        {variantGroup.items
+                          .filter(i => i.is_validated)
+                          .reduce((sum, i) => sum + (i.unit_price + (i.line_adjustment || 0)) * i.quantity, 0)
+                          .toFixed(2)} €
+                      </Table.Td>
                       {!isCompleted && (
                         <Table.Td>
                           <ActionIcon

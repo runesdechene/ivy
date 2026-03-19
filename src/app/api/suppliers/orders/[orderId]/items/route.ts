@@ -110,6 +110,38 @@ export async function PUT(
     const { shopId, itemId, is_validated, is_printed, quantity, unit_price, action } = body;
     const { orderId } = await params;
 
+    // Action : update line adjustment for items
+    if (action === 'update_line_adjustment') {
+      const { itemIds, lineAdjustment } = body;
+      if (!itemIds || !Array.isArray(itemIds)) {
+        return NextResponse.json({ error: 'Missing itemIds' }, { status: 400 });
+      }
+
+      // Get current items to recalculate line_total
+      const { data: currentItems } = await supabase
+        .from('supplier_order_items')
+        .select('id, unit_price, quantity')
+        .in('id', itemIds);
+
+      if (currentItems) {
+        for (const item of currentItems) {
+          const lineTotal = (item.unit_price + (lineAdjustment || 0)) * item.quantity;
+          await supabase
+            .from('supplier_order_items')
+            .update({
+              line_adjustment: lineAdjustment || 0,
+              line_total: lineTotal,
+            })
+            .eq('id', item.id);
+        }
+      }
+
+      // Update order totals
+      await updateOrderTotals(orderId, shopId);
+
+      return NextResponse.json({ success: true });
+    }
+
     // Action spéciale : recalculer tous les prix basés sur les coûts actuels
     if (action === 'recalculate_prices') {
       if (!shopId || !orderId) {
