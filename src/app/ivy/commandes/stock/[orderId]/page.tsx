@@ -1039,7 +1039,7 @@ export default function OrderDetailPage() {
                   <Table.Th>Métachamps</Table.Th>
                   <Table.Th style={{ textAlign: 'right' }}>Qté</Table.Th>
                   <Table.Th style={{ textAlign: 'right' }}>Coût unit.</Table.Th>
-                  <Table.Th style={{ textAlign: 'right', width: 110 }}>Ajust.</Table.Th>
+                  <Table.Th style={{ textAlign: 'right', width: 110 }}>Ajust./u</Table.Th>
                   <Table.Th style={{ textAlign: 'right' }}>Total validé</Table.Th>
                   {!isCompleted && <Table.Th style={{ width: 50 }}></Table.Th>}
                 </Table.Tr>
