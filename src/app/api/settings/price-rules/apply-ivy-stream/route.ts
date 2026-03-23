@@ -57,13 +57,13 @@ export async function GET(request: NextRequest) {
           return;
         }
 
-        if (!rule.product_type) {
-          send('❌ La règle doit avoir un type de produit défini', 'error');
+        if (!rule.sku) {
+          send('❌ La règle doit avoir un SKU défini', 'error');
           send('DONE', 'error');
           return;
         }
 
-        send(`✓ Règle: ${rule.product_type} (base: ${rule.base_price}€)`, 'success');
+        send(`✓ Règle: ${rule.sku} (base: ${rule.base_price}€)`, 'success');
 
         if (rule.modifiers?.length > 0) {
           send(`  └─ ${rule.modifiers.length} modificateur(s) métachamp`, 'info');
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
           send(`  └─ ${rule.option_modifiers.length} modificateur(s) d'option`, 'info');
         }
 
-        // Récupérer les produits du type correspondant avec leurs variantes
+        // Récupérer les produits avec leurs variantes (on filtre par SKU ensuite)
         const { data: products, error: productsError } = await supabase
           .from('products')
           .select(`
@@ -95,7 +95,6 @@ export async function GET(request: NextRequest) {
             )
           `)
           .eq('shop_id', shopId)
-          .ilike('product_type', rule.product_type)
           .in('status', ['active', 'local', 'draft']);
 
         if (productsError) {
@@ -105,14 +104,30 @@ export async function GET(request: NextRequest) {
         }
 
         if (!products || products.length === 0) {
-          send(`⚠️ Aucun produit trouvé pour le type "${rule.product_type}"`, 'warning');
+          send(`⚠️ Aucun produit trouvé`, 'warning');
+          send('DONE', 'success');
+          return;
+        }
+
+        // Filter variants by SKU prefix
+        const skuPrefix = rule.sku.toUpperCase();
+        for (const product of products) {
+          (product as any).variants = ((product.variants as any[]) || []).filter(
+            (v: any) => (v.sku || '').toUpperCase().startsWith(skuPrefix)
+          );
+        }
+        // Remove products with no matching variants
+        const filteredProducts = products.filter(p => ((p.variants as any[])?.length || 0) > 0);
+
+        if (filteredProducts.length === 0) {
+          send(`⚠️ Aucune variante trouvée pour le SKU "${rule.sku}"`, 'warning');
           send('DONE', 'success');
           return;
         }
 
         // Filtrer les variantes locales si la règle est local_only
         if (rule.local_only) {
-          for (const product of products) {
+          for (const product of filteredProducts) {
             (product as any).variants = ((product.variants as any[]) || []).filter(
               (v: any) => v.shopify_active === false
             );
@@ -121,15 +136,15 @@ export async function GET(request: NextRequest) {
         }
 
         // Compter les variantes totales
-        const totalVariants = products.reduce((sum, p) => sum + ((p.variants as any[])?.length || 0), 0);
+        const totalVariants = filteredProducts.reduce((sum, p) => sum + ((p.variants as any[])?.length || 0), 0);
 
         if (totalVariants === 0) {
-          send(`⚠️ Aucune variante locale trouvée pour le type "${rule.product_type}"`, 'warning');
+          send(`⚠️ Aucune variante trouvée pour le SKU "${rule.sku}"`, 'warning');
           send('DONE', 'success');
           return;
         }
 
-        send(`✓ ${products.length} produit(s), ${totalVariants} variante(s) à traiter`, 'success');
+        send(`✓ ${filteredProducts.length} produit(s), ${totalVariants} variante(s) à traiter`, 'success');
         send('', 'info');
         send('🔄 Calcul et mise à jour des coûts...', 'info');
 
@@ -140,7 +155,7 @@ export async function GET(request: NextRequest) {
         // Charger les métachamps des variantes si des modificateurs métachamp existent
         let variantMetafieldsMap: Record<string, Array<{ namespace: string; key: string; value: string }>> = {};
         if (rule.modifiers?.length > 0) {
-          const variantIds = products.flatMap(p => ((p.variants as any[]) || []).map((v: any) => v.id));
+          const variantIds = filteredProducts.flatMap(p => ((p.variants as any[]) || []).map((v: any) => v.id));
           if (variantIds.length > 0) {
             try {
               const { data: metafieldsData } = await supabase
@@ -167,7 +182,7 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        for (const product of products) {
+        for (const product of filteredProducts) {
           const optionNames = {
             option1: product.option1_name || 'Option 1',
             option2: product.option2_name || 'Option 2',

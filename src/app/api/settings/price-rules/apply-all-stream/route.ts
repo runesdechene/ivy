@@ -6,8 +6,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const GET_VARIANTS_BY_PRODUCT_TYPE_QUERY = `
-  query getVariantsByProductType($query: String!, $cursor: String) {
+const GET_VARIANTS_BY_SKU_QUERY = `
+  query getVariantsBySku($query: String!, $cursor: String) {
     productVariants(first: 100, query: $query, after: $cursor) {
       pageInfo {
         hasNextPage
@@ -247,15 +247,14 @@ async function applyAllOnShopify(
   for (const rule of rules) {
     send(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
     
-    // Vérifier que la règle a un product_type
-    if (!rule.product_type) {
-      send(`⚠️ Règle ignorée (pas de type de produit défini)`, 'warning');
+    if (!rule.sku) {
+      send(`⚠️ Règle ignorée (pas de SKU défini)`, 'warning');
       continue;
     }
-    
-    send(`📋 Règle: ${rule.product_type} (base: ${rule.base_price}€)`, 'info');
 
-    // Récupérer les variantes par type de produit
+    send(`📋 Règle: ${rule.sku} (base: ${rule.base_price}€)`, 'info');
+
+    // Récupérer les variantes par SKU prefix
     let allVariants: any[] = [];
     let hasNextPage = true;
     let cursor: string | null = null;
@@ -263,9 +262,9 @@ async function applyAllOnShopify(
     while (hasNextPage) {
       const result = await shopifyGraphQL(
         shopDomain, shopToken,
-        GET_VARIANTS_BY_PRODUCT_TYPE_QUERY,
+        GET_VARIANTS_BY_SKU_QUERY,
         {
-          query: `product_type:"${rule.product_type}"`,
+          query: `sku:${rule.sku}*`,
           cursor,
         },
         send
@@ -408,12 +407,12 @@ async function applyAllLocal(
 
     for (let i = 0; i < updatedLineItems.length; i++) {
       const item = updatedLineItems[i];
-      const itemProductType = item.product_type || item.variant?.product?.product_type || '';
+      const itemSku = (item.sku || '').toUpperCase();
 
-      // Trouver la règle applicable par type de produit
-      const matchingRule = rules.find(rule => 
-        rule.product_type && 
-        itemProductType.toLowerCase() === rule.product_type.toLowerCase()
+      // Trouver la règle applicable par SKU prefix
+      const matchingRule = rules.find(rule =>
+        rule.sku &&
+        itemSku.startsWith(rule.sku.toUpperCase())
       );
 
       if (matchingRule) {
@@ -511,14 +510,14 @@ async function applyAllOnIvy(
   for (const rule of localRules) {
     send('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
 
-    if (!rule.product_type) {
-      send(`⚠️ Règle ignorée (pas de type de produit défini)`, 'warning');
+    if (!rule.sku) {
+      send(`⚠️ Règle ignorée (pas de SKU défini)`, 'warning');
       continue;
     }
 
-    send(`📋 Règle: ${rule.product_type} (base: ${rule.base_price}€)`, 'info');
+    send(`📋 Règle: ${rule.sku} (base: ${rule.base_price}€)`, 'info');
 
-    // Récupérer les produits du type correspondant avec leurs variantes
+    // Récupérer tous les produits avec leurs variantes, filtrer par SKU ensuite
     const { data: products, error: productsError } = await supabase
       .from('products')
       .select(`
@@ -540,7 +539,6 @@ async function applyAllOnIvy(
         )
       `)
       .eq('shop_id', shopId)
-      .ilike('product_type', rule.product_type)
       .in('status', ['active', 'local', 'draft']);
 
     if (productsError || !products) {
@@ -548,10 +546,11 @@ async function applyAllOnIvy(
       continue;
     }
 
-    // Filtrer les variantes locales seulement
+    // Filtrer par SKU prefix + variantes locales seulement
+    const skuPrefix = rule.sku.toUpperCase();
     for (const product of products) {
       (product as any).variants = ((product.variants as any[]) || []).filter(
-        (v: any) => v.shopify_active === false
+        (v: any) => v.shopify_active === false && (v.sku || '').toUpperCase().startsWith(skuPrefix)
       );
     }
 

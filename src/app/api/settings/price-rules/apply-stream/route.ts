@@ -18,8 +18,8 @@ function buildBatchCostMutation(items: { inventoryItemId: string; cost: string }
   return `mutation {\n  ${mutations}\n}`;
 }
 
-const GET_VARIANTS_BY_PRODUCT_TYPE_QUERY = `
-  query getVariantsByProductType($query: String!, $cursor: String) {
+const GET_VARIANTS_BY_SKU_QUERY = `
+  query getVariantsBySku($query: String!, $cursor: String) {
     productVariants(first: 100, query: $query, after: $cursor) {
       pageInfo {
         hasNextPage
@@ -197,8 +197,8 @@ export async function GET(request: NextRequest) {
           .eq('id', ruleId)
           .single();
 
-        if (ruleError || !rule || !rule.product_type) {
-          send('❌ Règle non trouvée ou type de produit manquant', 'error');
+        if (ruleError || !rule || !rule.sku) {
+          send('❌ Règle non trouvée ou SKU manquant', 'error');
           sendDone();
           return;
         }
@@ -207,7 +207,7 @@ export async function GET(request: NextRequest) {
         if (isFirstChunk) {
           send('🚀 Démarrage de l\'application des règles...', 'info');
           send(`✓ Boutique: ${shop.name || shop.shopify_url}`, 'success');
-          send(`✓ Règle: ${rule.product_type} (base: ${rule.base_price}€)`, 'success');
+          send(`✓ Règle: ${rule.sku} (base: ${rule.base_price}€)`, 'success');
           if (rule.modifiers?.length > 0) {
             send(`  └─ ${rule.modifiers.length} modificateur(s) métachamp`, 'info');
           }
@@ -225,8 +225,8 @@ export async function GET(request: NextRequest) {
 
         const variantsResult = await shopifyGraphQL(
           shopDomain, shopToken,
-          GET_VARIANTS_BY_PRODUCT_TYPE_QUERY,
-          { query: `product_type:"${rule.product_type}"`, cursor: cursorParam || null },
+          GET_VARIANTS_BY_SKU_QUERY,
+          { query: `sku:${rule.sku}*`, cursor: cursorParam || null },
           send
         );
 

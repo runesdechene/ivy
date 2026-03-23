@@ -301,10 +301,10 @@ export default function PriceRulesPage() {
 
 
   const saveRule = async () => {
-    if (!currentShop || !formProductType.trim()) {
+    if (!currentShop || !formSku.trim()) {
       notifications.show({
         title: 'Erreur',
-        message: 'Le type de produit est obligatoire',
+        message: 'Le SKU est obligatoire',
         color: 'red',
       });
       return;
@@ -318,10 +318,10 @@ export default function PriceRulesPage() {
         ? {
             id: editingRule.id,
             title: formTitle.trim() || null,
-            sku: formSku.trim() || formProductType,
+            sku: formSku.trim(),
             basePrice: formBasePrice,
             description: formDescription || null,
-            productType: formProductType,
+            productType: formProductType.trim() || null,
             localOnly: formLocalOnly,
             modifiers: formModifiers,
             optionModifiers: formOptionModifiers,
@@ -329,10 +329,10 @@ export default function PriceRulesPage() {
         : {
             shopId: currentShop.id,
             title: formTitle.trim() || null,
-            sku: formSku.trim() || formProductType,
+            sku: formSku.trim(),
             basePrice: formBasePrice,
             description: formDescription || null,
-            productType: formProductType,
+            productType: formProductType.trim() || null,
             localOnly: formLocalOnly,
             modifiers: formModifiers,
             optionModifiers: formOptionModifiers,
@@ -1047,11 +1047,11 @@ export default function PriceRulesPage() {
           />
 
           <TextInput
-            label="Type de produit (ciblage)"
-            placeholder="Ex: T-shirt, Sweat, Hoodie..."
-            value={formProductType}
-            onChange={(e) => setFormProductType(e.target.value)}
-            description="Doit correspondre exactement au type de produit dans Shopify"
+            label="SKU (ciblage)"
+            placeholder="Ex: SLAMMER, DRUMMER 2.0..."
+            value={formSku}
+            onChange={(e) => setFormSku(e.target.value)}
+            description="Identifiant unique. Toutes les variantes dont le SKU commence par cette valeur seront ciblées."
             required
           />
 
@@ -1067,11 +1067,11 @@ export default function PriceRulesPage() {
           />
 
           <TextInput
-            label="SKU (optionnel)"
-            placeholder="Ex: SLAMMER"
-            value={formSku}
-            onChange={(e) => setFormSku(e.target.value)}
-            description="Sert à cibler les produits des commandes déjà passées. Si vide, le type de produit sera utilisé."
+            label="Type de produit (optionnel)"
+            placeholder="Ex: T-shirt, Sweat, Hoodie..."
+            value={formProductType}
+            onChange={(e) => setFormProductType(e.target.value)}
+            description="Informatif uniquement. N'est plus utilisé pour le ciblage."
           />
 
           <TextInput
