@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Title, Text, Paper, Button, Group, Badge, Checkbox, Loader, Center, Progress, SimpleGrid, Stack, Divider } from '@mantine/core';
-import { IconArrowLeft, IconPrinter, IconCheck, IconPackage } from '@tabler/icons-react';
+import { Title, Text, Paper, Button, Group, Badge, Checkbox, Loader, Center, Progress, SimpleGrid, Stack, Divider, Modal, Image, Tooltip } from '@mantine/core';
+import { IconArrowLeft, IconPrinter, IconCheck, IconPackage, IconPhotoOff } from '@tabler/icons-react';
 import { useShop } from '@/context/ShopContext';
 import { getColorHex, loadColorMappingsFromSupabase } from '@/utils/color-transformer';
 import { SortOptionsBar } from '@/components/Inventory/SortOptionsBar';
@@ -21,6 +21,7 @@ interface OrderItem {
   is_printed: boolean;
   printed_at: string | null;
   metafields?: Record<string, string>;
+  illustration_url?: string | null;
 }
 
 interface SupplierOrder {
@@ -50,6 +51,7 @@ export default function FeuilleImpressionPage() {
   const [items, setItems] = useState<OrderItem[]>([]);
 
   const [sortOrder, setSortOrder] = useState<string[]>(['Nom', 'Couleur', 'Taille']);
+  const [zoomedImage, setZoomedImage] = useState<{ url: string; title: string } | null>(null);
 
   // Charger la commande et ses articles
   const fetchOrder = useCallback(async () => {
@@ -111,6 +113,7 @@ export default function FeuilleImpressionPage() {
       metafields: Record<string, string>;
       quantity: number;
       printedCount: number;
+      illustrationUrl: string | null;
     };
 
     const compareByCriterion = (a: VariantGroup, b: VariantGroup, criterion: string): number => {
@@ -137,6 +140,7 @@ export default function FeuilleImpressionPage() {
         metafields: groupItems[0].metafields || {},
         quantity: groupItems.length,
         printedCount: groupItems.filter(i => i.is_printed).length,
+        illustrationUrl: groupItems[0].illustration_url || null,
       }));
 
     // Grouper par préfixe SKU
@@ -335,6 +339,30 @@ export default function FeuilleImpressionPage() {
 
                         <Divider />
 
+                        {group.illustrationUrl ? (
+                          <Image
+                            src={group.illustrationUrl}
+                            alt={group.product_title}
+                            h={140}
+                            fit="contain"
+                            radius="sm"
+                            style={{ cursor: 'zoom-in', background: '#fafafa' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setZoomedImage({ url: group.illustrationUrl!, title: group.product_title });
+                            }}
+                          />
+                        ) : (
+                          <Tooltip label="Illustration manquante — synchroniser dans Paramètres → Illustrations">
+                            <div style={{
+                              height: 140, display: 'flex', alignItems: 'center',
+                              justifyContent: 'center', background: '#f4f4f4', borderRadius: 6,
+                            }}>
+                              <IconPhotoOff size={32} color="#999" />
+                            </div>
+                          </Tooltip>
+                        )}
+
                         <Text fw={600} size="sm" lineClamp={2}>
                           {group.product_title}
                         </Text>
@@ -431,6 +459,18 @@ export default function FeuilleImpressionPage() {
           )}
         </>
       )}
+
+      <Modal
+        opened={!!zoomedImage}
+        onClose={() => setZoomedImage(null)}
+        title={zoomedImage?.title || ''}
+        size="xl"
+        centered
+      >
+        {zoomedImage && (
+          <Image src={zoomedImage.url} alt={zoomedImage.title} fit="contain" />
+        )}
+      </Modal>
     </div>
   );
 }
