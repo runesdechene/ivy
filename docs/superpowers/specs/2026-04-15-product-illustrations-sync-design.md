@@ -50,7 +50,7 @@ ALTER TABLE products ADD COLUMN illustration_url TEXT;
 - Upsert `illustration_url` sur `products` via `onConflict: shop_id,shopify_id`.
 - Envoie `DONE` avec `{ nextCursor, offset, updatedCount, missingCount, errorCount }`.
 
-**Détail à vérifier à l'implémentation :** namespace/key exact du metafield produit qui pointe vers le métaobjet Illustrations, et nom du champ image dans le métaobjet (à découvrir par introspection d'un produit lors du dev).
+**Metafield produit cible :** `namespace: custom`, `key: illustration_produit` (label "Illustration du produit"), de type `metaobject_reference` pointant vers un métaobjet `Illustrations`. Le nom du champ image dans le métaobjet reste à découvrir par introspection lors du dev (vraisemblablement `image` ou similaire).
 
 ### 3. Page de paramètres `/parametres/illustrations`
 
