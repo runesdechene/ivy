@@ -44,36 +44,47 @@ export async function GET(
     }
 
     // Enrich items with illustration_url from products table.
-    // Match via variant_id (may be "gid://shopify/ProductVariant/123" or "123")
-    // against product_variants.shopify_id, then join to products.illustration_url.
+    // supplier_order_items.variant_id is a Supabase UUID pointing to product_variants.id.
+    // Two-step join: variant.id → product_id, then product_id → illustration_url.
     let enrichedItems = items || [];
     if (enrichedItems.length > 0) {
-      const normalizeVariantId = (id: string | null): string | null =>
-        id ? id.replace('gid://shopify/ProductVariant/', '') : null;
-
       const variantIds = enrichedItems
-        .map(i => normalizeVariantId(i.variant_id))
+        .map(i => i.variant_id)
         .filter((v): v is string => !!v);
 
       if (variantIds.length > 0) {
-        const { data: variants } = await supabase
+        // Step 1: resolve variant UUIDs → product_id
+        const { data: variants, error: varErr } = await supabase
           .from('product_variants')
-          .select('shopify_id, products!inner(shop_id, illustration_url)')
-          .eq('products.shop_id', shopId)
-          .in('shopify_id', variantIds);
+          .select('id, product_id')
+          .in('id', variantIds);
 
-        // Build map: variant shopify_id → illustration_url
-        const illustrationMap: Record<string, string | null> = {};
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (variants as any[] | null)?.forEach(v => {
-          illustrationMap[v.shopify_id] = v.products?.illustration_url || null;
-        });
+        if (varErr) console.error('[illustration enrich] variants query error:', varErr);
+
+        const variantToProduct: Record<string, string> = {};
+        variants?.forEach(v => { variantToProduct[v.id] = v.product_id; });
+
+        // Step 2: products by id → illustration_url (scoped to shop)
+        const productIds = [...new Set(Object.values(variantToProduct))];
+        const productToIllustration: Record<string, string | null> = {};
+
+        if (productIds.length > 0) {
+          const { data: productsData, error: prodErr } = await supabase
+            .from('products')
+            .select('id, illustration_url')
+            .eq('shop_id', shopId)
+            .in('id', productIds);
+
+          if (prodErr) console.error('[illustration enrich] products query error:', prodErr);
+          productsData?.forEach(p => { productToIllustration[p.id] = p.illustration_url; });
+        }
 
         enrichedItems = enrichedItems.map(item => {
-          const normalized = normalizeVariantId(item.variant_id);
+          if (!item.variant_id) return { ...item, illustration_url: null };
+          const productId = variantToProduct[item.variant_id] || null;
           return {
             ...item,
-            illustration_url: normalized ? (illustrationMap[normalized] || null) : null,
+            illustration_url: productId ? (productToIllustration[productId] || null) : null,
           };
         });
       }

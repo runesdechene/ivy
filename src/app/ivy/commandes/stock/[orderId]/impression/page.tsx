@@ -339,40 +339,48 @@ export default function FeuilleImpressionPage() {
 
                         <Divider />
 
-                        {group.illustrationUrl ? (
-                          <Image
-                            src={group.illustrationUrl}
-                            alt={group.product_title}
-                            h={140}
-                            fit="contain"
-                            radius="sm"
-                            style={{ cursor: 'zoom-in', background: '#fafafa' }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setZoomedImage({ url: group.illustrationUrl!, title: group.product_title });
-                            }}
-                          />
-                        ) : (
-                          <Tooltip label="Illustration manquante — synchroniser dans Paramètres → Illustrations">
-                            <div style={{
-                              height: 140, display: 'flex', alignItems: 'center',
-                              justifyContent: 'center', background: '#f4f4f4', borderRadius: 6,
-                            }}>
-                              <IconPhotoOff size={32} color="#999" />
-                            </div>
-                          </Tooltip>
-                        )}
+                        <Group gap="sm" wrap="nowrap" align="flex-start">
+                          {group.illustrationUrl ? (
+                            <Image
+                              src={group.illustrationUrl}
+                              alt={group.product_title}
+                              w={96}
+                              h={96}
+                              fit="contain"
+                              radius="sm"
+                              style={{
+                                cursor: 'zoom-in',
+                                background: '#fafafa',
+                                flexShrink: 0,
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setZoomedImage({ url: group.illustrationUrl!, title: group.product_title });
+                              }}
+                            />
+                          ) : (
+                            <Tooltip label="Illustration manquante — synchroniser dans Paramètres → Illustrations">
+                              <div style={{
+                                width: 96, height: 96, display: 'flex', alignItems: 'center',
+                                justifyContent: 'center', background: '#f4f4f4', borderRadius: 6,
+                                flexShrink: 0,
+                              }}>
+                                <IconPhotoOff size={28} color="#999" />
+                              </div>
+                            </Tooltip>
+                          )}
 
-                        <Text fw={600} size="sm" lineClamp={2}>
-                          {group.product_title}
-                        </Text>
+                          <Stack gap="xs" style={{ flex: 1, minWidth: 0 }}>
+                            <Text fw={600} size="sm" lineClamp={2}>
+                              {group.product_title}
+                            </Text>
 
-                        <Badge variant="light" color="gray" size="sm">
-                          {group.sku || 'Sans SKU'}
-                        </Badge>
+                            <Badge variant="light" color="gray" size="sm" style={{ alignSelf: 'flex-start' }}>
+                              {group.sku || 'Sans SKU'}
+                            </Badge>
 
-                        <Group gap="xs" wrap="wrap">
-                          {allOptions.map((option, idx) => {
+                            <Group gap="xs" wrap="wrap">
+                              {allOptions.map((option, idx) => {
                             const colorHex = getColorHex(option);
                             if (colorHex && colorHex !== '#808080') {
                               return (
@@ -403,6 +411,8 @@ export default function FeuilleImpressionPage() {
                               </Badge>
                             );
                           })}
+                            </Group>
+                          </Stack>
                         </Group>
 
                         {Object.keys(group.metafields).length > 0 && (
