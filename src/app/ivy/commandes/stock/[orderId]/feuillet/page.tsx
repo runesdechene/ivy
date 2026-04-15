@@ -4,9 +4,9 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Title, Text, Paper, Table, Button, Group, Badge,
-  Checkbox, Loader, Center, Stack, Progress, ActionIcon, Tooltip, Modal, Image,
+  Checkbox, Loader, Center, Stack, Progress, ActionIcon, Tooltip
 } from '@mantine/core';
-import { IconArrowLeft, IconChecklist, IconCheckbox, IconSquare, IconPhotoOff } from '@tabler/icons-react';
+import { IconArrowLeft, IconChecklist, IconCheckbox, IconSquare } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useShop } from '@/context/ShopContext';
 import { getColorHex, isColorOption, loadColorMappingsFromSupabase, areColorMappingsLoaded } from '@/utils/color-transformer';
@@ -26,7 +26,6 @@ interface OrderItem {
   is_validated: boolean;
   validated_at: string | null;
   metafields?: Record<string, string>;
-  illustration_url?: string | null;
 }
 
 interface SupplierOrder {
@@ -42,7 +41,6 @@ interface GroupedVariant {
   items: OrderItem[];
   totalQuantity: number;
   validatedCount: number;
-  illustrationUrl: string | null;
 }
 
 export default function FeuilletCommandePage() {
@@ -54,7 +52,6 @@ export default function FeuilletCommandePage() {
   const [order, setOrder] = useState<SupplierOrder | null>(null);
   const [items, setItems] = useState<OrderItem[]>([]);
   const [sortOrder, setSortOrder] = useState<string[]>(['Couleur', 'Taille']);
-  const [zoomedImage, setZoomedImage] = useState<{ url: string; title: string } | null>(null);
 
   const fetchOrder = useCallback(async () => {
     if (!currentShop || !orderId) return;
@@ -121,7 +118,6 @@ export default function FeuilletCommandePage() {
           items: [item],
           totalQuantity: 1,
           validatedCount: item.is_validated ? 1 : 0,
-          illustrationUrl: item.illustration_url || null,
         });
       }
     });
@@ -289,32 +285,7 @@ export default function FeuilletCommandePage() {
 
               return (
                 <Stack key={sku} gap="xs">
-                  <Group gap="sm" wrap="nowrap" align="center">
-                    {groups[0]?.illustrationUrl ? (
-                      <Image
-                        src={groups[0].illustrationUrl}
-                        alt={sku}
-                        w={64}
-                        h={64}
-                        fit="contain"
-                        radius="sm"
-                        style={{ cursor: 'pointer', border: '1px solid #e0e0e0', flexShrink: 0 }}
-                        onClick={() => setZoomedImage({
-                          url: groups[0].illustrationUrl!,
-                          title: `${sku} — ${groups[0].items[0]?.product_title || ''}`,
-                        })}
-                      />
-                    ) : (
-                      <Tooltip label="Illustration manquante — synchroniser dans Paramètres → Illustrations">
-                        <div style={{
-                          width: 64, height: 64, display: 'flex', alignItems: 'center',
-                          justifyContent: 'center', background: '#f4f4f4', borderRadius: 6,
-                          border: '1px solid #e0e0e0', flexShrink: 0,
-                        }}>
-                          <IconPhotoOff size={24} color="#999" />
-                        </div>
-                      </Tooltip>
-                    )}
+                  <Group gap="sm">
                     <Title order={4} className={styles.skuTitle}>
                       {sku}
                       <Badge ml="sm" variant="light" color={skuValidated === skuTotal ? 'green' : 'gray'}>
@@ -409,18 +380,6 @@ export default function FeuilletCommandePage() {
           </Group>
         </Paper>
       )}
-
-      <Modal
-        opened={!!zoomedImage}
-        onClose={() => setZoomedImage(null)}
-        title={zoomedImage?.title || ''}
-        size="xl"
-        centered
-      >
-        {zoomedImage && (
-          <Image src={zoomedImage.url} alt={zoomedImage.title} fit="contain" />
-        )}
-      </Modal>
     </div>
   );
 }
