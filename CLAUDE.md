@@ -1,3 +1,10 @@
+# OpenWolf
+
+@.wolf/OPENWOLF.md
+
+This project uses OpenWolf for context management. Read and follow .wolf/OPENWOLF.md every session. Check .wolf/cerebrum.md before generating code. Check .wolf/anatomy.md before reading files.
+
+
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
@@ -80,6 +87,9 @@ src/
 - `GET /api/settings/price-rules/apply-stock-stream` — apply to supplier stock orders
 - `GET /api/settings/price-rules/apply-ivy-stream` — apply to local variants
 - `GET /api/settings/price-rules/apply-all-stream` — bulk apply all active rules
+- `GET/POST/PUT/DELETE /api/settings/product-descriptions` — CRUD for description templates
+- `GET /api/settings/product-descriptions/apply-stream` — chunked SSE apply of a description template to matching Shopify products
+- `GET /api/settings/illustrations/sync-stream` — chunked SSE sync of product illustrations from Shopify metaobjects (`custom.illustration_produit`) into `products.illustration_url`
 - `POST /api/inventory/sync` — inventory sync
 - `POST /api/pos/stock/adjust` — adjust stock + log to `stock_movements` + sync Shopify
 - `GET /api/pos/study-zones/stats` — stock movement stats for a date range (quantities only)
@@ -153,7 +163,11 @@ Cost per item = sum of all matching `price_rules`. Plus handling fee per order a
 
 ## Database (Supabase)
 
-Core tables: `shops`, `user_shops`, `orders`, `line_item_checks`, `order_progress`, `price_rules`, `price_rule_modifiers`, `price_rule_option_modifiers`, `billing_notes`, `monthly_balance`, `syncs`, `order_invoices`, `order_costs`, `supplier_orders`, `supplier_order_items`, `products`, `product_variants`, `inventory_levels`, `locations`, `stock_movements`, `metafield_config`.
+Core tables: `shops`, `user_shops`, `orders`, `line_item_checks`, `order_progress`, `price_rules`, `price_rule_modifiers`, `price_rule_option_modifiers`, `billing_notes`, `monthly_balance`, `syncs`, `order_invoices`, `order_costs`, `supplier_orders`, `supplier_order_items`, `products`, `product_variants`, `inventory_levels`, `locations`, `stock_movements`, `metafield_config`, `product_descriptions`.
+
+**Notable columns:**
+- `products.illustration_url` — URL de l'illustration produit (source : métaobjet Shopify via `custom.illustration_produit`). Peuplée par `/api/settings/illustrations/sync-stream`. Affichée sur le feuillet de production.
+- `product_descriptions` — modèles de descriptions HTML avec conditions de match (title/product_type contient X), appliquées en masse sur Shopify.
 
 Legacy POS tables (still exist, no longer written to): `pos_sales`, `pos_sale_items`, `pos_sellers`, `pos_discount_rules`, `pos_study_zones`, `pos_stand_adjustment`.
 
@@ -195,7 +209,4 @@ NEXT_PUBLIC_FIREBASE_APP_ID=
 
 ## Existing documentation
 
-- `MAIN.md` — full technical documentation (database schemas, component catalog, workflows)
-- `VARIANT_SYSTEM_UPDATE.md` — N-level variant system
-- `CLEAN_OLD_VARIANTS.md` — old data cleanup
-- `DEBUG_SYNC.md` — sync debugging
+- `_archive/MAIN.md` — legacy technical documentation from the Supabase migration (Feb 2026). Kept for historical reference; current state is reflected in this CLAUDE.md and the code.
