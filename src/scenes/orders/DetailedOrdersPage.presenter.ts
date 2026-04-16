@@ -71,6 +71,11 @@ export function useDetailedOrdersPagePresenter() {
 
   const pendingOrders = useMemo(() => {
     return orders.filter(order => {
+      // Ne pas inclure les commandes annulées
+      if (order.cancelledAt) {
+        return false;
+      }
+
       // Ne pas inclure les commandes remboursées
       if (order.displayFinancialStatus?.toLowerCase() === 'refunded') {
         return false;

@@ -58,11 +58,12 @@ export default function SuiviInternePage() {
       // Charger les mappings de couleurs
       await loadColorMappingsFromSupabase(currentShop.id);
       
-      // Récupérer toutes les commandes en cours (non expédiées, non remboursées)
+      // Récupérer toutes les commandes en cours (non expédiées, non remboursées, non annulées)
       const { data: orders, error: ordersError } = await supabase
         .from('orders')
         .select('*')
         .eq('shop_id', currentShop.id)
+        .is('cancelled_at', null)
         .neq('display_fulfillment_status', 'FULFILLED')
         .neq('display_financial_status', 'REFUNDED');
 

@@ -82,6 +82,7 @@ export default function FacturationBoutiquePage() {
         .from('orders')
         .select('*')
         .eq('shop_id', currentShop.id)
+        .is('cancelled_at', null)
         .neq('display_financial_status', 'REFUNDED')
         .order('created_at', { ascending: false });
 

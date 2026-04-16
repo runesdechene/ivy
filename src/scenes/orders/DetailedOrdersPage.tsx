@@ -84,6 +84,7 @@ function OrderRow({ order, isSelected, onSelect, metafieldConfigs }: OrderRowPro
           <div className={styles.orderHeader}>
             <div className={styles.orderTitle}>
               <Text fw={500}>{order.name}</Text>
+              {order.cancelledAt && <Badge color="red">Annulé</Badge>}
               <FinancialStatus status={order.displayFinancialStatus} />
             </div>
             <div className={styles.orderWaiting}>

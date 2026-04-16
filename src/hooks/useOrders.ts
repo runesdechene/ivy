@@ -7,6 +7,7 @@ interface UseOrdersOptions {
   excludeTags?: string[];
   includeTags?: string[];
   excludeOrderNumbers?: string[];
+  includeCancelled?: boolean;
 }
 
 export function useOrders(options: UseOrdersOptions = {}) {
@@ -15,7 +16,7 @@ export function useOrders(options: UseOrdersOptions = {}) {
   const [error, setError] = useState<Error | null>(null);
   const { currentShop } = useShop();
 
-  const { excludeTags = [], includeTags = [], excludeOrderNumbers = [] } = options;
+  const { excludeTags = [], includeTags = [], excludeOrderNumbers = [], includeCancelled = false } = options;
 
   useEffect(() => {
     if (!currentShop) {
@@ -50,6 +51,11 @@ export function useOrders(options: UseOrdersOptions = {}) {
           tags: order.tags || [],
           lineItems: order.line_items || [],
         }));
+
+        // Exclure les commandes annulées
+        if (!includeCancelled) {
+          transformedOrders = transformedOrders.filter(order => !order.cancelledAt);
+        }
 
         // Filtrer par tags exclus
         if (excludeTags.length > 0) {
@@ -97,7 +103,7 @@ export function useOrders(options: UseOrdersOptions = {}) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentShop, excludeTags.join(','), includeTags.join(','), excludeOrderNumbers.join(',')]);
+  }, [currentShop, excludeTags.join(','), includeTags.join(','), excludeOrderNumbers.join(','), includeCancelled]);
 
   return { orders, loading, error, refetch: () => {} };
 }
