@@ -6,6 +6,10 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// Groups of variants processed per Netlify invocation (26s limit).
+// Each group ≈ 2-4 Shopify API calls, so ~10 keeps us well under the timeout.
+const CHUNK_SIZE = 10;
+
 // --- Helpers (duplicated from parent route for isolation) ---
 
 async function batchMarkStatus(itemIds: string[], status: 'added' | 'failed', error: string | null) {
@@ -73,7 +77,7 @@ async function createVariantOnShopify(
   };
 }
 
-// --- Streaming endpoint ---
+// --- Streaming endpoint (chunked for Netlify 26s limit) ---
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -81,6 +85,8 @@ export async function GET(request: NextRequest) {
   const shopId = searchParams.get('shopId');
   const locationId = searchParams.get('locationId');
   const retryOnly = searchParams.get('retryOnly') === 'true';
+  const offsetParam = parseInt(searchParams.get('offset') || '0', 10);
+  const isFirstChunk = offsetParam === 0;
 
   if (!orderId || !shopId) {
     return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400 });
@@ -122,8 +128,8 @@ export async function GET(request: NextRequest) {
       const result = { added: 0, failed: 0, skipped: 0, errors: [] as any[] };
 
       try {
-        // 1. Update order status to completed (if not retry)
-        if (!retryOnly) {
+        // 1. First chunk: mark order completed (skipped on retry and subsequent chunks)
+        if (isFirstChunk && !retryOnly) {
           send('📋 Passage de la commande en "Terminée"...', 'info');
           const { error: updateError } = await supabase
             .from('supplier_orders')
@@ -137,64 +143,64 @@ export async function GET(request: NextRequest) {
 
           if (updateError) {
             send(`❌ Erreur mise à jour commande: ${updateError.message}`, 'error');
-            sendDone({ stockResult: result });
+            sendDone({ stockResult: result, hasMore: false, nextOffset: offsetParam });
             clearInterval(heartbeat);
             controller.close();
             return;
           }
           send('✓ Commande marquée comme terminée', 'success');
-        } else {
-          send('🔄 Retry des articles échoués...', 'info');
+        } else if (isFirstChunk && retryOnly) {
+          send('🔄 Reprise des articles non ajoutés...', 'info');
         }
 
-        // 2. Count already added
-        const { count: alreadyAddedCount } = await supabase
-          .from('supplier_order_items')
-          .select('*', { count: 'exact', head: true })
-          .eq('order_id', orderId)
-          .eq('is_validated', true)
-          .eq('stock_status', 'added');
+        // 2. First chunk: count already-added (for display)
+        if (isFirstChunk) {
+          const { count: alreadyAddedCount } = await supabase
+            .from('supplier_order_items')
+            .select('*', { count: 'exact', head: true })
+            .eq('order_id', orderId)
+            .eq('is_validated', true)
+            .eq('stock_status', 'added');
 
-        result.skipped = alreadyAddedCount || 0;
-        if (result.skipped > 0) {
-          send(`⏭️  ${result.skipped} article(s) déjà ajouté(s) au stock`, 'info');
+          result.skipped = alreadyAddedCount || 0;
+          if (result.skipped > 0) {
+            send(`⏭️  ${result.skipped} article(s) déjà ajouté(s) au stock`, 'info');
+          }
         }
 
-        // 3. Get items to process
-        let query = supabase
+        // 3. Get items to process (excludes already-added; covers null + failed)
+        const { data: validatedItems } = await supabase
           .from('supplier_order_items')
           .select('id, variant_id, quantity, sku, variant_title')
           .eq('order_id', orderId)
-          .eq('is_validated', true);
-
-        if (retryOnly) {
-          query = query.eq('stock_status', 'failed');
-        } else {
-          query = query.or('stock_status.is.null,stock_status.eq.failed');
-        }
-
-        const { data: validatedItems } = await query;
+          .eq('is_validated', true)
+          .or('stock_status.is.null,stock_status.eq.failed')
+          .order('id');
 
         if (!validatedItems || validatedItems.length === 0) {
-          send('ℹ️  Aucun article à traiter', 'info');
-          sendDone({ stockResult: result });
+          if (isFirstChunk) send('ℹ️  Aucun article à traiter', 'info');
+          sendDone({ stockResult: result, hasMore: false, nextOffset: offsetParam });
           clearInterval(heartbeat);
           controller.close();
           return;
         }
 
-        send(`📦 ${validatedItems.length} article(s) à traiter...`, 'info');
-
-        // 4. Group by variant_id
-        const groups: Record<string, typeof validatedItems> = {};
+        // 4. Group by variant_id (order preserved thanks to .order('id'))
+        const groupsMap = new Map<string, typeof validatedItems>();
         for (const item of validatedItems) {
           const key = item.variant_id || 'null';
-          if (!groups[key]) groups[key] = [];
-          groups[key].push(item);
+          if (!groupsMap.has(key)) groupsMap.set(key, []);
+          groupsMap.get(key)!.push(item);
         }
+        const allGroups = Array.from(groupsMap.entries());
+        const chunkGroups = allGroups.slice(0, CHUNK_SIZE);
+        const hasMore = allGroups.length > CHUNK_SIZE;
 
-        send(`🔀 ${Object.keys(groups).length} groupe(s) de variantes`, 'info');
-        send('', 'info');
+        if (isFirstChunk) {
+          const totalChunks = Math.ceil(allGroups.length / CHUNK_SIZE);
+          send(`📦 ${validatedItems.length} article(s) à traiter (${allGroups.length} groupe(s), ${totalChunks} lot(s))`, 'info');
+          send('', 'info');
+        }
 
         // 5. Get shop info
         const { data: shop } = await supabase
@@ -205,11 +211,11 @@ export async function GET(request: NextRequest) {
 
         if (!shop) {
           send('❌ Boutique introuvable', 'error');
-          for (const groupItems of Object.values(groups)) {
+          for (const [, groupItems] of chunkGroups) {
             await batchMarkStatus(groupItems.map(i => i.id), 'failed', 'Shop non trouvé');
             result.failed += groupItems.length;
           }
-          sendDone({ stockResult: result });
+          sendDone({ stockResult: result, hasMore: false, nextOffset: offsetParam });
           clearInterval(heartbeat);
           controller.close();
           return;
@@ -229,28 +235,27 @@ export async function GET(request: NextRequest) {
 
         if (!shopifyLocationId) {
           send('❌ Aucun emplacement trouvé pour le stock', 'error');
-          for (const groupItems of Object.values(groups)) {
+          for (const [, groupItems] of chunkGroups) {
             await batchMarkStatus(groupItems.map(i => i.id), 'failed', 'Aucun emplacement trouvé');
             result.failed += groupItems.length;
           }
-          sendDone({ stockResult: result });
+          sendDone({ stockResult: result, hasMore: false, nextOffset: offsetParam });
           clearInterval(heartbeat);
           controller.close();
           return;
         }
 
-        // 7. Process each variant group
-        let groupIndex = 0;
-        const totalGroups = Object.keys(groups).length;
-
-        for (const [variantKey, groupItems] of Object.entries(groups)) {
-          groupIndex++;
+        // 7. Process this chunk's variant groups
+        let chunkGroupIndex = 0;
+        for (const [variantKey, groupItems] of chunkGroups) {
+          chunkGroupIndex++;
+          const absoluteIndex = offsetParam + chunkGroupIndex;
           const totalQuantity = groupItems.reduce((sum, i) => sum + i.quantity, 0);
           const itemIds = groupItems.map(i => i.id);
           const sample = groupItems[0];
           const label = `${sample.sku || '?'} — ${sample.variant_title || '?'}`;
 
-          send(`[${groupIndex}/${totalGroups}] ${label} (×${totalQuantity})`, 'progress');
+          send(`[${absoluteIndex}] ${label} (×${totalQuantity})`, 'progress');
 
           // Case 1: variant_id is NULL (link broken by ON DELETE SET NULL)
           if (variantKey === 'null') {
@@ -298,14 +303,12 @@ export async function GET(request: NextRequest) {
           // Priority 3: Truly local (no shopify_id on product) → IVY-only stock
           if (!isShopifyReady) {
             if (product.shopify_id && product.status !== 'local') {
-              // Try to create variant on Shopify
               send(`  🔧 Création de la variante sur Shopify...`, 'warning');
               try {
                 const created = await createVariantOnShopify(shop, product.shopify_id, variant);
                 inventoryItemId = created.inventoryItemId;
                 send(`  ✓ Variante créée (ID: ${created.shopifyVariantId})`, 'success');
               } catch (err: any) {
-                // Shopify creation failed → force fallback to IVY-only stock
                 inventoryItemId = null;
                 send(`  ⚠️  Création Shopify échouée, ajout au stock IVY uniquement`, 'warning');
               }
@@ -405,18 +408,14 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        // Summary
-        send('', 'info');
-        send('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-        send(
-          `✅ ${result.added} ajouté(s) | ❌ ${result.failed} échoué(s) | ⏭️  ${result.skipped} ignoré(s)`,
-          result.failed > 0 ? 'warning' : 'success'
-        );
-
-        sendDone({ stockResult: result });
+        sendDone({
+          stockResult: result,
+          hasMore,
+          nextOffset: offsetParam + chunkGroups.length,
+        });
       } catch (error: any) {
         send(`❌ Erreur globale: ${error.message}`, 'error');
-        sendDone({ stockResult: result });
+        sendDone({ stockResult: result, hasMore: false, nextOffset: offsetParam });
       } finally {
         clearInterval(heartbeat);
         if (!streamClosed) {

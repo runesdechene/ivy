@@ -68,7 +68,7 @@ export default function OrderDetailPage() {
   const orderId = params.orderId as string;
   const { currentShop } = useShop();
   const { currentLocation } = useLocation();
-  const { streamFromUrl } = useTerminalStream();
+  const { streamFromUrl, log: terminalLog, endSync: terminalEndSync } = useTerminalStream();
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -621,27 +621,17 @@ export default function OrderDetailPage() {
   const changeStatus = async (newStatus: 'draft' | 'requested' | 'produced' | 'completed') => {
     if (!currentShop || !order) return;
 
-    // For completed: use streaming endpoint with terminal
+    // For completed: use streaming endpoint with terminal (chunked for Netlify 26s limit)
     if (newStatus === 'completed') {
       const validatedCount = items.filter(i => i.is_validated).length;
       if (!confirm(`Terminer cette commande ?\n\n${validatedCount} article(s) validé(s) seront ajoutés au stock et synchronisés vers Shopify.\n\nCette action est irréversible.`)) {
         return;
       }
 
-      const params = new URLSearchParams({
-        orderId,
-        shopId: currentShop.id,
-      });
-      if (currentLocation?.id) params.set('locationId', currentLocation.id);
-
       setSaving(true);
       try {
-        await streamFromUrl(`/api/suppliers/orders/stock-stream?${params}`, {
-          title: `Ajout au stock — ${order.order_number}`,
-          onComplete: () => {
-            fetchOrder();
-          },
-        });
+        await runStockStream(`Ajout au stock — ${order.order_number}`);
+        fetchOrder();
       } catch (err) {
         console.error('Error streaming stock:', err);
         notifications.show({
@@ -697,25 +687,67 @@ export default function OrderDetailPage() {
     }
   };
 
-  // Réessayer les articles échoués (streaming)
+  // Run the stock-stream endpoint, looping over chunks (Netlify 26s limit).
+  // Backend processes 10 variant-groups per invocation and returns { hasMore, nextOffset }.
+  const runStockStream = async (title: string, retryOnly = false) => {
+    if (!currentShop || !order) return;
+
+    let offset = 0;
+    let hasMore = true;
+    let chunk = 0;
+    const cum = { added: 0, failed: 0, skipped: 0 };
+
+    while (hasMore) {
+      const params = new URLSearchParams({
+        orderId,
+        shopId: currentShop.id,
+        offset: String(offset),
+      });
+      if (retryOnly) params.set('retryOnly', 'true');
+      if (currentLocation?.id) params.set('locationId', currentLocation.id);
+
+      let gotMore = false;
+      let nextOffset = offset;
+
+      await streamFromUrl(`/api/suppliers/orders/stock-stream?${params}`, {
+        title: chunk === 0 ? title : undefined,
+        noStartSync: chunk > 0,
+        noEndSync: true,
+        onComplete: (data) => {
+          gotMore = (data?.hasMore as boolean) || false;
+          nextOffset = (data?.nextOffset as number) ?? offset;
+          const r = data?.stockResult as { added?: number; failed?: number; skipped?: number } | undefined;
+          if (r) {
+            cum.added += r.added || 0;
+            cum.failed += r.failed || 0;
+            // skipped is the count of already-added items, computed once on chunk 0
+            if ((r.skipped || 0) > cum.skipped) cum.skipped = r.skipped || 0;
+          }
+        },
+      });
+
+      hasMore = gotMore;
+      offset = nextOffset;
+      chunk++;
+    }
+
+    terminalLog('', 'info');
+    terminalLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+    terminalLog(
+      `✅ ${cum.added} ajouté(s) | ❌ ${cum.failed} échoué(s) | ⏭️  ${cum.skipped} ignoré(s)`,
+      cum.failed > 0 ? 'warning' : 'success'
+    );
+    terminalEndSync();
+  };
+
+  // Réessayer les articles échoués ou en attente (streaming, chunked)
   const retryFailedStock = async () => {
     if (!currentShop || !order) return;
 
-    const params = new URLSearchParams({
-      orderId,
-      shopId: currentShop.id,
-      retryOnly: 'true',
-    });
-    if (currentLocation?.id) params.set('locationId', currentLocation.id);
-
     setSaving(true);
     try {
-      await streamFromUrl(`/api/suppliers/orders/stock-stream?${params}`, {
-        title: `Retry stock — ${order.order_number}`,
-        onComplete: () => {
-          fetchOrder();
-        },
-      });
+      await runStockStream(`Ajout au stock — ${order.order_number}`, true);
+      fetchOrder();
     } catch (err) {
       console.error('Error retrying stock:', err);
       notifications.show({
@@ -975,14 +1007,14 @@ export default function OrderDetailPage() {
             </>
           )}
 
-          {isCompleted && items.some(i => i.stock_status === 'failed') && (
+          {isCompleted && items.some(i => i.is_validated && i.stock_status !== 'added') && (
             <Button
               color="orange"
               leftSection={<IconRefresh size={18} />}
               onClick={retryFailedStock}
               loading={saving}
             >
-              Réessayer les échoués ({items.filter(i => i.stock_status === 'failed').length})
+              Ajouter les restants ({items.filter(i => i.is_validated && i.stock_status !== 'added').length})
             </Button>
           )}
         </Group>
