@@ -1,1 +1,1 @@
-export const APP_VERSION = '0.3.31 - Ivy';
+export const APP_VERSION = '0.4.0 - Ivy (Atelier boréal foundation)';
