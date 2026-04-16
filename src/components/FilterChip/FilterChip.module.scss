@@ -1,0 +1,32 @@
+@use '@/style/_tokens.scss' as *;
+
+.chip {
+  padding: 6px 12px;
+  border-radius: $radius-pill;
+  background: transparent;
+  color: $slate-soft;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: $font-inter;
+
+  &:hover {
+    background: $cream-warm;
+  }
+}
+
+.chip.active {
+  background: $slate;
+  color: $cream;
+}
+
+.count {
+  opacity: 0.6;
+  font-family: $font-fraunces;
+  font-style: italic;
+}
