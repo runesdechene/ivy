@@ -2,14 +2,13 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Title, Text, Paper, Stack, Group, SimpleGrid, Loader, Center,
-  Progress, Badge, ThemeIcon, Button, Menu, Checkbox, NumberInput
+  Loader, SimpleGrid, Button, Menu, Checkbox, NumberInput,
 } from '@mantine/core';
 import {
   IconPackage, IconCurrencyEuro, IconPalette, IconRuler2,
   IconChartBar, IconTrendingUp, IconMapPin, IconDownload,
   IconFileSpreadsheet, IconChevronDown, IconListDetails,
-  IconPrinter
+  IconPrinter,
 } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useShop } from '@/context/ShopContext';
@@ -17,6 +16,7 @@ import { useLocation } from '@/context/LocationContext';
 import { generateInventoryCsv, generateSummaryCsv, downloadCsv, type SaleValueOptions } from '@/utils/csv-export';
 import { printSummaryPdf, printDetailPdf } from '@/utils/pdf-export';
 import { getColorHex, loadColorMappingsFromSupabase } from '@/utils/color-transformer';
+import styles from './dashboard.module.scss';
 
 interface Stats {
   totalStock: number;
@@ -40,16 +40,16 @@ export default function InventaireDashboardPage() {
 
   const fetchStats = useCallback(async () => {
     if (!currentShop) return;
-    
+
     setLoading(true);
     try {
       await loadColorMappingsFromSupabase(currentShop.id);
-      
+
       const params = new URLSearchParams({ shopId: currentShop.id });
       if (currentLocation?.id) {
         params.append('locationId', currentLocation.id);
       }
-      
+
       const response = await fetch(`/api/inventory/stats?${params}`);
       if (response.ok) {
         const data = await response.json();
@@ -89,8 +89,8 @@ export default function InventaireDashboardPage() {
     } catch (err) {
       notifications.show({
         title: 'Erreur',
-        message: 'Impossible d\'exporter l\'inventaire',
-        color: 'red',
+        message: "Impossible d'exporter l'inventaire",
+        color: 'rust',
       });
     } finally {
       setExporting(false);
@@ -141,26 +141,32 @@ export default function InventaireDashboardPage() {
       notifications.show({
         title: 'Erreur',
         message: 'Impossible de générer le PDF',
-        color: 'red',
+        color: 'rust',
       });
     } finally {
       setExporting(false);
     }
   }, [currentShop, currentLocation, saleValueOpts]);
 
+  const shopName = currentShop?.name || 'Runes de Chêne';
+
   if (loading) {
     return (
-      <Center h={400}>
-        <Loader size="lg" />
-      </Center>
+      <div className={styles.container}>
+        <div className={styles.loadingWrap}>
+          <Loader color="moss" />
+        </div>
+      </div>
     );
   }
 
   if (!stats) {
     return (
-      <Center h={400}>
-        <Text c="dimmed">Impossible de charger les statistiques</Text>
-      </Center>
+      <div className={styles.container}>
+        <div className={styles.errorWrap}>
+          Impossible de charger les statistiques.
+        </div>
+      </div>
     );
   }
 
@@ -179,283 +185,307 @@ export default function InventaireDashboardPage() {
   });
   const maxSizeStock = Math.max(...sortedSizes.map(([, s]) => s.stock), 1);
 
+  const productTypeCount = Object.keys(stats.byProductType).length;
+
   return (
-    <div>
-      <Group justify="space-between" mb="xl">
-        <Title order={2}>Tableau de bord inventaire</Title>
-        <Group gap="sm">
-          {currentLocation && (
-            <Badge variant="light" color="green" size="lg" leftSection={<IconMapPin size={14} />}>
-              {currentLocation.name}
-            </Badge>
-          )}
-          <Menu shadow="md" width={240}>
-            <Menu.Target>
-              <Button
-                variant="light"
-                leftSection={<IconDownload size={16} />}
-                rightSection={<IconChevronDown size={14} />}
-                loading={exporting}
-                size="sm"
-              >
-                Exporter
-              </Button>
-            </Menu.Target>
-            <Menu.Dropdown>
-              <div style={{ padding: '8px 12px' }}>
-                <Checkbox
-                  label="Inclure valeur de vente"
-                  checked={includeSaleValue}
-                  onChange={(e) => setIncludeSaleValue(e.currentTarget.checked)}
+    <div className={styles.container}>
+      <div className={styles.pageHead}>
+        <div className={styles.pageHeadLeft}>
+          <div className={styles.eyebrow}>Inventaire · {shopName}</div>
+          <h1 className={styles.title}>
+            Tableau <em>de bord</em>
+          </h1>
+          <div className={styles.sub}>
+            <span>{stats.totalStock.toLocaleString('fr-FR')} unités en stock</span>
+            <span className={styles.subSep}>·</span>
+            <span>{productTypeCount} type{productTypeCount > 1 ? 's' : ''} de produit</span>
+            {currentLocation && (
+              <>
+                <span className={styles.subSep}>·</span>
+                <span className={styles.locationChip}>
+                  <IconMapPin size={11} />
+                  {currentLocation.name}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+
+        <Menu shadow="md" width={260} radius="md">
+          <Menu.Target>
+            <Button
+              variant="light"
+              color="moss"
+              leftSection={<IconDownload size={16} />}
+              rightSection={<IconChevronDown size={14} />}
+              loading={exporting}
+              size="sm"
+              radius="md"
+            >
+              Exporter
+            </Button>
+          </Menu.Target>
+          <Menu.Dropdown>
+            <div className={styles.exportConfig}>
+              <Checkbox
+                label="Inclure valeur de vente"
+                checked={includeSaleValue}
+                onChange={(e) => setIncludeSaleValue(e.currentTarget.checked)}
+                size="xs"
+                color="moss"
+              />
+              {includeSaleValue && (
+                <NumberInput
+                  label="Modulation"
+                  value={saleValueModifier}
+                  onChange={(v) => setSaleValueModifier(typeof v === 'number' ? v : 0)}
+                  suffix=" %"
+                  allowNegative
+                  step={5}
                   size="xs"
+                  mt={8}
+                  styles={{ input: { width: 100 } }}
                 />
-                {includeSaleValue && (
-                  <NumberInput
-                    label="Modulation"
-                    value={saleValueModifier}
-                    onChange={(v) => setSaleValueModifier(typeof v === 'number' ? v : 0)}
-                    suffix=" %"
-                    allowNegative
-                    step={5}
-                    size="xs"
-                    mt={8}
-                    styles={{ input: { width: 100 } }}
-                  />
-                )}
-              </div>
-              <Menu.Divider />
-              <Menu.Label>CSV (tableur)</Menu.Label>
-              <Menu.Item
-                leftSection={<IconFileSpreadsheet size={16} />}
-                onClick={handleExportSummary}
-              >
-                Résumé par type
-              </Menu.Item>
-              <Menu.Item
-                leftSection={<IconListDetails size={16} />}
-                onClick={handleExportCsv}
-              >
-                Détail par variante
-              </Menu.Item>
-              <Menu.Divider />
-              <Menu.Label>PDF (impression)</Menu.Label>
-              <Menu.Item
-                leftSection={<IconPrinter size={16} />}
-                onClick={handlePrintSummary}
-              >
-                Résumé par type
-              </Menu.Item>
-              <Menu.Item
-                leftSection={<IconPrinter size={16} />}
-                onClick={handlePrintDetail}
-              >
-                Détail par variante
-              </Menu.Item>
-            </Menu.Dropdown>
-          </Menu>
-        </Group>
-      </Group>
+              )}
+            </div>
+            <Menu.Divider />
+            <Menu.Label>CSV (tableur)</Menu.Label>
+            <Menu.Item
+              leftSection={<IconFileSpreadsheet size={16} />}
+              onClick={handleExportSummary}
+            >
+              Résumé par type
+            </Menu.Item>
+            <Menu.Item
+              leftSection={<IconListDetails size={16} />}
+              onClick={handleExportCsv}
+            >
+              Détail par variante
+            </Menu.Item>
+            <Menu.Divider />
+            <Menu.Label>PDF (impression)</Menu.Label>
+            <Menu.Item
+              leftSection={<IconPrinter size={16} />}
+              onClick={handlePrintSummary}
+            >
+              Résumé par type
+            </Menu.Item>
+            <Menu.Item
+              leftSection={<IconPrinter size={16} />}
+              onClick={handlePrintDetail}
+            >
+              Détail par variante
+            </Menu.Item>
+          </Menu.Dropdown>
+        </Menu>
+      </div>
 
       {/* Cartes principales */}
-      <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md" mb="xl">
-        <Paper withBorder p="md" radius="md">
-          <Group justify="space-between">
-            <div>
-              <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
-                Unités en stock
-              </Text>
-              <Text fw={700} size="xl">
-                {stats.totalStock.toLocaleString('fr-FR')}
-              </Text>
+      <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md" className={styles.metricsGrid}>
+        <div className={styles.metricCard}>
+          <div className={styles.metricBody}>
+            <div className={styles.metricLabel}>Unités en stock</div>
+            <div className={`${styles.metricValue} ${styles.metricValueNeutral}`}>
+              {stats.totalStock.toLocaleString('fr-FR')}
             </div>
-            <ThemeIcon color="blue" variant="light" size={48} radius="md">
-              <IconPackage size={24} />
-            </ThemeIcon>
-          </Group>
-        </Paper>
+          </div>
+          <div className={`${styles.metricIcon} ${styles.metricIcon_slate}`}>
+            <IconPackage size={20} />
+          </div>
+        </div>
 
-        <Paper withBorder p="md" radius="md">
-          <Group justify="space-between">
-            <div>
-              <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
-                Coût du stock
-              </Text>
-              <Text fw={700} size="xl">
-                {stats.totalStockValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €
-              </Text>
+        <div className={styles.metricCard}>
+          <div className={styles.metricBody}>
+            <div className={styles.metricLabel}>Coût du stock</div>
+            <div className={`${styles.metricValue} ${styles.metricValueNeutral}`}>
+              {stats.totalStockValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}
+              <span className={styles.metricUnit}>€</span>
             </div>
-            <ThemeIcon color="orange" variant="light" size={48} radius="md">
-              <IconCurrencyEuro size={24} />
-            </ThemeIcon>
-          </Group>
-        </Paper>
+          </div>
+          <div className={`${styles.metricIcon} ${styles.metricIcon_clay}`}>
+            <IconCurrencyEuro size={20} />
+          </div>
+        </div>
 
-        <Paper withBorder p="md" radius="md">
-          <Group justify="space-between">
-            <div>
-              <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
-                Valeur de vente
-              </Text>
-              <Text fw={700} size="xl">
-                {stats.totalSaleValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €
-              </Text>
+        <div className={styles.metricCard}>
+          <div className={styles.metricBody}>
+            <div className={styles.metricLabel}>Valeur de vente</div>
+            <div className={`${styles.metricValue} ${styles.metricValueNeutral}`}>
+              {stats.totalSaleValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}
+              <span className={styles.metricUnit}>€</span>
             </div>
-            <ThemeIcon color="teal" variant="light" size={48} radius="md">
-              <IconChartBar size={24} />
-            </ThemeIcon>
-          </Group>
-        </Paper>
+          </div>
+          <div className={`${styles.metricIcon} ${styles.metricIcon_plum}`}>
+            <IconChartBar size={20} />
+          </div>
+        </div>
 
-        <Paper withBorder p="md" radius="md">
-          <Group justify="space-between">
-            <div>
-              <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
-                Profit potentiel
-              </Text>
-              <Text fw={700} size="xl" c={stats.potentialProfit >= 0 ? 'green' : 'red'}>
-                {stats.potentialProfit.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €
-              </Text>
+        <div className={styles.metricCard}>
+          <div className={styles.metricBody}>
+            <div className={styles.metricLabel}>Profit potentiel</div>
+            <div className={`${styles.metricValue} ${stats.potentialProfit >= 0 ? styles.metricValuePositive : styles.metricValueNegative}`}>
+              {stats.potentialProfit.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}
+              <span className={styles.metricUnit}>€</span>
             </div>
-            <ThemeIcon color="green" variant="light" size={48} radius="md">
-              <IconTrendingUp size={24} />
-            </ThemeIcon>
-          </Group>
-        </Paper>
+          </div>
+          <div className={`${styles.metricIcon} ${styles.metricIcon_moss}`}>
+            <IconTrendingUp size={20} />
+          </div>
+        </div>
       </SimpleGrid>
 
-      <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md" mb="xl">
+      <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md" className={styles.panelsGrid}>
         {/* Stock par type de produit */}
-        <Paper withBorder p="md" radius="md">
-          <Group mb="md">
-            <IconPackage size={20} />
-            <Text fw={600}>Stock par type de produit</Text>
-          </Group>
-          <Stack gap="xs">
+        <div className={styles.panel}>
+          <div className={styles.panelHead}>
+            <span className={styles.panelIcon}>
+              <IconPackage size={18} />
+            </span>
+            <h3 className={styles.panelTitle}>
+              Stock par <em>type</em>
+            </h3>
+          </div>
+          <div>
             {Object.entries(stats.byProductType).slice(0, 8).map(([type, data]) => (
-              <div key={type}>
-                <Group justify="space-between" mb={4}>
-                  <Text size="sm" fw={500}>{type}</Text>
-                  <Group gap="xs">
-                    <Badge size="sm" variant="light">
-                      {data.stock.toLocaleString('fr-FR')} unités
-                    </Badge>
-                    <Badge size="sm" variant="light" color="green">
+              <div key={type} className={styles.row}>
+                <div className={styles.rowHead}>
+                  <div className={styles.rowLabel}>
+                    <span className={styles.rowLabelText}>{type}</span>
+                  </div>
+                  <div className={styles.rowMetrics}>
+                    <span style={{ fontFamily: 'var(--font-inter)', fontSize: 12, color: 'var(--slate-soft)' }}>
+                      {data.stock.toLocaleString('fr-FR')}
+                    </span>
+                    <span style={{ fontFamily: 'var(--font-fraunces)', fontStyle: 'italic', fontSize: 12, color: 'var(--moss)' }}>
                       {data.value.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €
-                    </Badge>
-                  </Group>
-                </Group>
-                <Progress 
-                  value={(data.stock / maxStock) * 100} 
-                  size="sm" 
-                  color="blue"
-                />
+                    </span>
+                  </div>
+                </div>
+                <div className={styles.bar}>
+                  <div
+                    className={styles.barFill}
+                    style={{ width: `${(data.stock / maxStock) * 100}%` }}
+                  />
+                </div>
               </div>
             ))}
-          </Stack>
-        </Paper>
+          </div>
+        </div>
 
         {/* Top produits */}
-        <Paper withBorder p="md" radius="md">
-          <Group mb="md">
-            <IconTrendingUp size={20} />
-            <Text fw={600}>Top 10 produits en stock</Text>
-          </Group>
-          <Stack gap="xs">
+        <div className={styles.panel}>
+          <div className={styles.panelHead}>
+            <span className={styles.panelIcon}>
+              <IconTrendingUp size={18} />
+            </span>
+            <h3 className={styles.panelTitle}>
+              Top 10 <em>produits</em>
+            </h3>
+          </div>
+          <div>
             {stats.topProducts.slice(0, 10).map((product, index) => (
-              <Group key={product.title} justify="space-between">
-                <Group gap="xs">
-                  <Badge size="sm" variant="filled" color="gray" circle>
-                    {index + 1}
-                  </Badge>
-                  <Text size="sm" lineClamp={1} style={{ maxWidth: 200 }}>
-                    {product.title}
-                  </Text>
-                </Group>
-                <Group gap="xs">
-                  <Badge size="sm" variant="light">
-                    {product.stock.toLocaleString('fr-FR')}
-                  </Badge>
-                  <Badge size="sm" variant="light" color="green">
-                    {product.value.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €
-                  </Badge>
-                </Group>
-              </Group>
+              <div key={product.title} className={styles.row}>
+                <div className={styles.rowHead}>
+                  <div className={styles.rowLabel}>
+                    <span className={styles.rankBadge}>{index + 1}</span>
+                    <span className={styles.rowLabelText}>{product.title}</span>
+                  </div>
+                  <div className={styles.rowMetrics}>
+                    <span style={{ fontFamily: 'var(--font-inter)', fontSize: 12, color: 'var(--slate-soft)' }}>
+                      {product.stock.toLocaleString('fr-FR')}
+                    </span>
+                    <span style={{ fontFamily: 'var(--font-fraunces)', fontStyle: 'italic', fontSize: 12, color: 'var(--moss)' }}>
+                      {product.value.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €
+                    </span>
+                  </div>
+                </div>
+              </div>
             ))}
-          </Stack>
-        </Paper>
+          </div>
+        </div>
       </SimpleGrid>
 
       <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md">
         {/* Couleurs les plus présentes */}
-        <Paper withBorder p="md" radius="md">
-          <Group mb="md">
-            <IconPalette size={20} />
-            <Text fw={600}>Couleurs les plus présentes</Text>
-          </Group>
-          <Stack gap="xs">
+        <div className={styles.panel}>
+          <div className={styles.panelHead}>
+            <span className={styles.panelIcon}>
+              <IconPalette size={18} />
+            </span>
+            <h3 className={styles.panelTitle}>
+              Couleurs <em>présentes</em>
+            </h3>
+          </div>
+          <div>
             {Object.entries(stats.byColor).slice(0, 12).map(([color, data]) => {
               const hex = getColorHex(color);
+              const showSwatch = hex && hex !== '#808080';
               return (
-                <div key={color}>
-                  <Group justify="space-between" mb={4}>
-                    <Group gap="xs">
-                      {hex && hex !== '#808080' && (
-                        <div
-                          style={{
-                            width: 16,
-                            height: 16,
-                            borderRadius: '50%',
-                            background: hex,
-                            border: '1px solid #ddd',
-                          }}
+                <div key={color} className={styles.row}>
+                  <div className={styles.rowHead}>
+                    <div className={styles.rowLabel}>
+                      {showSwatch && (
+                        <span
+                          className={styles.colorSwatch}
+                          style={{ background: hex }}
                         />
                       )}
-                      <Text size="sm" fw={500}>{color}</Text>
-                    </Group>
-                    <Badge size="sm" variant="light">
-                      {data.stock.toLocaleString('fr-FR')} unités
-                    </Badge>
-                  </Group>
-                  <Progress 
-                    value={(data.stock / maxColorStock) * 100} 
-                    size="sm" 
-                    color={hex && hex !== '#808080' ? undefined : 'gray'}
-                    styles={hex && hex !== '#808080' ? {
-                      section: { backgroundColor: hex }
-                    } : undefined}
-                  />
+                      <span className={styles.rowLabelText}>{color}</span>
+                    </div>
+                    <div className={styles.rowMetrics}>
+                      <span style={{ fontFamily: 'var(--font-inter)', fontSize: 12, color: 'var(--slate-soft)' }}>
+                        {data.stock.toLocaleString('fr-FR')}
+                      </span>
+                    </div>
+                  </div>
+                  <div className={styles.bar}>
+                    <div
+                      className={styles.barFill}
+                      style={{
+                        width: `${(data.stock / maxColorStock) * 100}%`,
+                        ...(showSwatch ? { background: hex } : {}),
+                      }}
+                    />
+                  </div>
                 </div>
               );
             })}
-          </Stack>
-        </Paper>
+          </div>
+        </div>
 
         {/* Tailles les plus présentes */}
-        <Paper withBorder p="md" radius="md">
-          <Group mb="md">
-            <IconRuler2 size={20} />
-            <Text fw={600}>Répartition par taille</Text>
-          </Group>
-          <Stack gap="xs">
+        <div className={styles.panel}>
+          <div className={styles.panelHead}>
+            <span className={styles.panelIcon}>
+              <IconRuler2 size={18} />
+            </span>
+            <h3 className={styles.panelTitle}>
+              Répartition par <em>taille</em>
+            </h3>
+          </div>
+          <div>
             {sortedSizes.map(([size, data]) => (
-              <div key={size}>
-                <Group justify="space-between" mb={4}>
-                  <Badge size="md" variant="filled" color="blue">
-                    {size}
-                  </Badge>
-                  <Badge size="sm" variant="light">
-                    {data.stock.toLocaleString('fr-FR')} unités
-                  </Badge>
-                </Group>
-                <Progress 
-                  value={(data.stock / maxSizeStock) * 100} 
-                  size="sm" 
-                  color="blue"
-                />
+              <div key={size} className={styles.row}>
+                <div className={styles.rowHead}>
+                  <div className={styles.rowLabel}>
+                    <span className={styles.sizePill}>{size}</span>
+                  </div>
+                  <div className={styles.rowMetrics}>
+                    <span style={{ fontFamily: 'var(--font-inter)', fontSize: 12, color: 'var(--slate-soft)' }}>
+                      {data.stock.toLocaleString('fr-FR')}
+                    </span>
+                  </div>
+                </div>
+                <div className={styles.bar}>
+                  <div
+                    className={`${styles.barFill} ${styles.barFill_clay}`}
+                    style={{ width: `${(data.stock / maxSizeStock) * 100}%` }}
+                  />
+                </div>
               </div>
             ))}
-          </Stack>
-        </Paper>
+          </div>
+        </div>
       </SimpleGrid>
     </div>
   );
