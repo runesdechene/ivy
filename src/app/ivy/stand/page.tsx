@@ -1,20 +1,18 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Loader, SimpleGrid } from '@mantine/core';
 import {
-  Title,
-  Text,
-  Card,
-  Group,
-  Stack,
-  SimpleGrid,
-  Loader,
-  Center,
-} from '@mantine/core';
-import { IconPackage, IconArrowDown, IconArrowUp, IconCalendar } from '@tabler/icons-react';
+  IconArrowDown,
+  IconArrowUp,
+  IconCalendar,
+  IconPackage,
+  IconMapPin,
+} from '@tabler/icons-react';
 import { createClient } from '@supabase/supabase-js';
 import { useShop } from '@/context/ShopContext';
 import { useLocation } from '@/context/LocationContext';
+import styles from './stand-dashboard.module.scss';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -91,94 +89,112 @@ export default function FestivalDashboardPage() {
     loadStats();
   }, [currentShop?.id, currentLocation?.id]);
 
+  const shopName = currentShop?.name || 'Runes de Chêne';
+
   if (loading) {
     return (
-      <Center h={400}>
-        <Loader size="lg" />
-      </Center>
+      <div className={styles.container}>
+        <div className={styles.loadingWrap}>
+          <Loader color="moss" />
+        </div>
+      </div>
     );
   }
 
-  if (!stats) return null;
+  if (!stats) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.errorWrap}>
+          Impossible de charger les statistiques.
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <Stack gap="lg">
-      <div>
-        <Title order={2}>Tableau de bord — Festivals</Title>
-        <Text c="dimmed" size="sm">
-          Vue d'ensemble des mouvements de stock
-        </Text>
+    <div className={styles.container}>
+      <div className={styles.pageHead}>
+        <div className={styles.pageHeadLeft}>
+          <div className={styles.eyebrow}>Festivals · {shopName}</div>
+          <h1 className={styles.title}>
+            Tableau <em>de bord</em>
+          </h1>
+          <div className={styles.sub}>
+            <span>Récapitulatif des mouvements stock</span>
+            {currentLocation && (
+              <>
+                <span className={styles.subSep}>·</span>
+                <span className={styles.locationChip}>
+                  <IconMapPin size={11} />
+                  {currentLocation.name}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
-      <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
-        <Card withBorder padding="lg">
-          <Group justify="space-between" align="flex-start">
-            <div>
-              <Text size="sm" c="dimmed" tt="uppercase" fw={600}>
-                Sorties aujourd'hui
-              </Text>
-              <Text size="xl" fw={700} mt="xs">
-                {stats.todayItemsOut}
-              </Text>
-              <Text size="sm" c="dimmed">
-                article{stats.todayItemsOut > 1 ? 's' : ''}
-              </Text>
+      <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md" className={styles.metricsGrid}>
+        <div className={styles.metricCard}>
+          <div className={styles.metricBody}>
+            <div className={styles.metricLabel}>Sorties aujourd&apos;hui</div>
+            <div className={styles.metricValue}>
+              {stats.todayItemsOut.toLocaleString('fr-FR')}
             </div>
-            <IconArrowDown size={32} color="var(--mantine-color-orange-5)" />
-          </Group>
-        </Card>
+            <span className={styles.metricUnit}>
+              article{stats.todayItemsOut > 1 ? 's' : ''}
+            </span>
+          </div>
+          <div className={`${styles.metricIcon} ${styles.metricIcon_clay}`}>
+            <IconArrowDown size={20} />
+          </div>
+        </div>
 
-        <Card withBorder padding="lg">
-          <Group justify="space-between" align="flex-start">
-            <div>
-              <Text size="sm" c="dimmed" tt="uppercase" fw={600}>
-                Retours aujourd'hui
-              </Text>
-              <Text size="xl" fw={700} mt="xs">
-                {stats.todayItemsReturn}
-              </Text>
-              <Text size="sm" c="dimmed">
-                article{stats.todayItemsReturn > 1 ? 's' : ''}
-              </Text>
+        <div className={styles.metricCard}>
+          <div className={styles.metricBody}>
+            <div className={styles.metricLabel}>Retours aujourd&apos;hui</div>
+            <div className={`${styles.metricValue} ${styles.metricValueNeutral}`}>
+              {stats.todayItemsReturn.toLocaleString('fr-FR')}
             </div>
-            <IconArrowUp size={32} color="var(--mantine-color-blue-5)" />
-          </Group>
-        </Card>
+            <span className={styles.metricUnit}>
+              article{stats.todayItemsReturn > 1 ? 's' : ''}
+            </span>
+          </div>
+          <div className={`${styles.metricIcon} ${styles.metricIcon_slate}`}>
+            <IconArrowUp size={20} />
+          </div>
+        </div>
 
-        <Card withBorder padding="lg">
-          <Group justify="space-between" align="flex-start">
-            <div>
-              <Text size="sm" c="dimmed" tt="uppercase" fw={600}>
-                Cette semaine
-              </Text>
-              <Text size="xl" fw={700} mt="xs">
-                {stats.weekItemsOut}
-              </Text>
-              <Text size="sm" c="dimmed">
-                article{stats.weekItemsOut > 1 ? 's' : ''} sorti{stats.weekItemsOut > 1 ? 's' : ''}
-              </Text>
+        <div className={styles.metricCard}>
+          <div className={styles.metricBody}>
+            <div className={styles.metricLabel}>Cette semaine</div>
+            <div className={styles.metricValue}>
+              {stats.weekItemsOut.toLocaleString('fr-FR')}
             </div>
-            <IconCalendar size={32} color="var(--mantine-color-violet-5)" />
-          </Group>
-        </Card>
+            <span className={styles.metricUnit}>
+              article{stats.weekItemsOut > 1 ? 's' : ''} sorti{stats.weekItemsOut > 1 ? 's' : ''}
+            </span>
+          </div>
+          <div className={`${styles.metricIcon} ${styles.metricIcon_plum}`}>
+            <IconCalendar size={20} />
+          </div>
+        </div>
 
-        <Card withBorder padding="lg">
-          <Group justify="space-between" align="flex-start">
-            <div>
-              <Text size="sm" c="dimmed" tt="uppercase" fw={600}>
-                Ce mois
-              </Text>
-              <Text size="xl" fw={700} mt="xs">
-                {stats.monthItemsOut}
-              </Text>
-              <Text size="sm" c="dimmed">
-                article{stats.monthItemsOut > 1 ? 's' : ''} sorti{stats.monthItemsOut > 1 ? 's' : ''}
-              </Text>
+        <div className={styles.metricCard}>
+          <div className={styles.metricBody}>
+            <div className={styles.metricLabel}>Ce mois</div>
+            <div className={styles.metricValue}>
+              {stats.monthItemsOut.toLocaleString('fr-FR')}
             </div>
-            <IconPackage size={32} color="var(--mantine-color-green-5)" />
-          </Group>
-        </Card>
+            <span className={styles.metricUnit}>
+              article{stats.monthItemsOut > 1 ? 's' : ''} sorti{stats.monthItemsOut > 1 ? 's' : ''}
+            </span>
+          </div>
+          <div className={`${styles.metricIcon} ${styles.metricIcon_moss}`}>
+            <IconPackage size={20} />
+          </div>
+        </div>
       </SimpleGrid>
-    </Stack>
+    </div>
   );
 }

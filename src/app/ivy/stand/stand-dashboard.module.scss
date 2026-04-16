@@ -1,0 +1,191 @@
+@use '@/style/_tokens.scss' as *;
+
+.container {
+  position: relative;
+  min-height: 100%;
+  padding: $space-xl;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+// Page head
+.pageHead {
+  margin-bottom: 28px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: $space-lg;
+  flex-wrap: wrap;
+}
+
+.pageHeadLeft {
+  min-width: 0;
+}
+
+.eyebrow {
+  font-family: $font-inter;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: $slate-muted;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.title {
+  font-family: $font-fraunces;
+  font-size: 40px;
+  font-weight: 500;
+  color: $slate;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin: 0 0 8px;
+
+  em {
+    font-style: italic;
+    font-weight: 400;
+    color: $moss;
+  }
+}
+
+.sub {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 16px;
+  color: $slate-soft;
+  font-weight: 400;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.subSep {
+  color: $slate-muted;
+  font-style: normal;
+}
+
+.locationChip {
+  font-family: $font-inter;
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: $moss;
+  background: $moss-bg;
+  border: 1px solid rgba(107, 122, 85, 0.25);
+  border-radius: $radius-pill;
+  padding: 3px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+// Metric cards row
+.metricsGrid {
+  margin-bottom: 28px;
+}
+
+.metricCard {
+  background: $cream-soft;
+  border: 1px solid $divider;
+  border-radius: $radius-xl;
+  padding: 18px 20px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: $space-md;
+  transition: border-color 0.15s ease, background 0.15s ease;
+
+  &:hover {
+    border-color: $divider-strong;
+  }
+}
+
+.metricBody {
+  min-width: 0;
+  flex: 1;
+}
+
+.metricLabel {
+  font-family: $font-inter;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: $slate-muted;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.metricValue {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 30px;
+  color: $moss;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+}
+
+.metricValueNeutral {
+  color: $slate;
+}
+
+.metricUnit {
+  font-family: $font-inter;
+  font-style: normal;
+  font-weight: 400;
+  font-size: 12px;
+  color: $slate-muted;
+  margin-top: 4px;
+  display: block;
+}
+
+.metricIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: $radius-lg;
+  flex-shrink: 0;
+}
+
+.metricIcon_slate {
+  background: rgba(58, 70, 86, 0.08);
+  color: $slate;
+}
+
+.metricIcon_clay {
+  background: $clay-bg;
+  color: $clay;
+}
+
+.metricIcon_moss {
+  background: $moss-bg;
+  color: $moss;
+}
+
+.metricIcon_plum {
+  background: $plum-bg;
+  color: $plum;
+}
+
+// Loading + error wraps
+.loadingWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+
+.errorWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 15px;
+  color: $slate-muted;
+}
