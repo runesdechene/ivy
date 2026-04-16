@@ -2,14 +2,19 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Title, Text, Paper, Table, Button, Group, Badge, ActionIcon, Modal, NumberInput, Checkbox, Loader, Center, Stack, Textarea, Divider, Progress, TextInput, SimpleGrid, Tooltip } from '@mantine/core';
-import { IconArrowLeft, IconPlus, IconTrash, IconDeviceFloppy, IconCheck, IconLock, IconSearch, IconPackage, IconMinus, IconRefresh, IconTag, IconPrinter, IconChecklist } from '@tabler/icons-react';
+import { Text, Button, Group, Modal, NumberInput, Checkbox, Loader, Center, Textarea, TextInput, Tooltip, ActionIcon } from '@mantine/core';
+import { IconArrowLeft, IconPlus, IconTrash, IconDeviceFloppy, IconCheck, IconLock, IconSearch, IconMinus, IconRefresh, IconTag, IconPrinter, IconChecklist, IconDots } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useDisclosure } from '@mantine/hooks';
+import clsx from 'clsx';
 import { useShop } from '@/context/ShopContext';
 import { useLocation } from '@/context/LocationContext';
-import { ProductCard, ProductData } from '@/components/Inventory';
+import { ProductData } from '@/components/Inventory';
 import { SortOptionsBar } from '@/components/Inventory/SortOptionsBar';
+import { StatusBadge, type StatusBadgeVariant } from '@/components/StatusBadge';
+import { SkuChip } from '@/components/SkuChip';
+import { MetaChip } from '@/components/MetaChip';
+import { FilterChip } from '@/components/FilterChip';
 import { getColorHex, isColorOption, loadColorMappingsFromSupabase, areColorMappingsLoaded } from '@/utils/color-transformer';
 import { useTerminalStream } from '@/hooks/useTerminalStream';
 import styles from './order-detail.module.scss';
@@ -42,13 +47,6 @@ interface OrderItem {
   stock_added_at: string | null;
 }
 
-interface StockResult {
-  added: number;
-  failed: number;
-  skipped: number;
-  errors: Array<{ sku: string; variant_title: string; error: string }>;
-}
-
 interface SupplierOrder {
   id: string;
   order_number: string;
@@ -62,6 +60,25 @@ interface SupplierOrder {
   closed_at: string | null;
 }
 
+const STATUS_LABELS: Record<SupplierOrder['status'], string> = {
+  draft: 'Brouillon',
+  requested: 'Demandée',
+  produced: 'Produite',
+  completed: 'Terminée',
+};
+
+const STATUS_VARIANTS: Record<SupplierOrder['status'], StatusBadgeVariant> = {
+  draft: 'slate',
+  requested: 'plum',
+  produced: 'moss',
+  completed: 'moss',
+};
+
+function formatEuro(n: number): string {
+  const sign = n < 0 ? '-' : '';
+  return `${sign}${Math.abs(n).toFixed(2).replace('.', ',')} €`;
+}
+
 export default function OrderDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -69,14 +86,29 @@ export default function OrderDetailPage() {
   const { currentShop } = useShop();
   const { currentLocation } = useLocation();
   const { streamFromUrl, log: terminalLog, endSync: terminalEndSync } = useTerminalStream();
-  
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [order, setOrder] = useState<SupplierOrder | null>(null);
   const [items, setItems] = useState<OrderItem[]>([]);
   const [note, setNote] = useState('');
   const [balanceAdjustment, setBalanceAdjustment] = useState(0);
-  
+
+  // Kebab menu
+  const [kebabOpen, setKebabOpen] = useState(false);
+  const kebabRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!kebabOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (kebabRef.current && !kebabRef.current.contains(e.target as Node)) {
+        setKebabOpen(false);
+      }
+    };
+    window.addEventListener('mousedown', onClick);
+    return () => window.removeEventListener('mousedown', onClick);
+  }, [kebabOpen]);
+
   // Modal ajout produits
   const [addModalOpened, { open: openAddModal, close: closeAddModal }] = useDisclosure(false);
   const [products, setProducts] = useState<ProductData[]>([]);
@@ -88,12 +120,12 @@ export default function OrderDetailPage() {
 
   // Tri des articles dans la liste principale (drag & drop)
   const [sortOrder, setSortOrder] = useState<string[]>(['Nom', 'Couleur', 'Taille']);
-  
+
 
   // Charger la commande et ses articles
   const fetchOrder = useCallback(async () => {
     if (!currentShop || !orderId) return;
-    
+
     setLoading(true);
     try {
       const response = await fetch(`/api/suppliers/orders/${orderId}?shopId=${currentShop.id}`);
@@ -132,12 +164,12 @@ export default function OrderDetailPage() {
       setProducts([]);
       return;
     }
-    
+
     setLoadingProducts(true);
     try {
-      const params = new URLSearchParams({ 
+      const params = new URLSearchParams({
         shopId: currentShop.id,
-        search: query 
+        search: query
       });
       if (currentLocation) {
         params.append('locationId', currentLocation.id);
@@ -167,7 +199,7 @@ export default function OrderDetailPage() {
   // Extraire les préfixes SKU uniques des produits chargés
   const skuPrefixes = useMemo(() => {
     const prefixCounts = new Map<string, Set<string>>();
-    
+
     products.forEach(product => {
       product.variants.forEach(variant => {
         if (variant.sku) {
@@ -182,7 +214,7 @@ export default function OrderDetailPage() {
         }
       });
     });
-    
+
     return Array.from(prefixCounts.entries())
       .map(([prefix, productIds]) => ({ prefix, count: productIds.size }))
       .sort((a, b) => a.prefix.localeCompare(b.prefix));
@@ -264,7 +296,7 @@ export default function OrderDetailPage() {
   // Rechercher les produits quand la query change
   useEffect(() => {
     if (!addModalOpened) return;
-    
+
     const timeoutId = setTimeout(() => {
       if (searchQuery.length >= 3) {
         fetchProducts(searchQuery);
@@ -272,7 +304,7 @@ export default function OrderDetailPage() {
         setProducts([]);
       }
     }, 300); // Debounce de 300ms
-    
+
     return () => clearTimeout(timeoutId);
   }, [searchQuery, addModalOpened, currentShop, currentLocation]);
 
@@ -280,7 +312,7 @@ export default function OrderDetailPage() {
   // Ajouter les variantes sélectionnées
   const addSelectedVariants = async () => {
     if (!currentShop || !orderId) return;
-    
+
     const variantsToAdd = Object.entries(selectedVariants)
       .filter(([_, qty]) => qty > 0)
       .map(([variantId, quantity]) => {
@@ -345,12 +377,12 @@ export default function OrderDetailPage() {
   // Supprimer un article
   const deleteItem = async (itemId: string) => {
     if (!currentShop) return;
-    
+
     try {
       const response = await fetch(`/api/suppliers/orders/${orderId}/items?itemId=${itemId}&shopId=${currentShop.id}`, {
         method: 'DELETE',
       });
-      
+
       if (response.ok) {
         setItems(prev => prev.filter(i => i.id !== itemId));
         notifications.show({
@@ -367,7 +399,7 @@ export default function OrderDetailPage() {
   // Valider/Dévalider un article
   const toggleValidation = async (itemId: string, isValidated: boolean) => {
     if (!currentShop) return;
-    
+
     try {
       const response = await fetch(`/api/suppliers/orders/${orderId}/items`, {
         method: 'PUT',
@@ -378,10 +410,10 @@ export default function OrderDetailPage() {
           is_validated: isValidated,
         }),
       });
-      
+
       if (response.ok) {
-        setItems(prev => prev.map(i => 
-          i.id === itemId 
+        setItems(prev => prev.map(i =>
+          i.id === itemId
             ? { ...i, is_validated: isValidated, validated_at: isValidated ? new Date().toISOString() : null }
             : i
         ));
@@ -394,7 +426,8 @@ export default function OrderDetailPage() {
   // Recalculer les prix basés sur les coûts actuels des variantes
   const recalculatePrices = async () => {
     if (!currentShop || !orderId) return;
-    
+    setKebabOpen(false);
+
     setSaving(true);
     try {
       const response = await fetch(`/api/suppliers/orders/${orderId}/items`, {
@@ -405,7 +438,7 @@ export default function OrderDetailPage() {
           action: 'recalculate_prices',
         }),
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         notifications.show({
@@ -432,7 +465,8 @@ export default function OrderDetailPage() {
   // Rafraîchir les métachamps de tous les articles
   const refreshMetafields = async () => {
     if (!currentShop || !orderId) return;
-    
+    setKebabOpen(false);
+
     setSaving(true);
     try {
       const response = await fetch(`/api/suppliers/orders/${orderId}/items`, {
@@ -443,7 +477,7 @@ export default function OrderDetailPage() {
           action: 'refresh_metafields',
         }),
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         notifications.show({
@@ -547,7 +581,7 @@ export default function OrderDetailPage() {
   // Sauvegarder les modifications de la commande
   const saveOrder = async () => {
     if (!currentShop || !order) return;
-    
+
     setSaving(true);
     try {
       const response = await fetch('/api/suppliers/orders', {
@@ -560,7 +594,7 @@ export default function OrderDetailPage() {
           balance_adjustment: balanceAdjustment,
         }),
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setOrder(data.order);
@@ -861,415 +895,493 @@ export default function OrderDetailPage() {
   }
 
   const isCompleted = order.status === 'completed';
+  const failedOrPendingCount = items.filter(i => i.is_validated && i.stock_status !== 'added').length;
+  const hasPendingStock = isCompleted && failedOrPendingCount > 0;
+  const statusLabel = STATUS_LABELS[order.status];
+  const statusVariant = STATUS_VARIANTS[order.status];
 
   return (
-    <div className={styles.container}>
-      {/* Header */}
-      <Group justify="space-between" mb="lg">
-        <Group>
-          <Button
-            variant="subtle"
-            color="gray"
-            leftSection={<IconArrowLeft size={18} />}
-            onClick={() => router.push('/ivy/commandes/stock')}
-          >
-            Retour
-          </Button>
-          <Title order={2}>{order.order_number}</Title>
-          <Badge 
-            color={
-              order.status === 'completed' ? 'green' : 
-              order.status === 'produced' ? 'teal' : 
-              order.status === 'requested' ? 'blue' : 'gray'
-            }
-            size="lg"
-          >
-            {order.status === 'completed' ? 'Terminée' : 
-             order.status === 'produced' ? 'Produite' : 
-             order.status === 'requested' ? 'Demandée' : 'Brouillon'}
-          </Badge>
-          <Button
-            variant="light"
-            color="green"
-            leftSection={<IconChecklist size={18} />}
-            onClick={() => router.push(`/ivy/commandes/stock/${orderId}/feuillet`)}
-          >
-            Feuillet de commande
-          </Button>
-          <Button
-            variant="light"
-            color="violet"
-            leftSection={<IconPrinter size={18} />}
-            onClick={() => router.push(`/ivy/commandes/stock/${orderId}/impression`)}
-          >
-            Feuillet de production
-          </Button>
-        </Group>
-        
-        <Group>
-          {/* Actions selon le statut */}
-          {order.status === 'draft' && (
-            <>
-              <Button
-                variant="light"
-                leftSection={<IconPlus size={18} />}
-                onClick={handleOpenAddModal}
-              >
-                Ajouter des articles
-              </Button>
-              <Button
-                variant="light"
-                color="orange"
-                leftSection={<IconRefresh size={18} />}
-                onClick={recalculatePrices}
-                loading={saving}
-                disabled={items.length === 0}
-              >
-                Recalculer les prix
-              </Button>
-              <Button
-                variant="light"
-                color="violet"
-                leftSection={<IconTag size={18} />}
-                onClick={refreshMetafields}
-                loading={saving}
-                disabled={items.length === 0}
-              >
-                Rafraîchir métachamps
-              </Button>
-              <Button
-                leftSection={<IconDeviceFloppy size={18} />}
-                onClick={saveOrder}
-                loading={saving}
-              >
-                Sauvegarder
-              </Button>
-              <Button
-                color="blue"
-                leftSection={<IconCheck size={18} />}
-                onClick={() => changeStatus('requested')}
-                disabled={items.length === 0}
-                loading={saving}
-              >
-                Passer en Demandée
-              </Button>
-            </>
-          )}
-          
-          {order.status === 'requested' && (
-            <>
-              <Button
-                variant="light"
-                color="gray"
-                onClick={() => changeStatus('draft')}
-                loading={saving}
-              >
-                Repasser en Brouillon
-              </Button>
-              <Button
-                color="teal"
-                leftSection={<IconCheck size={18} />}
-                onClick={() => changeStatus('produced')}
-                loading={saving}
-              >
-                Marquer comme Produite
-              </Button>
-            </>
-          )}
-          
-          {order.status === 'produced' && (
-            <>
-              <Button
-                variant="light"
-                color="gray"
-                onClick={() => changeStatus('requested')}
-                loading={saving}
-              >
-                Repasser en Demandée
-              </Button>
-              <Button
-                variant="light"
-                color="gray"
-                leftSection={<IconLock size={18} />}
-                onClick={() => closeWithoutStock()}
-                loading={saving}
-              >
-                Terminer sans stock
-              </Button>
-              <Button
-                color="green"
-                leftSection={<IconLock size={18} />}
-                onClick={() => changeStatus('completed')}
-                loading={saving}
-              >
-                Terminer et ajouter au stock
-              </Button>
-            </>
-          )}
+    <div className={styles.page}>
+      {/* Back button */}
+      <button
+        type="button"
+        className={styles.backBtn}
+        onClick={() => router.push('/ivy/commandes/stock')}
+      >
+        <IconArrowLeft size={14} /> Retour aux commandes stock
+      </button>
 
-          {isCompleted && items.some(i => i.is_validated && i.stock_status !== 'added') && (
+      {/* Page head */}
+      <div className={styles.pageHead}>
+        <div className={styles.eyebrow}>Atelier · Runes de Chêne</div>
+        <h1 className={styles.title}>
+          Commande <em>stock</em>
+        </h1>
+        <div className={styles.sub}>
+          <span>N° {order.order_number}</span>
+          <span className={styles.subSep}>·</span>
+          <StatusBadge variant={statusVariant}>{statusLabel}</StatusBadge>
+          <span className={styles.subSep}>·</span>
+          <span>{items.length} article{items.length > 1 ? 's' : ''}</span>
+        </div>
+      </div>
+
+      {/* Action bar */}
+      <div className={styles.actionBar}>
+        <Button
+          variant="light"
+          color="moss"
+          leftSection={<IconChecklist size={16} />}
+          onClick={() => router.push(`/ivy/commandes/stock/${orderId}/feuillet`)}
+        >
+          Feuillet de commande
+        </Button>
+        <Button
+          variant="light"
+          color="plum"
+          leftSection={<IconPrinter size={16} />}
+          onClick={() => router.push(`/ivy/commandes/stock/${orderId}/impression`)}
+        >
+          Feuillet de production
+        </Button>
+
+        <div className={styles.actionSpacer} />
+
+        {/* Actions selon le statut */}
+        {order.status === 'draft' && (
+          <>
             <Button
-              color="orange"
-              leftSection={<IconRefresh size={18} />}
-              onClick={retryFailedStock}
+              variant="light"
+              color="slate"
+              leftSection={<IconPlus size={16} />}
+              onClick={handleOpenAddModal}
+            >
+              Ajouter des articles
+            </Button>
+            <Button
+              variant="light"
+              color="slate"
+              leftSection={<IconDeviceFloppy size={16} />}
+              onClick={saveOrder}
               loading={saving}
             >
-              Ajouter les restants ({items.filter(i => i.is_validated && i.stock_status !== 'added').length})
+              Sauvegarder
             </Button>
-          )}
-        </Group>
-      </Group>
+            <Button
+              color="slate"
+              leftSection={<IconCheck size={16} />}
+              onClick={() => changeStatus('requested')}
+              disabled={items.length === 0}
+              loading={saving}
+            >
+              Passer en Demandée
+            </Button>
+
+            {/* Kebab for secondary actions */}
+            <div className={styles.kebabWrap} ref={kebabRef}>
+              <button
+                type="button"
+                className={styles.btnKebab}
+                onClick={() => setKebabOpen(v => !v)}
+                aria-label="Actions secondaires"
+              >
+                <IconDots size={14} />
+              </button>
+              {kebabOpen && (
+                <div className={styles.kebabMenu}>
+                  <button
+                    type="button"
+                    className={styles.kebabItem}
+                    onClick={recalculatePrices}
+                    disabled={items.length === 0 || saving}
+                  >
+                    <IconRefresh size={14} /> Recalculer les prix
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.kebabItem}
+                    onClick={refreshMetafields}
+                    disabled={items.length === 0 || saving}
+                  >
+                    <IconTag size={14} /> Rafraîchir métachamps
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {order.status === 'requested' && (
+          <>
+            <Button
+              variant="subtle"
+              color="slate"
+              onClick={() => changeStatus('draft')}
+              loading={saving}
+            >
+              Repasser en Brouillon
+            </Button>
+            <Button
+              color="moss"
+              leftSection={<IconCheck size={16} />}
+              onClick={() => changeStatus('produced')}
+              loading={saving}
+            >
+              Marquer comme Produite
+            </Button>
+          </>
+        )}
+
+        {order.status === 'produced' && (
+          <>
+            <Button
+              variant="subtle"
+              color="slate"
+              onClick={() => changeStatus('requested')}
+              loading={saving}
+            >
+              Repasser en Demandée
+            </Button>
+            <Button
+              variant="light"
+              color="slate"
+              leftSection={<IconLock size={16} />}
+              onClick={closeWithoutStock}
+              loading={saving}
+            >
+              Terminer sans stock
+            </Button>
+            <Button
+              color="moss"
+              leftSection={<IconLock size={16} />}
+              onClick={() => changeStatus('completed')}
+              loading={saving}
+            >
+              Terminer et ajouter au stock
+            </Button>
+          </>
+        )}
+
+        {hasPendingStock && (
+          <Button
+            color="clay"
+            leftSection={<IconRefresh size={16} />}
+            onClick={retryFailedStock}
+            loading={saving}
+          >
+            Ajouter les restants ({failedOrPendingCount})
+          </Button>
+        )}
+      </div>
 
       {/* Progression */}
-      <Paper withBorder p="md" radius="md" mb="lg">
-        <Group justify="space-between" mb="xs">
-          <Text fw={600}>Progression de validation</Text>
-          <Text size="sm" c="dimmed">
+      <div className={clsx(styles.card, styles.cardSm)}>
+        <div className={styles.cardHeader}>
+          <h3 className={styles.cardTitle}>Progression de <em>validation</em></h3>
+          <span className={styles.cardSubNote}>
             {totals.validatedCount} / {items.length} articles validés
-          </Text>
-        </Group>
-        <Progress value={totals.progress} size="lg" color="green" />
-      </Paper>
+          </span>
+        </div>
+        <div className={styles.progressTrack}>
+          <div className={styles.progressFill} style={{ width: `${totals.progress}%` }} />
+        </div>
+      </div>
 
       {/* Note */}
-      <Paper withBorder p="md" radius="md" mb="lg">
+      <div className={clsx(styles.card, styles.cardSm)}>
         <Textarea
           label="Note de commande"
-          placeholder="Ajouter une note..."
+          placeholder="Ajouter une note…"
           value={note}
           onChange={(e) => setNote(e.target.value)}
           disabled={isCompleted}
           rows={2}
+          styles={{
+            label: {
+              fontFamily: 'var(--font-inter)',
+              fontSize: 11,
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em',
+              color: 'var(--slate-muted)',
+              fontWeight: 600,
+              marginBottom: 6,
+            },
+            input: {
+              background: 'var(--cream)',
+              borderColor: 'var(--divider)',
+              fontFamily: 'var(--font-inter)',
+              color: 'var(--slate)',
+            },
+          }}
         />
-      </Paper>
+      </div>
 
       {/* Tri des articles par drag & drop */}
       {items.length > 0 && (
-        <Paper withBorder p="sm" radius="md" mb="md">
+        <div className={clsx(styles.card, styles.cardSm)}>
           <SortOptionsBar options={sortOrder} onReorder={setSortOrder} />
-        </Paper>
+        </div>
       )}
 
       {/* Articles */}
       {Object.keys(groupedItems).length > 0 ? (
-        Object.entries(groupedItems).map(([prefix, variantGroups]) => (
-          <Paper key={prefix} withBorder radius="md" mb="lg">
-            <div className={styles.groupHeader}>
-              <Group>
-                <IconPackage size={20} />
-                <Text fw={600}>{prefix}</Text>
-                <Badge variant="light">{variantGroups.reduce((sum, g) => sum + g.items.length, 0)} article(s)</Badge>
-              </Group>
-            </div>
-            <Table striped>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>{isCompleted ? 'Stock' : 'Validé'}</Table.Th>
-                  <Table.Th>Produit</Table.Th>
-                  <Table.Th>SKU</Table.Th>
-                  <Table.Th>Variante</Table.Th>
-                  <Table.Th>Métachamps</Table.Th>
-                  <Table.Th style={{ textAlign: 'right' }}>Qté</Table.Th>
-                  <Table.Th style={{ textAlign: 'right' }}>Coût unit.</Table.Th>
-                  <Table.Th style={{ textAlign: 'right', width: 110 }}>Ajust./u</Table.Th>
-                  <Table.Th style={{ textAlign: 'right' }}>Total validé</Table.Th>
-                  {!isCompleted && <Table.Th style={{ width: 50 }}></Table.Th>}
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {variantGroups.map((variantGroup) => {
-                  const firstItem = variantGroup.items[0];
-                  const validatedCount = variantGroup.items.filter(i => i.is_validated).length;
-                  const validatedTotal = variantGroup.items.filter(i => i.is_validated).reduce((sum, i) => sum + i.line_total, 0);
-                  const allValidated = validatedCount === variantGroup.items.length;
-                  const someValidated = validatedCount > 0 && !allValidated;
-                  const metafields = firstItem.metafields || {};
-                  
-                  return (
-                    <Table.Tr key={variantGroup.key} className={allValidated ? styles.validatedRow : ''}>
-                      <Table.Td>
-                        <Group gap={4}>
-                          {isCompleted ? (
-                            variantGroup.items.map((item) => {
-                              if (item.stock_status === 'added') {
-                                return <Badge key={item.id} size="sm" color="green">Ajouté</Badge>;
-                              } else if (item.stock_status === 'failed') {
-                                return (
-                                  <Tooltip key={item.id} label={item.stock_error || 'Erreur inconnue'} multiline w={300}>
-                                    <Badge size="sm" color="red" style={{ cursor: 'help' }}>Échoué</Badge>
-                                  </Tooltip>
-                                );
-                              } else if (!item.is_validated) {
-                                return <Badge key={item.id} size="sm" color="gray" variant="light">Non validé</Badge>;
-                              } else {
-                                return <Badge key={item.id} size="sm" color="yellow">En attente</Badge>;
-                              }
-                            })
+        Object.entries(groupedItems).map(([prefix, variantGroups]) => {
+          const totalInGroup = variantGroups.reduce((sum, g) => sum + g.items.length, 0);
+          return (
+            <div key={prefix} className={styles.group}>
+              <div className={styles.groupHeader}>
+                <span className={styles.groupTitle}>{prefix}</span>
+                <span className={styles.groupCount}>{totalInGroup} article{totalInGroup > 1 ? 's' : ''}</span>
+              </div>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th className={styles.th}>{isCompleted ? 'Stock' : 'Validé'}</th>
+                    <th className={styles.th}>Produit</th>
+                    <th className={styles.th}>SKU</th>
+                    <th className={styles.th}>Variante</th>
+                    <th className={styles.th}>Métachamps</th>
+                    <th className={clsx(styles.th, styles.thRight)}>Qté</th>
+                    <th className={clsx(styles.th, styles.thRight)}>Prix unit.</th>
+                    <th className={clsx(styles.th, styles.thRight)} style={{ width: 120 }}>Ajust./u</th>
+                    <th className={clsx(styles.th, styles.thRight)}>Total validé</th>
+                    {!isCompleted && <th className={styles.th} style={{ width: 48 }} />}
+                  </tr>
+                </thead>
+                <tbody>
+                  {variantGroups.map((variantGroup) => {
+                    const firstItem = variantGroup.items[0];
+                    const validatedCount = variantGroup.items.filter(i => i.is_validated).length;
+                    const allValidated = validatedCount === variantGroup.items.length;
+                    const someValidated = validatedCount > 0 && !allValidated;
+                    const metafields = firstItem.metafields || {};
+
+                    return (
+                      <tr key={variantGroup.key} className={allValidated ? styles.validatedRow : undefined}>
+                        <td className={styles.td}>
+                          <div className={styles.stockBadges}>
+                            {isCompleted ? (
+                              variantGroup.items.map((item) => {
+                                if (item.stock_status === 'added') {
+                                  return <StatusBadge key={item.id} variant="moss">Ajouté</StatusBadge>;
+                                } else if (item.stock_status === 'failed') {
+                                  return (
+                                    <Tooltip key={item.id} label={item.stock_error || 'Erreur inconnue'} multiline w={300}>
+                                      <span style={{ cursor: 'help', display: 'inline-flex' }}>
+                                        <StatusBadge variant="clay">Échoué</StatusBadge>
+                                      </span>
+                                    </Tooltip>
+                                  );
+                                } else if (!item.is_validated) {
+                                  return <StatusBadge key={item.id} variant="slate">Non validé</StatusBadge>;
+                                } else {
+                                  return <StatusBadge key={item.id} variant="sand">En attente</StatusBadge>;
+                                }
+                              })
+                            ) : (
+                              variantGroup.items.map((item) => (
+                                <Checkbox
+                                  key={item.id}
+                                  checked={item.is_validated}
+                                  onChange={(e) => toggleValidation(item.id, e.currentTarget.checked)}
+                                  size="sm"
+                                  color="moss"
+                                />
+                              ))
+                            )}
+                          </div>
+                        </td>
+                        <td className={clsx(styles.td, styles.tdProductName)}>{firstItem.product_title}</td>
+                        <td className={styles.td}>
+                          {firstItem.sku ? <SkuChip>{firstItem.sku}</SkuChip> : <span className={styles.metaCellEmpty}>—</span>}
+                        </td>
+                        <td className={clsx(styles.td, styles.tdVariant)}>{firstItem.variant_title || '—'}</td>
+                        <td className={styles.td}>
+                          {Object.keys(metafields).length > 0 ? (
+                            <div className={styles.metaChipRow}>
+                              {Object.entries(metafields).map(([key, value]) => (
+                                <MetaChip key={key} keyName={key} value={String(value)} />
+                              ))}
+                            </div>
                           ) : (
-                            variantGroup.items.map((item) => (
-                              <Checkbox
-                                key={item.id}
-                                checked={item.is_validated}
-                                onChange={(e) => toggleValidation(item.id, e.currentTarget.checked)}
-                                size="sm"
-                              />
-                            ))
+                            <span className={styles.metaCellEmpty}>—</span>
                           )}
-                        </Group>
-                      </Table.Td>
-                      <Table.Td>{firstItem.product_title}</Table.Td>
-                      <Table.Td>
-                        <Badge variant="light" color="gray">{firstItem.sku || '-'}</Badge>
-                      </Table.Td>
-                      <Table.Td>{firstItem.variant_title || '-'}</Table.Td>
-                      <Table.Td>
-                        {Object.keys(metafields).length > 0 ? (
-                          <Group gap={4}>
-                            {Object.entries(metafields).map(([key, value]) => (
-                              <Badge key={key} variant="light" color="violet" size="sm">
-                                {key}: {value}
-                              </Badge>
-                            ))}
-                          </Group>
-                        ) : (
-                          <Text size="xs" c="dimmed">-</Text>
-                        )}
-                      </Table.Td>
-                      <Table.Td style={{ textAlign: 'right' }}>
-                        <Text size="sm" c={someValidated ? 'orange' : undefined}>
-                          {validatedCount}/{variantGroup.items.length}
-                        </Text>
-                      </Table.Td>
-                      <Table.Td style={{ textAlign: 'right' }}>{firstItem.unit_price.toFixed(2)} €</Table.Td>
-                      <Table.Td style={{ textAlign: 'right' }}>
-                        <NumberInput
-                          value={firstItem.line_adjustment || 0}
-                          onChange={(value) => {
-                            const adj = Number(value) || 0;
-                            updateLineAdjustment(variantGroup.key, adj);
-                          }}
-                          decimalScale={2}
-                          step={0.5}
-                          suffix=" €"
-                          size="xs"
-                          style={{ width: 100, marginLeft: 'auto' }}
-                          styles={{ input: { textAlign: 'right' } }}
-                        />
-                      </Table.Td>
-                      <Table.Td style={{ textAlign: 'right', fontWeight: 600 }}>
-                        {variantGroup.items
-                          .filter(i => i.is_validated)
-                          .reduce((sum, i) => sum + (i.unit_price + (i.line_adjustment || 0)) * i.quantity, 0)
-                          .toFixed(2)} €
-                      </Table.Td>
-                      {!isCompleted && (
-                        <Table.Td>
-                          <ActionIcon
-                            variant="subtle"
-                            color="red"
-                            onClick={() => {
-                              variantGroup.items.forEach(item => deleteItem(item.id));
+                        </td>
+                        <td className={clsx(styles.td, styles.tdRight)}>
+                          <span className={someValidated ? styles.qtyPartial : styles.qtyFull}>
+                            {validatedCount}/{variantGroup.items.length}
+                          </span>
+                        </td>
+                        <td className={clsx(styles.td, styles.tdRight, styles.tdUnit)}>
+                          {formatEuro(firstItem.unit_price)}
+                        </td>
+                        <td className={clsx(styles.td, styles.tdRight)}>
+                          <NumberInput
+                            value={firstItem.line_adjustment || 0}
+                            onChange={(value) => {
+                              const adj = Number(value) || 0;
+                              updateLineAdjustment(variantGroup.key, adj);
                             }}
-                          >
-                            <IconTrash size={16} />
-                          </ActionIcon>
-                        </Table.Td>
-                      )}
-                    </Table.Tr>
-                  );
-                })}
-              </Table.Tbody>
-            </Table>
-          </Paper>
-        ))
+                            decimalScale={2}
+                            step={0.5}
+                            suffix=" €"
+                            size="xs"
+                            style={{ width: 110, marginLeft: 'auto' }}
+                            styles={{
+                              input: {
+                                textAlign: 'right',
+                                background: 'var(--cream)',
+                                borderColor: 'var(--divider)',
+                                fontFamily: 'var(--font-inter)',
+                                color: 'var(--slate)',
+                              },
+                            }}
+                            disabled={isCompleted}
+                          />
+                        </td>
+                        <td className={clsx(styles.td, styles.tdRight, styles.tdLineTotal)}>
+                          {formatEuro(
+                            variantGroup.items
+                              .filter(i => i.is_validated)
+                              .reduce((sum, i) => sum + (i.unit_price + (i.line_adjustment || 0)) * i.quantity, 0)
+                          )}
+                        </td>
+                        {!isCompleted && (
+                          <td className={styles.td}>
+                            <button
+                              type="button"
+                              className={styles.deleteBtn}
+                              onClick={() => {
+                                variantGroup.items.forEach(item => deleteItem(item.id));
+                              }}
+                              aria-label="Supprimer"
+                            >
+                              <IconTrash size={14} />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          );
+        })
       ) : (
-        <Paper withBorder p="xl" radius="md" mb="lg">
-          <Text c="dimmed" ta="center">
-            Aucun article dans cette commande. Cliquez sur "Ajouter des articles" pour commencer.
-          </Text>
-        </Paper>
+        <div className={styles.emptyState}>
+          Aucun article dans cette commande. Cliquez sur « Ajouter des articles » pour commencer.
+        </div>
       )}
 
       {/* Facturation */}
-      <Paper withBorder p="md" radius="md">
-        <Title order={4} mb="md">Facturation</Title>
-        <Stack gap="sm">
-          <Group justify="space-between">
-            <Text>Sous-total</Text>
-            <Text fw={600}>{totals.subtotal.toFixed(2)} €</Text>
-          </Group>
-          <Group justify="space-between" align="flex-end">
-            <NumberInput
-              label="Balance (ajustement)"
-              value={balanceAdjustment}
-              onChange={(value) => setBalanceAdjustment(Number(value) || 0)}
-              decimalScale={2}
-              prefix={balanceAdjustment >= 0 ? '+' : ''}
-              suffix=" €"
-              style={{ width: 200 }}
-            />
-            <Text fw={600}>{balanceAdjustment >= 0 ? '+' : ''}{balanceAdjustment.toFixed(2)} €</Text>
-          </Group>
-          <Divider />
-          <Group justify="space-between">
-            <Text fw={600}>Total HT</Text>
-            <Text fw={600} size="lg">{totals.totalHt.toFixed(2)} €</Text>
-          </Group>
-          <Group justify="space-between">
-            <Text c="dimmed">TVA (20%)</Text>
-            <Text c="dimmed">{(totals.totalHt * 0.2).toFixed(2)} €</Text>
-          </Group>
-          <Divider />
-          <Group justify="space-between">
-            <Text fw={700} size="lg">Total TTC</Text>
-            <Text fw={700} size="xl" c="green">{totals.totalTtc.toFixed(2)} €</Text>
-          </Group>
-          {totals.validatedCount < totals.totalItems && (
-            <Group justify="space-between">
-              <Text size="sm" c="dimmed">Total TTC projeté (si tout validé)</Text>
-              <Text size="sm" c="dimmed">{totals.projectedTtc.toFixed(2)} €</Text>
-            </Group>
-          )}
-        </Stack>
-      </Paper>
+      <div className={styles.billing}>
+        <h2 className={styles.billingTitle}>
+          <em>Facturation</em>
+        </h2>
+
+        <div className={styles.billingRow}>
+          <span>Sous-total</span>
+          <span className={styles.billingValue}>{formatEuro(totals.subtotal)}</span>
+        </div>
+
+        <div className={styles.billingAdjust}>
+          <span className={styles.billingAdjustLabel}>Balance (ajustement)</span>
+          <NumberInput
+            value={balanceAdjustment}
+            onChange={(value) => setBalanceAdjustment(Number(value) || 0)}
+            decimalScale={2}
+            prefix={balanceAdjustment >= 0 ? '+' : ''}
+            suffix=" €"
+            style={{ width: 200 }}
+            styles={{
+              input: {
+                background: 'var(--cream)',
+                borderColor: 'var(--divider)',
+                fontFamily: 'var(--font-inter)',
+                color: 'var(--slate)',
+                textAlign: 'right',
+              },
+            }}
+            disabled={isCompleted}
+          />
+        </div>
+
+        <div className={styles.billingDivider} />
+
+        <div className={styles.billingRow}>
+          <span style={{ fontWeight: 600 }}>Total HT</span>
+          <span className={styles.billingTotalHt}>{formatEuro(totals.totalHt)}</span>
+        </div>
+        <div className={clsx(styles.billingRow, styles.billingRowMuted)}>
+          <span>TVA (20%)</span>
+          <span>{formatEuro(totals.totalHt * 0.2)}</span>
+        </div>
+
+        <div className={styles.billingDivider} />
+
+        <div className={styles.billingRow}>
+          <span style={{ fontFamily: 'var(--font-fraunces)', fontSize: 22, fontWeight: 500, color: 'var(--slate)', letterSpacing: '-0.01em' }}>
+            Total TTC
+          </span>
+          <span className={styles.billingTotalTtc}>{formatEuro(totals.totalTtc)}</span>
+        </div>
+
+        {totals.validatedCount < totals.totalItems && (
+          <div className={clsx(styles.billingRow, styles.billingRowMuted)} style={{ fontSize: 12 }}>
+            <span>Total TTC projeté (si tout validé)</span>
+            <span>{formatEuro(totals.projectedTtc)}</span>
+          </div>
+        )}
+      </div>
 
       {/* Modal ajout d'articles */}
       <Modal
         opened={addModalOpened}
         onClose={closeAddModal}
-        title="Ajouter des articles"
+        title={<span style={{ fontFamily: 'var(--font-fraunces)', fontSize: 20, fontWeight: 500, color: 'var(--slate)', letterSpacing: '-0.01em' }}>Ajouter des articles</span>}
         size="xl"
+        styles={{
+          content: { background: 'var(--cream-soft)' },
+          header: { background: 'var(--cream-soft)', borderBottom: '1px solid var(--divider)' },
+        }}
       >
         <TextInput
-          placeholder="Rechercher un produit ou SKU..."
+          placeholder="Rechercher un produit ou SKU…"
           leftSection={<IconSearch size={16} />}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           mb="md"
+          styles={{
+            input: {
+              background: 'var(--cream)',
+              borderColor: 'var(--divider)',
+              fontFamily: 'var(--font-inter)',
+            },
+          }}
         />
-        
+
         {/* Filtres SKU */}
         {skuPrefixes.length > 0 && (
-          <Group gap="xs" mb="md" wrap="wrap">
-            <Text size="sm" fw={500}>SKU:</Text>
-            <Badge
-              variant={skuFilter === null ? 'filled' : 'light'}
-              style={{ cursor: 'pointer' }}
+          <div className={styles.skuFilterBar}>
+            <span className={styles.skuFilterLabel}>SKU :</span>
+            <FilterChip
+              active={skuFilter === null}
               onClick={() => setSkuFilter(null)}
             >
               Tous
-            </Badge>
+            </FilterChip>
             {skuPrefixes.map(({ prefix, count }) => (
-              <Badge
+              <FilterChip
                 key={prefix}
-                variant={skuFilter === prefix ? 'filled' : 'light'}
-                style={{ cursor: 'pointer' }}
+                active={skuFilter === prefix}
+                count={count}
                 onClick={() => setSkuFilter(skuFilter === prefix ? null : prefix)}
               >
-                {prefix} ({count})
-              </Badge>
+                {prefix}
+              </FilterChip>
             ))}
-          </Group>
+          </div>
         )}
 
         {modalProductOptions.length > 1 && products.length > 0 && (
@@ -1280,22 +1392,18 @@ export default function OrderDetailPage() {
         )}
 
         {searchQuery.length < 3 ? (
-          <Center h={200}>
-            <Text c="dimmed">Tapez au moins 3 caractères pour rechercher</Text>
-          </Center>
+          <div className={styles.modalHint}>Tapez au moins 3 caractères pour rechercher.</div>
         ) : loadingProducts ? (
           <Center h={200}>
             <Loader />
           </Center>
         ) : displayedProducts.length === 0 ? (
-          <Center h={200}>
-            <Text c="dimmed">Aucun produit trouvé pour "{searchQuery}"</Text>
-          </Center>
+          <div className={styles.modalHint}>Aucun produit trouvé pour « {searchQuery} ».</div>
         ) : (
           <div className={styles.productsList}>
             {displayedProducts.map((product) => (
-              <Paper key={product.id} withBorder p="sm" radius="md" mb="sm">
-                <Text fw={600} mb="xs">{product.title}</Text>
+              <div key={product.id} className={styles.productCard}>
+                <h4 className={styles.productTitle}>{product.title}</h4>
                 <div className={styles.variantsList}>
                   {product.variants.map((variant) => {
                     // Extraire la couleur de la variante
@@ -1308,38 +1416,30 @@ export default function OrderDetailPage() {
                       );
                     }
                     const colorHex = colorOption ? getColorHex(colorOption.value) : null;
-                    
+
                     return (
-                      <Group key={variant.id} justify="space-between" className={styles.variantRow}>
-                        <Group gap="xs">
+                      <div key={variant.id} className={styles.variantRow}>
+                        <div className={styles.variantLeft}>
                           {colorHex && (
-                            <div
-                              style={{
-                                width: 16,
-                                height: 16,
-                                borderRadius: '50%',
-                                background: colorHex,
-                                border: '1px solid #ddd',
-                                flexShrink: 0,
-                              }}
-                            />
+                            <span className={styles.variantDot} style={{ background: colorHex }} />
                           )}
-                          <Text size="sm">{variant.title}</Text>
-                          <Badge size="xs" variant="light">{variant.sku}</Badge>
-                          <Badge size="xs" variant="light" color={variant.quantity > 0 ? 'green' : 'red'}>
+                          <span className={styles.variantLabel}>{variant.title}</span>
+                          {variant.sku && <SkuChip>{variant.sku}</SkuChip>}
+                          <span className={clsx(styles.stockPill, variant.quantity > 0 ? styles.stockOk : styles.stockEmpty)}>
                             stock: {variant.quantity}
-                          </Badge>
-                        </Group>
-                        <Group gap={4}>
+                          </span>
+                        </div>
+                        <div className={styles.variantControls}>
                           <ActionIcon
-                            size="xs"
-                            variant="light"
+                            size="sm"
+                            variant="subtle"
+                            color="slate"
                             onClick={() => setSelectedVariants(prev => ({
                               ...prev,
                               [variant.id]: Math.max(0, (prev[variant.id] || 0) - 1),
                             }))}
                           >
-                            <IconMinus size={12} />
+                            <IconMinus size={14} />
                           </ActionIcon>
                           <NumberInput
                             size="xs"
@@ -1351,39 +1451,48 @@ export default function OrderDetailPage() {
                             }))}
                             style={{ width: 60 }}
                             hideControls
+                            styles={{
+                              input: {
+                                background: 'var(--cream-soft)',
+                                borderColor: 'var(--divider)',
+                                textAlign: 'center',
+                                fontFamily: 'var(--font-inter)',
+                              },
+                            }}
                           />
                           <ActionIcon
-                            size="xs"
-                            variant="light"
+                            size="sm"
+                            variant="subtle"
+                            color="slate"
                             onClick={() => setSelectedVariants(prev => ({
                               ...prev,
                               [variant.id]: (prev[variant.id] || 0) + 1,
                             }))}
                           >
-                            <IconPlus size={12} />
+                            <IconPlus size={14} />
                           </ActionIcon>
-                        </Group>
-                      </Group>
+                        </div>
+                      </div>
                     );
                   })}
                 </div>
-              </Paper>
+              </div>
             ))}
           </div>
         )}
-        
+
         <Group justify="flex-end" mt="md">
-          <Button variant="subtle" onClick={closeAddModal}>Annuler</Button>
-          <Button 
+          <Button variant="subtle" color="slate" onClick={closeAddModal}>Annuler</Button>
+          <Button
+            color="slate"
             onClick={addSelectedVariants}
             loading={saving}
             disabled={Object.values(selectedVariants).every(v => v === 0)}
           >
-            Ajouter ({Object.values(selectedVariants).filter(v => v > 0).length} variante(s))
+            Ajouter ({Object.values(selectedVariants).filter(v => v > 0).length} variante{Object.values(selectedVariants).filter(v => v > 0).length > 1 ? 's' : ''})
           </Button>
         </Group>
       </Modal>
     </div>
   );
 }
-

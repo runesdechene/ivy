@@ -1,30 +1,606 @@
-.container {
-  padding: 0;
+@use '@/style/_tokens.scss' as *;
+
+// ---------------------------------------------------------------------------
+// Page shell
+// ---------------------------------------------------------------------------
+
+.page {
+  padding: $space-xl;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.pageHead {
+  margin-bottom: 24px;
+}
+
+.eyebrow {
+  font-family: $font-inter;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: $slate-muted;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.title {
+  font-family: $font-fraunces;
+  font-size: 40px;
+  font-weight: 500;
+  color: $slate;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin: 0 0 8px;
+
+  em {
+    font-style: italic;
+    font-weight: 400;
+    color: $moss;
+  }
+}
+
+.sub {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 16px;
+  color: $slate-soft;
+  font-weight: 400;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.subSep {
+  color: $slate-muted;
+  font-style: normal;
+}
+
+.backBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: $radius-md;
+  border: 1px solid transparent;
+  background: transparent;
+  color: $slate-soft;
+  font-family: $font-inter;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-bottom: 12px;
+
+  &:hover {
+    background: $cream-warm;
+    color: $slate;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Action bar
+// ---------------------------------------------------------------------------
+
+.actionBar {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  padding: 14px $space-base;
+  background: $cream-soft;
+  border: 1px solid $divider;
+  border-radius: $radius-xl;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  position: relative;
+}
+
+.actionSpacer {
+  flex: 1;
+}
+
+.kebabWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.btnKebab {
+  width: 36px;
+  height: 36px;
+  border-radius: $radius-md;
+  background: transparent;
+  border: 1px solid $divider-strong;
+  color: $slate-soft;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: $cream-warm;
+    color: $slate;
+  }
+}
+
+.kebabMenu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  background: $cream-soft;
+  border: 1px solid $divider;
+  border-radius: $radius-md;
+  box-shadow: 0 8px 24px rgba(43, 52, 64, 0.1);
+  padding: 4px;
+  min-width: 240px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+}
+
+.kebabItem {
+  padding: 8px 10px;
+  background: transparent;
+  border: 0;
+  border-radius: $radius-sm;
+  text-align: left;
+  font-family: $font-inter;
+  font-size: 13px;
+  color: $slate;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  &:hover {
+    background: $cream-warm;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Cards (progress, note, facturation, sort bar)
+// ---------------------------------------------------------------------------
+
+.card {
+  background: $cream-soft;
+  border: 1px solid $divider;
+  border-radius: $radius-xl;
+  padding: $space-base $space-lg;
+  margin-bottom: $space-base;
+}
+
+.cardSm {
+  padding: $space-md $space-base;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $space-sm;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.cardTitle {
+  font-family: $font-fraunces;
+  font-size: 18px;
+  font-weight: 500;
+  color: $slate;
+  letter-spacing: -0.01em;
+  margin: 0;
+
+  em {
+    font-style: italic;
+    color: $moss;
+    font-weight: 400;
+  }
+}
+
+.cardSubNote {
+  font-family: $font-inter;
+  font-size: 12px;
+  color: $slate-muted;
+}
+
+.progressTrack {
+  height: 8px;
+  background: $cream-warm;
+  border-radius: $radius-pill;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: linear-gradient(90deg, $moss 0%, $moss-soft 100%);
+  border-radius: $radius-pill;
+  transition: width 0.3s ease;
+}
+
+// ---------------------------------------------------------------------------
+// Groups (par préfixe SKU)
+// ---------------------------------------------------------------------------
+
+.group {
+  background: $cream-soft;
+  border: 1px solid $divider;
+  border-radius: $radius-xl;
+  overflow: hidden;
+  margin-bottom: 20px;
 }
 
 .groupHeader {
-  padding: 12px 16px;
-  background-color: var(--mantine-color-gray-0);
-  border-bottom: 1px solid var(--mantine-color-gray-3);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px $space-lg;
+  background: $cream-warm;
+  border-bottom: 1px solid $divider;
+}
+
+.groupTitle {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 20px;
+  font-weight: 500;
+  color: $slate;
+  letter-spacing: -0.01em;
+}
+
+.groupCount {
+  padding: 2px 10px;
+  background: $cream-soft;
+  border: 1px solid $divider;
+  border-radius: $radius-pill;
+  font-family: $font-inter;
+  font-size: 11px;
+  font-weight: 600;
+  color: $slate-soft;
+  letter-spacing: 0.04em;
+}
+
+// ---------------------------------------------------------------------------
+// Tableau d'items
+// ---------------------------------------------------------------------------
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.th {
+  font-family: $font-inter;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: $slate-muted;
+  font-weight: 600;
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid $divider;
+  background: $cream;
+}
+
+.thRight {
+  text-align: right;
+}
+
+.td {
+  padding: 12px;
+  border-bottom: 1px solid $divider;
+  font-family: $font-inter;
+  font-size: 13px;
+  color: $slate;
+  vertical-align: middle;
+}
+
+.tdRight {
+  text-align: right;
+}
+
+.tdProductName {
+  font-weight: 600;
+  color: $slate;
+}
+
+.tdVariant {
+  font-family: $font-fraunces;
+  font-style: italic;
+  color: $slate-soft;
+  font-size: 13px;
+}
+
+.tdUnit {
+  font-family: $font-fraunces;
+  font-weight: 500;
+  color: $slate;
+}
+
+.tdLineTotal {
+  font-family: $font-fraunces;
+  font-weight: 500;
+  color: $moss;
+  font-size: 15px;
+  letter-spacing: -0.01em;
 }
 
 .validatedRow {
-  background-color: var(--mantine-color-green-0) !important;
+  background: $moss-bg;
+
+  .tdProductName {
+    color: $slate;
+  }
 }
 
+.qtyPartial {
+  color: $clay;
+  font-weight: 600;
+}
+
+.qtyFull {
+  color: $slate-soft;
+}
+
+.metaCellEmpty {
+  color: $slate-muted;
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 12px;
+}
+
+.metaChipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.deleteBtn {
+  width: 30px;
+  height: 30px;
+  border-radius: $radius-md;
+  background: transparent;
+  border: 1px solid transparent;
+  color: $slate-muted;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    background: rgba(168, 91, 76, 0.12);
+    color: $rust;
+  }
+}
+
+.stockBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+// ---------------------------------------------------------------------------
+// Empty state
+// ---------------------------------------------------------------------------
+
+.emptyState {
+  padding: 56px 24px;
+  text-align: center;
+  color: $slate-muted;
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 15px;
+  background: $cream-soft;
+  border: 1px dashed $divider-strong;
+  border-radius: $radius-xl;
+  margin-bottom: 20px;
+}
+
+// ---------------------------------------------------------------------------
+// Facturation
+// ---------------------------------------------------------------------------
+
+.billing {
+  background: $cream-soft;
+  border: 1px solid $divider;
+  border-radius: $radius-xl;
+  padding: $space-lg $space-xl;
+}
+
+.billingTitle {
+  font-family: $font-fraunces;
+  font-size: 22px;
+  font-weight: 500;
+  color: $slate;
+  letter-spacing: -0.01em;
+  margin: 0 0 $space-base;
+
+  em {
+    font-style: italic;
+    color: $moss;
+    font-weight: 400;
+  }
+}
+
+.billingRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-family: $font-inter;
+  font-size: 14px;
+  color: $slate;
+}
+
+.billingRowMuted {
+  color: $slate-muted;
+}
+
+.billingDivider {
+  height: 1px;
+  background: $divider;
+  margin: 8px 0;
+}
+
+.billingValue {
+  font-family: $font-fraunces;
+  font-weight: 500;
+  font-size: 15px;
+}
+
+.billingTotalHt {
+  font-family: $font-fraunces;
+  font-weight: 500;
+  font-size: 20px;
+  color: $slate;
+  letter-spacing: -0.01em;
+}
+
+.billingTotalTtc {
+  font-family: $font-fraunces;
+  font-weight: 500;
+  font-size: 26px;
+  color: $moss;
+  letter-spacing: -0.01em;
+}
+
+.billingAdjust {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 0;
+}
+
+.billingAdjustLabel {
+  font-family: $font-inter;
+  font-size: 14px;
+  color: $slate;
+}
+
+// ---------------------------------------------------------------------------
+// Modal add articles
+// ---------------------------------------------------------------------------
+
 .productsList {
-  max-height: 400px;
+  max-height: 460px;
   overflow-y: auto;
+  padding-right: 4px;
+}
+
+.productCard {
+  background: $cream-soft;
+  border: 1px solid $divider;
+  border-radius: $radius-lg;
+  padding: $space-md $space-base;
+  margin-bottom: $space-md;
+}
+
+.productTitle {
+  font-family: $font-fraunces;
+  font-size: 16px;
+  font-weight: 500;
+  color: $slate;
+  letter-spacing: -0.01em;
+  margin: 0 0 8px;
 }
 
 .variantsList {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .variantRow {
-  padding: 4px 8px;
-  background-color: var(--mantine-color-gray-0);
-  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 10px;
+  background: $cream;
+  border: 1px solid $divider;
+  border-radius: $radius-md;
+
+  &:hover {
+    background: $cream-warm;
+  }
+}
+
+.variantLeft {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.variantLabel {
+  font-family: $font-inter;
+  font-size: 13px;
+  color: $slate;
+}
+
+.variantDot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  flex-shrink: 0;
+}
+
+.stockPill {
+  font-family: $font-inter;
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: $radius-pill;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+
+  &.stockOk {
+    background: $moss-bg;
+    color: $moss;
+  }
+
+  &.stockEmpty {
+    background: rgba(168, 91, 76, 0.12);
+    color: $rust;
+  }
+}
+
+.variantControls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.modalHint {
+  padding: 40px 20px;
+  text-align: center;
+  color: $slate-muted;
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 14px;
+}
+
+.skuFilterBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: $space-md;
+}
+
+.skuFilterLabel {
+  font-family: $font-inter;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: $slate-muted;
+  font-weight: 600;
 }
