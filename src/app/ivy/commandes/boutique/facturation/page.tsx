@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { Title, Paper, Stack, Table, Text, Group, Box, Select, Loader, Center, Badge, Button, NumberInput, Divider } from '@mantine/core';
+import { Loader } from '@mantine/core';
 import { IconFileInvoice, IconCheck, IconX } from '@tabler/icons-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { VariantCheckboxGroup } from '@/components/VariantCheckboxGroup';
+import { FilterChip } from '@/components/FilterChip';
+import { StatusBadge } from '@/components/StatusBadge';
 import { useShop } from '@/context/ShopContext';
 import { supabase } from '@/supabase/client';
 import { encodeFirestoreId } from '@/utils/firebase-helpers';
@@ -39,13 +41,13 @@ interface Order {
   line_items: LineItem[];
 }
 
-interface OrderSettings {
-  handling_fee: number;
-}
-
 interface MonthlyBillingStatus {
   is_invoiced: boolean;
   is_paid: boolean;
+}
+
+function formatEuro(value: number): string {
+  return `${value.toFixed(2).replace('.', ',')} €`;
 }
 
 export default function FacturationBoutiquePage() {
@@ -119,7 +121,7 @@ export default function FacturationBoutiquePage() {
 
   const fetchBillingStatus = useCallback(async () => {
     if (!currentShop || !selectedMonth) return;
-    
+
     try {
       const res = await fetch(`/api/billing/monthly-status?shopId=${currentShop.id}&monthKey=${selectedMonth}`);
       if (res.ok) {
@@ -133,7 +135,7 @@ export default function FacturationBoutiquePage() {
 
   const updateBillingStatus = async (field: 'isInvoiced' | 'isPaid', value: boolean) => {
     if (!currentShop) return;
-    
+
     try {
       const res = await fetch('/api/billing/monthly-status', {
         method: 'PUT',
@@ -144,7 +146,7 @@ export default function FacturationBoutiquePage() {
           [field]: value,
         }),
       });
-      
+
       if (res.ok) {
         const data = await res.json();
         setBillingStatus(data.status);
@@ -218,9 +220,9 @@ export default function FacturationBoutiquePage() {
     const [year, month] = monthKey.split('-');
     const monthTitle = new Date(parseInt(year), parseInt(month) - 1).toLocaleDateString('fr-FR', {
       month: 'long',
-      year: 'numeric'
+      year: 'numeric',
     });
-    return { value: monthKey, label: monthTitle };
+    return { value: monthKey, label: monthTitle, count: ordersByMonth[monthKey]?.length || 0 };
   });
 
   const formatVariant = (variantTitle?: string) => {
@@ -255,227 +257,297 @@ export default function FacturationBoutiquePage() {
     return calculateMonthlySubtotal(monthOrders) + monthlyBalance;
   };
 
-  if (loading) {
-    return (
-      <Center h={400}>
-        <Loader size="lg" />
-      </Center>
-    );
-  }
-
   const currentMonthOrders = ordersByMonth[selectedMonth] || [];
+  const currentMonthLabel = (() => {
+    const [year, month] = selectedMonth.split('-');
+    if (!year || !month) return '';
+    return new Date(parseInt(year), parseInt(month) - 1).toLocaleDateString('fr-FR', {
+      month: 'long',
+      year: 'numeric',
+    });
+  })();
+
+  const monthlyTotal = calculateMonthlyTotal(currentMonthOrders);
 
   return (
-    <div className={styles.container}>
-      <Group justify="space-between" align="flex-end" mb="lg">
-        <Title order={2}>Facturation</Title>
-        <Select
-          label="Mois"
-          placeholder="Sélectionnez un mois"
-          data={monthOptions}
-          value={selectedMonth}
-          onChange={(value) => setSelectedMonth(value || '')}
-          w={250}
-        />
-      </Group>
-
-      {currentMonthOrders.length === 0 ? (
-        <Paper withBorder p="xl" radius="md">
-          <Center>
-            <Text c="dimmed">Aucune commande pour ce mois.</Text>
-          </Center>
-        </Paper>
-      ) : (
-        <Paper withBorder radius="md" style={{ overflow: 'hidden' }}>
-          <Group justify="space-between" p="md" style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}>
-            <Box>
-              <Title order={3}>
-                {new Date(parseInt(selectedMonth.split('-')[0]), parseInt(selectedMonth.split('-')[1]) - 1).toLocaleDateString('fr-FR', {
-                  month: 'long',
-                  year: 'numeric'
-                })}
-              </Title>
-              <Text size="sm" c="dimmed">{currentMonthOrders.length} commande(s)</Text>
-            </Box>
-            <Group gap="md">
-              <Button
-                variant={billingStatus.is_invoiced ? 'filled' : 'light'}
-                color={billingStatus.is_invoiced ? 'blue' : 'gray'}
-                leftSection={billingStatus.is_invoiced ? <IconCheck size={16} /> : <IconFileInvoice size={16} />}
-                onClick={() => updateBillingStatus('isInvoiced', !billingStatus.is_invoiced)}
-              >
-                {billingStatus.is_invoiced ? 'Mois facturé' : 'Non facturé'}
-              </Button>
-              <Button
-                variant={billingStatus.is_paid ? 'filled' : 'light'}
-                color={billingStatus.is_paid ? 'green' : 'gray'}
-                leftSection={billingStatus.is_paid ? <IconCheck size={16} /> : <IconX size={16} />}
-                onClick={() => updateBillingStatus('isPaid', !billingStatus.is_paid)}
-                disabled={!billingStatus.is_invoiced}
-              >
-                {billingStatus.is_paid ? 'Facture payée' : 'Non payée'}
-              </Button>
-              <Badge size="xl" variant="light" color="green">
-                Total: {calculateMonthlyTotal(currentMonthOrders).toFixed(2)} € HT
-              </Badge>
-            </Group>
-          </Group>
-
-          <div className={styles.tableWrapper}>
-            <Table striped highlightOnHover>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th style={{ width: 100 }}>Date</Table.Th>
-                  <Table.Th style={{ width: 100 }}>Commande</Table.Th>
-                  <Table.Th>Contenu</Table.Th>
-                  <Table.Th style={{ width: 120, textAlign: 'right' }}>Coût articles</Table.Th>
-                  <Table.Th style={{ width: 100, textAlign: 'right' }}>Manutention</Table.Th>
-                  <Table.Th style={{ width: 100, textAlign: 'right' }}>Total</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {currentMonthOrders.map((order) => {
-                  let itemIdx = 0;
-                  const itemsCost = order.line_items
-                    .filter(item => !item.isCancelled)
-                    .reduce((sum, item) => {
-                      const cost = getItemBilledCost(order, item, itemIdx);
-                      itemIdx++;
-                      return sum + cost;
-                    }, 0);
-                  const totalCost = itemsCost + (itemsCost > 0 ? handlingFee : 0);
-
-                  return (
-                    <Table.Tr key={order.id}>
-                      <Table.Td>
-                        {format(new Date(order.created_at), 'dd/MM/yyyy', { locale: fr })}
-                      </Table.Td>
-                      <Table.Td>
-                        <Text fw={500}>#{order.order_number || order.name}</Text>
-                      </Table.Td>
-                      <Table.Td>
-                        <Stack gap={4}>
-                          {order.line_items
-                            .filter(item => !item.isCancelled)
-                            .map((item, index) => {
-                              const color = getColorFromVariant(item);
-                              const size = getSizeFromVariant(item);
-                              const encodedOrderId = encodeFirestoreId(order.shopify_id);
-
-                              return (
-                                <Group key={index} gap="xs" wrap="nowrap">
-                                  <VariantCheckboxGroup
-                                    orderId={encodedOrderId}
-                                    sku={item.sku || ''}
-                                    color={color}
-                                    size={size}
-                                    quantity={item.quantity}
-                                    productIndex={index}
-                                    variantTitle={item.variantTitle}
-                                    lineItems={order.line_items.map(li => ({
-                                      sku: li.sku || '',
-                                      variantTitle: li.variantTitle,
-                                      quantity: li.quantity
-                                    }))}
-                                  />
-                                  <Text size="xs" style={{ flex: 1 }}>
-                                    {item.quantity}× {item.sku} - {formatVariant(item.variantTitle)}
-                                    {item.unitCost !== null && item.unitCost !== undefined && item.unitCost > 0 && (
-                                      <Text span c="dimmed" ml="xs">
-                                        ({item.unitCost.toFixed(2)} €/u)
-                                      </Text>
-                                    )}
-                                  </Text>
-                                  <Text size="xs" fw={500} style={{ minWidth: 60, textAlign: 'right' }}>
-                                    {(() => {
-                                      const billedCost = getItemBilledCost(order, item, index);
-                                      return billedCost > 0 ? `${billedCost.toFixed(2)} \u20ac` : '-';
-                                    })()}
-                                  </Text>
-                                </Group>
-                              );
-                            })}
-                        </Stack>
-                      </Table.Td>
-                      <Table.Td style={{ textAlign: 'right' }}>
-                        <Text fw={500}>{itemsCost.toFixed(2)} €</Text>
-                      </Table.Td>
-                      <Table.Td style={{ textAlign: 'right' }}>
-                        <Text c="dimmed">{handlingFee.toFixed(2)} €</Text>
-                      </Table.Td>
-                      <Table.Td style={{ textAlign: 'right' }}>
-                        <Text fw={600} c="blue">{totalCost.toFixed(2)} €</Text>
-                      </Table.Td>
-                    </Table.Tr>
-                  );
-                })}
-              </Table.Tbody>
-              <Table.Tfoot>
-                <Table.Tr style={{ backgroundColor: 'var(--mantine-color-gray-1)' }}>
-                  <Table.Td colSpan={3}>
-                    <Text fw={600}>Sous-total du mois</Text>
-                  </Table.Td>
-                  <Table.Td style={{ textAlign: 'right' }}>
-                    <Text fw={600}>
-                      {currentMonthOrders.reduce((sum, o) => {
-                        let idx = 0;
-                        return sum + o.line_items.filter(i => !i.isCancelled).reduce((s, i) => {
-                          const cost = getItemBilledCost(o, i, idx);
-                          idx++;
-                          return s + cost;
-                        }, 0);
-                      }, 0).toFixed(2)} €
-                    </Text>
-                  </Table.Td>
-                  <Table.Td style={{ textAlign: 'right' }}>
-                    <Text fw={600}>
-                      {currentMonthOrders.reduce((sum, o) => {
-                        let idx = 0;
-                        const hasChecked = o.line_items.filter(i => !i.isCancelled).some(i => {
-                          const cost = getItemBilledCost(o, i, idx);
-                          idx++;
-                          return cost > 0;
-                        });
-                        return sum + (hasChecked ? handlingFee : 0);
-                      }, 0).toFixed(2)} €
-                    </Text>
-                  </Table.Td>
-                  <Table.Td style={{ textAlign: 'right' }}>
-                    <Text fw={600}>
-                      {calculateMonthlySubtotal(currentMonthOrders).toFixed(2)} €
-                    </Text>
-                  </Table.Td>
-                </Table.Tr>
-                <Table.Tr>
-                  <Table.Td colSpan={5}>
-                    <Text fw={600}>Balance (ajustement)</Text>
-                  </Table.Td>
-                  <Table.Td style={{ textAlign: 'right' }}>
-                    <NumberInput
-                      value={monthlyBalance}
-                      onChange={(value) => updateMonthlyBalance(Number(value) || 0)}
-                      decimalScale={2}
-                      prefix={monthlyBalance >= 0 ? '+' : ''}
-                      suffix=" €"
-                      size="xs"
-                      style={{ width: 140, marginLeft: 'auto' }}
-                    />
-                  </Table.Td>
-                </Table.Tr>
-                <Table.Tr style={{ backgroundColor: 'var(--mantine-color-blue-0)' }}>
-                  <Table.Td colSpan={5}>
-                    <Text fw={700} size="lg">Total du mois</Text>
-                  </Table.Td>
-                  <Table.Td style={{ textAlign: 'right' }}>
-                    <Text fw={700} c="blue" size="lg">
-                      {calculateMonthlyTotal(currentMonthOrders).toFixed(2)} € HT
-                    </Text>
-                  </Table.Td>
-                </Table.Tr>
-              </Table.Tfoot>
-            </Table>
+    <div className={styles.page}>
+      <header className={styles.pageHead}>
+        <div className={styles.pageHeadLeft}>
+          <div className={styles.eyebrow}>Atelier · Runes de Chêne</div>
+          <h1 className={styles.title}>
+            Facturation <em>mensuelle</em>
+          </h1>
+          <div className={styles.sub}>
+            {loading ? (
+              <span>Chargement…</span>
+            ) : (
+              <>
+                <span>{currentMonthOrders.length} commande{currentMonthOrders.length > 1 ? 's' : ''}</span>
+                <span className={styles.subSep}>·</span>
+                <span>{formatEuro(monthlyTotal)} HT ce mois</span>
+              </>
+            )}
           </div>
-        </Paper>
+        </div>
+      </header>
+
+      {loading ? (
+        <div className={styles.loaderWrap}>
+          <Loader size="lg" color="var(--moss)" />
+        </div>
+      ) : (
+        <>
+          {monthOptions.length > 0 && (
+            <div className={styles.filterBar}>
+              <span className={styles.filterLabel}>Mois</span>
+              {monthOptions.map((opt) => (
+                <FilterChip
+                  key={opt.value}
+                  active={selectedMonth === opt.value}
+                  count={opt.count}
+                  onClick={() => setSelectedMonth(opt.value)}
+                >
+                  {opt.label}
+                </FilterChip>
+              ))}
+            </div>
+          )}
+
+          {currentMonthOrders.length === 0 ? (
+            <div className={styles.emptyState}>Aucune commande pour ce mois.</div>
+          ) : (
+            <div className={styles.monthPanel}>
+              <div className={styles.monthHeader}>
+                <div className={styles.monthHeaderLeft}>
+                  <h2 className={styles.monthTitle}>{currentMonthLabel}</h2>
+                  <div className={styles.monthSub}>
+                    {currentMonthOrders.length} commande{currentMonthOrders.length > 1 ? 's' : ''}
+                  </div>
+                </div>
+                <div className={styles.monthHeaderRight}>
+                  {billingStatus.is_invoiced ? (
+                    <StatusBadge variant="moss">Facturé</StatusBadge>
+                  ) : (
+                    <StatusBadge variant="sand">Non facturé</StatusBadge>
+                  )}
+                  {billingStatus.is_paid ? (
+                    <StatusBadge variant="moss">Payée</StatusBadge>
+                  ) : billingStatus.is_invoiced ? (
+                    <StatusBadge variant="clay">Impayée</StatusBadge>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    className={billingStatus.is_invoiced ? styles.btnGhost : styles.btnPrimary}
+                    onClick={() => updateBillingStatus('isInvoiced', !billingStatus.is_invoiced)}
+                  >
+                    {billingStatus.is_invoiced ? (
+                      <>
+                        <IconCheck size={14} /> Mois facturé
+                      </>
+                    ) : (
+                      <>
+                        <IconFileInvoice size={14} /> Marquer facturé
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    className={billingStatus.is_paid ? styles.btnGhost : styles.btnMoss}
+                    onClick={() => updateBillingStatus('isPaid', !billingStatus.is_paid)}
+                    disabled={!billingStatus.is_invoiced}
+                  >
+                    {billingStatus.is_paid ? (
+                      <>
+                        <IconCheck size={14} /> Facture payée
+                      </>
+                    ) : (
+                      <>
+                        <IconX size={14} /> Marquer payée
+                      </>
+                    )}
+                  </button>
+
+                  <span className={styles.totalPill}>
+                    {formatEuro(monthlyTotal)}
+                    <em>HT</em>
+                  </span>
+                </div>
+              </div>
+
+              <div className={styles.tableWrapper}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th className={styles.th} style={{ width: 110 }}>Date</th>
+                      <th className={styles.th} style={{ width: 110 }}>Commande</th>
+                      <th className={styles.th}>Contenu</th>
+                      <th className={`${styles.th} ${styles.thRight}`} style={{ width: 130 }}>Coût articles</th>
+                      <th className={`${styles.th} ${styles.thRight}`} style={{ width: 110 }}>Manutention</th>
+                      <th className={`${styles.th} ${styles.thRight}`} style={{ width: 110 }}>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentMonthOrders.map((order) => {
+                      let itemIdx = 0;
+                      const itemsCost = order.line_items
+                        .filter(item => !item.isCancelled)
+                        .reduce((sum, item) => {
+                          const cost = getItemBilledCost(order, item, itemIdx);
+                          itemIdx++;
+                          return sum + cost;
+                        }, 0);
+                      const totalCost = itemsCost + (itemsCost > 0 ? handlingFee : 0);
+
+                      return (
+                        <tr key={order.id} className={styles.row}>
+                          <td className={`${styles.td} ${styles.tdDate}`}>
+                            {format(new Date(order.created_at), 'dd/MM/yyyy', { locale: fr })}
+                          </td>
+                          <td className={`${styles.td} ${styles.tdOrderNum}`}>
+                            #{order.order_number || order.name}
+                          </td>
+                          <td className={styles.td}>
+                            <div>
+                              {order.line_items
+                                .filter(item => !item.isCancelled)
+                                .map((item, index) => {
+                                  const color = getColorFromVariant(item);
+                                  const size = getSizeFromVariant(item);
+                                  const encodedOrderId = encodeFirestoreId(order.shopify_id);
+                                  const billedCost = getItemBilledCost(order, item, index);
+                                  const hasBilled = billedCost > 0;
+
+                                  return (
+                                    <div key={index} className={styles.itemRow}>
+                                      <VariantCheckboxGroup
+                                        orderId={encodedOrderId}
+                                        sku={item.sku || ''}
+                                        color={color}
+                                        size={size}
+                                        quantity={item.quantity}
+                                        productIndex={index}
+                                        variantTitle={item.variantTitle}
+                                        lineItems={order.line_items.map(li => ({
+                                          sku: li.sku || '',
+                                          variantTitle: li.variantTitle,
+                                          quantity: li.quantity,
+                                        }))}
+                                      />
+                                      <div className={styles.itemLabel}>
+                                        <span className={styles.itemQty}>{item.quantity}×</span>
+                                        <span className={styles.itemSku}>{item.sku}</span>
+                                        <span className={styles.itemVariant}>{formatVariant(item.variantTitle)}</span>
+                                        {item.unitCost !== null && item.unitCost !== undefined && item.unitCost > 0 && (
+                                          <span className={styles.itemUnit}>
+                                            ({formatEuro(item.unitCost)}/u)
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div
+                                        className={`${styles.itemAmount} ${
+                                          hasBilled ? styles.itemAmountActive : styles.itemAmountMuted
+                                        }`}
+                                      >
+                                        {hasBilled ? formatEuro(billedCost) : '—'}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                          </td>
+                          <td className={`${styles.td} ${styles.tdRight}`}>
+                            <span className={itemsCost > 0 ? styles.amount : `${styles.amount} ${styles.amountMuted}`}>
+                              {formatEuro(itemsCost)}
+                            </span>
+                          </td>
+                          <td className={`${styles.td} ${styles.tdRight}`}>
+                            <span className={`${styles.amount} ${styles.amountMuted}`}>
+                              {formatEuro(itemsCost > 0 ? handlingFee : 0)}
+                            </span>
+                          </td>
+                          <td className={`${styles.td} ${styles.tdRight}`}>
+                            <span className={totalCost > 0 ? styles.amountTotal : `${styles.amount} ${styles.amountMuted}`}>
+                              {formatEuro(totalCost)}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot className={styles.tfoot}>
+                    <tr className={styles.footRow}>
+                      <td className={styles.td} colSpan={3}>
+                        <span className={styles.footLabel}>Sous-total du mois</span>
+                      </td>
+                      <td className={`${styles.td} ${styles.tdRight}`}>
+                        <span className={styles.amount}>
+                          {formatEuro(
+                            currentMonthOrders.reduce((sum, o) => {
+                              let idx = 0;
+                              return sum + o.line_items.filter(i => !i.isCancelled).reduce((s, i) => {
+                                const cost = getItemBilledCost(o, i, idx);
+                                idx++;
+                                return s + cost;
+                              }, 0);
+                            }, 0)
+                          )}
+                        </span>
+                      </td>
+                      <td className={`${styles.td} ${styles.tdRight}`}>
+                        <span className={styles.amount}>
+                          {formatEuro(
+                            currentMonthOrders.reduce((sum, o) => {
+                              let idx = 0;
+                              const hasChecked = o.line_items.filter(i => !i.isCancelled).some(i => {
+                                const cost = getItemBilledCost(o, i, idx);
+                                idx++;
+                                return cost > 0;
+                              });
+                              return sum + (hasChecked ? handlingFee : 0);
+                            }, 0)
+                          )}
+                        </span>
+                      </td>
+                      <td className={`${styles.td} ${styles.tdRight}`}>
+                        <span className={styles.amount}>{formatEuro(calculateMonthlySubtotal(currentMonthOrders))}</span>
+                      </td>
+                    </tr>
+                    <tr className={`${styles.footRow} ${styles.balanceRow}`}>
+                      <td className={styles.td} colSpan={5}>
+                        <span className={styles.footLabel}>Balance (ajustement)</span>
+                      </td>
+                      <td className={`${styles.td} ${styles.tdRight}`}>
+                        <div className={styles.balanceInputWrap}>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={monthlyBalance}
+                            onChange={(e) => updateMonthlyBalance(Number(e.target.value) || 0)}
+                            className={styles.balanceInput}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                    <tr className={`${styles.footRow} ${styles.totalRow}`}>
+                      <td className={styles.td} colSpan={5}>
+                        <span className={styles.totalLabel}>
+                          Total <em>du mois</em>
+                        </span>
+                      </td>
+                      <td className={`${styles.td} ${styles.tdRight}`}>
+                        <span className={styles.totalAmount}>
+                          {formatEuro(monthlyTotal)}
+                          <em>HT</em>
+                        </span>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
