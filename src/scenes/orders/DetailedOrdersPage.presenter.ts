@@ -5,9 +5,15 @@ import { supabase } from '@/supabase/client';
 import { useShop } from '@/context/ShopContext';
 import type { ShopifyOrder } from '@/types/shopify';
 
+export interface OrderProgress {
+  checkedCount: number;
+  totalCount: number;
+}
+
 export function useDetailedOrdersPagePresenter() {
   const [isReversed, setIsReversed] = useState(false);
   const [orders, setOrders] = useState<ShopifyOrder[]>([]);
+  const [progressByOrder, setProgressByOrder] = useState<Record<string, OrderProgress>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<ShopifyOrder | undefined>(undefined);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -16,6 +22,7 @@ export function useDetailedOrdersPagePresenter() {
   useEffect(() => {
     if (!currentShop) {
       setOrders([]);
+      setProgressByOrder({});
       setIsLoading(false);
       return;
     }
@@ -52,10 +59,32 @@ export function useDetailedOrdersPagePresenter() {
       setIsLoading(false);
     };
 
-    loadOrders();
+    const loadProgress = async () => {
+      const { data, error } = await supabase
+        .from('order_progress')
+        .select('order_id, checked_count, total_count')
+        .eq('shop_id', currentShop.id);
 
-    // Écouter les changements en temps réel
-    const channel = supabase
+      if (error) {
+        console.error('Error fetching progress:', error);
+        return;
+      }
+
+      const map: Record<string, OrderProgress> = {};
+      (data || []).forEach((row: any) => {
+        map[row.order_id] = {
+          checkedCount: row.checked_count || 0,
+          totalCount: row.total_count || 0,
+        };
+      });
+      setProgressByOrder(map);
+    };
+
+    loadOrders();
+    loadProgress();
+
+    // Écouter les changements en temps réel (orders)
+    const channelOrders = supabase
       .channel('orders-realtime')
       .on(
         'postgres_changes',
@@ -64,8 +93,19 @@ export function useDetailedOrdersPagePresenter() {
       )
       .subscribe();
 
+    // Écouter les changements sur order_progress
+    const channelProgress = supabase
+      .channel('order-progress-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'order_progress', filter: `shop_id=eq.${currentShop.id}` },
+        () => loadProgress()
+      )
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(channelOrders);
+      supabase.removeChannel(channelProgress);
     };
   }, [currentShop]);
 
@@ -139,6 +179,7 @@ export function useDetailedOrdersPagePresenter() {
 
   return {
     pendingOrders: sortedPendingOrders,
+    progressByOrder,
     orderStats,
     isReversed,
     toggleOrder,

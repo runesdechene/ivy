@@ -1,23 +1,143 @@
-.main_content {
-  padding: 2rem;
+@use '@/style/_tokens.scss' as *;
+
+.page {
+  padding: $space-xl;
+  max-width: 1600px;
+  margin: 0 auto;
 }
 
-.section {
-  margin-top: 2rem;
+.pageHead {
+  margin-bottom: 28px;
 }
 
-.main_content {
-  padding: 2rem;
+.eyebrow {
+  font-family: $font-inter;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: $slate-muted;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
 
-  > * + * {
-    margin-top: 2rem;
+.title {
+  font-family: $font-fraunces;
+  font-size: 40px;
+  font-weight: 500;
+  color: $slate;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin: 0 0 8px;
+
+  em {
+    font-style: italic;
+    font-weight: 400;
+    color: $moss;
   }
 }
 
-.ordersGrid {
+.sub {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 16px;
+  color: $slate-soft;
+  font-weight: 400;
+}
+
+.filterBar {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  margin: 24px 0 20px;
+  padding: 14px $space-base;
+  background: $cream-soft;
+  border: 1px solid $divider;
+  border-radius: $radius-xl;
+  flex-wrap: wrap;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.sortBtn {
+  padding: 6px 10px;
+  border-radius: $radius-md;
+  background: transparent;
+  border: 1px solid $divider-strong;
+  color: $slate-soft;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: $font-inter;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: $cream-warm;
+  }
+}
+
+.search {
+  padding: 7px 14px;
+  background: $cream;
+  border: 1px solid $divider;
+  border-radius: $radius-pill;
+  font-size: 13px;
+  color: $slate;
+  width: 240px;
+  font-family: $font-inter;
+  outline: none;
+
+  &::placeholder {
+    color: $slate-muted;
+  }
+
+  &:focus {
+    border-color: $moss;
+    background: white;
+  }
+}
+
+.printerNotes {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: $space-base;
+  padding: 10px $space-base;
+  background: $cream-warm;
+  border: 1px dashed $divider-strong;
+  border-radius: $radius-lg;
+  flex-wrap: wrap;
+}
+
+.printerNotesLabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: $slate-soft;
+  font-weight: 600;
+}
+
+.printerNoteChip {
+  padding: 4px 10px;
+  background: white;
+  border: 1px solid $divider;
+  border-radius: $radius-pill;
+  font-size: 12px;
+  color: $slate;
+  font-family: $font-inter;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
+
+.grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 1rem;
+  gap: $space-lg;
 
   @media (max-width: 1200px) {
     grid-template-columns: 1fr;
@@ -26,99 +146,360 @@
   }
 }
 
-.orderRow {
-  padding: 1.25rem;
-  border-radius: 12px;
-  transition: box-shadow 0.2s ease;
-  
+.card {
+  background: $cream-soft;
+  border: 1px solid $divider;
+  border-radius: $radius-xl;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+
   &:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(43, 52, 64, 0.06);
+    border-color: $divider-strong;
   }
 }
 
-.orderInfo {
+.cardHead {
+  padding: 14px $space-lg;
+  border-bottom: 1px solid $divider;
+  background: $cream-warm;
+}
+
+.cardHeadTop {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.orderNum {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 24px;
+  font-weight: 500;
+  color: $slate;
+  letter-spacing: -0.01em;
+}
+
+.cardHeadRight {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.cardHeadBottom {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: $slate-soft;
+  flex-wrap: wrap;
+}
+
+.date {
+  color: $slate-muted;
+  font-family: $font-inter;
+}
+
+.daysBadge {
+  padding: 3px 10px;
+  border-radius: $radius-pill;
+  font-size: 11px;
+  font-family: $font-inter;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+
+  &.daysRecent {
+    background: $moss-bg;
+    color: $moss;
+  }
+
+  &.daysMedium {
+    background: $clay-bg;
+    color: $clay;
+  }
+
+  &.daysOld {
+    background: rgba(168, 91, 76, 0.1);
+    color: $rust;
+  }
+}
+
+.costSummary {
+  margin-left: auto;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.costSummaryLabel {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: $slate-muted;
+  font-weight: 600;
+}
+
+.costSummaryAmount {
+  font-family: $font-fraunces;
+  font-weight: 500;
+  font-size: 18px;
+  color: $moss;
+  letter-spacing: -0.01em;
+}
+
+.costSummaryUnit {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 12px;
+  color: $slate-muted;
+}
+
+.cardBody {
+  padding: 10px 14px;
+  flex: 1;
+}
+
+.item {
+  padding: 10px 8px;
+  border-bottom: 1px dashed $divider;
   display: grid;
-  gap: 0.75rem;
-  
-  .orderHeader {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.5rem;
+  grid-template-columns: auto auto 1fr auto;
+  gap: 10px;
+  align-items: flex-start;
 
-    .orderTitle {
-      display: flex;
-      gap: 0.75rem;
-      align-items: center;
-    }
-
-    .orderWaiting {
-      display: flex;
-      gap: 0.75rem;
-      align-items: center;
-    }
+  &:last-child {
+    border-bottom: 0;
   }
 
-  .orderDetails {
-    margin-top: 0.25rem;
-    display: flex;
-    justify-content: stretch;
-    gap: 1rem;
-
-    > * {
-      flex: 1;
-    }
+  &:hover {
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: $radius-md;
   }
-}
 
-.orderItems {
-  padding: 1rem;
-  overflow-x: auto;
-}
-
-.productList {
-  display: grid;
-  gap: 0.5rem;
-}
-
-.productItem {
-  border: none;
-  background: #f1f1f1;
-  border-radius: 20px;
   &.cancelled {
-    opacity: 0.5;
-  }
-
-  .productContent {
-    display: flex;
-    gap: 1rem;
-    align-items: center;
-
-    .productImageContainer {
-      flex: 0 0 100px;
-      width: 100px;
-      height: 100px;
-    }
-
-    .productInfo {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .productActions {
-      flex: 0 0 auto;
-
-      :global(.mantine-Badge-root) {
-        border: none;
-        background: transparent !important;
-        color: #5e5856 !important;
-      }
-    }
+    opacity: 0.45;
   }
 }
 
-.productImage {
-  border-radius: var(--mantine-radius-sm);
-  border: 1px solid var(--mantine-color-gray-3);
+.itemCheck {
+  padding-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.itemInfo {
+  min-width: 0;
+}
+
+.itemName {
+  font-size: 14px;
+  color: $slate;
+  font-weight: 600;
+  line-height: 1.25;
+  margin-bottom: 3px;
+  font-family: $font-inter;
+}
+
+.itemMeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 3px;
+}
+
+.variant {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 12.5px;
+  color: $slate-muted;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.variantDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.qtyPill {
+  padding: 2px 8px;
+  background: white;
+  border: 1px solid $divider;
+  border-radius: $radius-pill;
+  font-size: 11px;
+  font-family: $font-inter;
+  font-weight: 600;
+  color: $slate-soft;
+  letter-spacing: 0.03em;
+}
+
+.noteAlert {
+  margin: 8px 14px;
+  padding: 10px 12px;
+  background: rgba(122, 91, 114, 0.08);
+  border-left: 3px solid $plum;
+  border-radius: $radius-sm;
+  font-size: 12.5px;
+  color: $slate-soft;
+  font-family: $font-fraunces;
+  font-style: italic;
+}
+
+.cardFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px $space-lg;
+  background: $cream;
+  border-top: 1px solid $divider;
+  gap: 10px;
+}
+
+.progressWrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.progressLabel {
+  font-size: 12px;
+  color: $slate-soft;
+  font-weight: 500;
+  min-width: 40px;
+  font-family: $font-fraunces;
+  font-style: italic;
+}
+
+.progressTrack {
+  height: 6px;
+  background: $cream-warm;
+  border-radius: $radius-pill;
+  flex: 1;
+  overflow: hidden;
+  max-width: 140px;
+}
+
+.progressFill {
+  height: 100%;
+  background: linear-gradient(90deg, $moss 0%, $moss-soft 100%);
+  border-radius: $radius-pill;
+  transition: width 0.3s ease;
+}
+
+.footRight {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+}
+
+.btnGhost {
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid $divider-strong;
+  border-radius: $radius-md;
+  font-size: 12.5px;
+  color: $slate;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: $font-inter;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  &:hover {
+    background: $cream-warm;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.btnKebab {
+  width: 32px;
+  height: 32px;
+  border-radius: $radius-md;
+  background: transparent;
+  border: 1px solid transparent;
+  color: $slate-soft;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover {
+    background: $cream-warm;
+    color: $slate;
+  }
+}
+
+.kebabMenu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  background: white;
+  border: 1px solid $divider;
+  border-radius: $radius-md;
+  box-shadow: 0 8px 24px rgba(43, 52, 64, 0.1);
+  padding: 4px;
+  min-width: 220px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+}
+
+.kebabItem {
+  padding: 8px 10px;
+  background: transparent;
+  border: 0;
+  border-radius: $radius-sm;
+  text-align: left;
+  font-family: $font-inter;
+  font-size: 13px;
+  color: $slate;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  &:hover {
+    background: $cream-warm;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.emptyState {
+  padding: 48px 24px;
+  text-align: center;
+  color: $slate-muted;
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 15px;
+}
+
+.loadingWrap {
+  padding: 48px 24px;
+  display: flex;
+  justify-content: center;
 }
