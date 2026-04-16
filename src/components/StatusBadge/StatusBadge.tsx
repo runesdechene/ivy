@@ -1,7 +1,7 @@
 import clsx from 'clsx';
 import styles from './StatusBadge.module.scss';
 
-export type StatusBadgeVariant = 'moss' | 'clay' | 'sand' | 'slate' | 'plum';
+export type StatusBadgeVariant = 'moss' | 'clay' | 'sand' | 'slate' | 'plum' | 'rust';
 
 export interface StatusBadgeProps {
   variant: StatusBadgeVariant;
