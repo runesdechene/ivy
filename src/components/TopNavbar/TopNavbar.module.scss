@@ -1,33 +1,32 @@
+@use '@/style/_tokens.scss' as *;
+
 .topNavbar {
-  position: relative;
-  height: 60px;
-  background-color: white;
-  border-bottom: 1px solid var(--mantine-color-gray-2);
+  height: 68px;
+  background: $cream-soft;
+  border-bottom: 1px solid $divider;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
+  padding: 0 $space-xl;
+  position: sticky;
+  top: 0;
   z-index: 100;
+}
 
-  .rightSection {
-    margin-left: auto;
-  }
+.separator {
+  width: 1px;
+  height: 28px;
+  background: $divider;
+}
 
-  .activeButton {
-    background-color: rgb(240, 213, 198);
-    color: rgb(170, 84, 34);
-    font-weight: 600;
+.navButton {
+  transition: all 0.15s ease;
+}
 
-    &:hover {
-      background-color: rgb(245, 217, 192);
-    }
-  }
-
-  .inactiveButton {
-    color: rgb(170, 84, 34);
-
-    &:hover {
-      background-color: rgb(240, 213, 198);
-    }
-  }
+.version {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 11px;
+  color: $slate-muted;
+  letter-spacing: 0.02em;
 }

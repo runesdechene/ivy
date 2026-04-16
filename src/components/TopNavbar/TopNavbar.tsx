@@ -3,17 +3,17 @@
 import { usePathname, useRouter } from 'next/navigation';
 import { Button, Group, Text, ActionIcon, Tooltip } from '@mantine/core';
 import { IconLogout, IconSettings, IconPackage, IconBuildingStore, IconTent, IconUser } from '@tabler/icons-react';
-import Image from 'next/image';
 import { APP_VERSION } from '@/config/version';
 import { ShopSelector } from '@/components/ShopSelector';
 import { useAuth } from '@/context/AuthContext';
+import { IvyMark } from '@/components/IvyMark';
 import styles from './TopNavbar.module.scss';
 
 export function TopNavbar() {
   const pathname = usePathname();
   const router = useRouter();
   const { signOut } = useAuth();
-  
+
   const isCommandesSection = pathname.startsWith('/ivy/commandes');
   const isInventaireSection = pathname.startsWith('/ivy/inventaire');
   const isStandSection = pathname.startsWith('/ivy/stand');
@@ -30,88 +30,69 @@ export function TopNavbar() {
 
   return (
     <div className={styles.topNavbar}>
-      <Group gap="md">
-        <Image
-          src="/runesdechene.png"
-          alt="Runes de Chêne"
-          width={160}
-          height={66}
-          priority
-          style={{ objectFit: 'contain' }}
-        />
-        <Group gap="xs">
+      <Group gap="xl">
+        <IvyMark size="md" withParent />
+
+        <div className={styles.separator} />
+
+        <Group gap={4}>
           <Button
             variant={isCommandesSection ? 'filled' : 'subtle'}
-            color="orange"
+            color={isCommandesSection ? 'slate' : 'gray'}
             onClick={() => router.push('/ivy/commandes')}
             size="md"
             leftSection={<IconBuildingStore size={18} />}
-            className={isCommandesSection ? styles.activeButton : styles.inactiveButton}
+            className={styles.navButton}
           >
             Atelier
           </Button>
           <Button
             variant={isStandSection ? 'filled' : 'subtle'}
-            color="orange"
+            color={isStandSection ? 'slate' : 'gray'}
             onClick={() => router.push('/ivy/stand')}
             size="md"
             leftSection={<IconTent size={18} />}
-            className={isStandSection ? styles.activeButton : styles.inactiveButton}
+            className={styles.navButton}
           >
             Festivals
           </Button>
           <Button
             variant={isInventaireSection ? 'filled' : 'subtle'}
-            color="orange"
+            color={isInventaireSection ? 'slate' : 'gray'}
             onClick={() => router.push('/ivy/inventaire')}
             size="md"
-            className={isInventaireSection ? styles.activeButton : styles.inactiveButton}
+            className={styles.navButton}
           >
             Inventaire
           </Button>
           <Button
             variant={isHubSection ? 'filled' : 'subtle'}
-            color="orange"
+            color={isHubSection ? 'slate' : 'gray'}
             onClick={() => router.push('/ivy/hub')}
             size="md"
             leftSection={<IconPackage size={18} />}
-            className={isHubSection ? styles.activeButton : styles.inactiveButton}
+            className={styles.navButton}
           >
             HUB de stand
           </Button>
         </Group>
       </Group>
-      
+
       <Group gap="md">
         <ShopSelector />
-        <Text size="sm" c="dimmed">v{APP_VERSION}</Text>
+        <Text className={styles.version}>v{APP_VERSION}</Text>
         <Tooltip label="Profil">
-          <ActionIcon
-            variant="subtle"
-            color="gray"
-            size="lg"
-            onClick={() => router.push('/ivy/profil')}
-          >
+          <ActionIcon variant="subtle" color="gray" size="lg" onClick={() => router.push('/ivy/profil')}>
             <IconUser size={20} />
           </ActionIcon>
         </Tooltip>
         <Tooltip label="Options globales">
-          <ActionIcon
-            variant="subtle"
-            color="gray"
-            size="lg"
-            onClick={() => router.push('/parametres')}
-          >
+          <ActionIcon variant="subtle" color="gray" size="lg" onClick={() => router.push('/parametres')}>
             <IconSettings size={20} />
           </ActionIcon>
         </Tooltip>
         <Tooltip label="Déconnexion">
-          <ActionIcon 
-            variant="subtle" 
-            color="gray" 
-            size="lg"
-            onClick={handleLogout}
-          >
+          <ActionIcon variant="subtle" color="gray" size="lg" onClick={handleLogout}>
             <IconLogout size={20} />
           </ActionIcon>
         </Tooltip>
