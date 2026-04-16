@@ -1,0 +1,49 @@
+// Atelier boréal design tokens — SCSS aliases for CSS custom properties.
+// Import with: @use '@/style/_tokens.scss' as *;
+
+// Surfaces
+$cream: var(--cream);
+$cream-soft: var(--cream-soft);
+$cream-warm: var(--cream-warm);
+$sand-soft: var(--sand-soft);
+
+// Ink scale
+$ink: var(--ink);
+$slate: var(--slate);
+$slate-soft: var(--slate-soft);
+$slate-muted: var(--slate-muted);
+$divider: var(--divider);
+$divider-strong: var(--divider-strong);
+
+// Accents
+$moss: var(--moss);
+$moss-soft: var(--moss-soft);
+$moss-bg: var(--moss-bg);
+$clay: var(--clay);
+$clay-bg: var(--clay-bg);
+$rust: var(--rust);
+$plum: var(--plum);
+$plum-bg: var(--plum-bg);
+$sand: var(--sand);
+
+// Font family aliases
+$font-inter: var(--font-inter);
+$font-fraunces: var(--font-fraunces);
+$font-jetbrains: var(--font-jetbrains);
+
+// Spacing scale (base 4px)
+$space-xs: 4px;
+$space-sm: 8px;
+$space-md: 12px;
+$space-base: 16px;
+$space-lg: 20px;
+$space-xl: 32px;
+$space-2xl: 44px;
+
+// Radius scale
+$radius-xs: 4px;
+$radius-sm: 6px;
+$radius-md: 8px;
+$radius-lg: 10px;
+$radius-xl: 14px;
+$radius-pill: 999px;
