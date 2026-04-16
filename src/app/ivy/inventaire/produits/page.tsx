@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Title, Text, SimpleGrid, Loader, Center, TextInput, Group, Button, Paper, Stack, Badge, Modal } from '@mantine/core';
-import { IconSearch, IconRefresh, IconDownload, IconAlertTriangle, IconArrowLeft } from '@tabler/icons-react';
-import { notifications } from '@mantine/notifications';
+import { Loader, TextInput, Group, Button, Stack, Modal, SimpleGrid, Text } from '@mantine/core';
+import { IconSearch, IconRefresh, IconDownload, IconAlertTriangle } from '@tabler/icons-react';
 import { useDisclosure } from '@mantine/hooks';
 import { useShop } from '@/context/ShopContext';
 import { useLocation } from '@/context/LocationContext';
@@ -16,7 +15,7 @@ import styles from './inventory.module.scss';
 export default function InventoryPage() {
   const { currentShop } = useShop();
   const { currentLocation } = useLocation();
-  const { streamFromUrl, endSync, log: terminalLog } = useTerminalStream();
+  const { streamFromUrl, endSync } = useTerminalStream();
   const [products, setProducts] = useState<ProductData[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -45,7 +44,7 @@ export default function InventoryPage() {
       }
 
       const response = await fetch(`/api/products?${params}`);
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch products');
       }
@@ -53,7 +52,7 @@ export default function InventoryPage() {
       const data = await response.json();
       setProducts(data.products || []);
       setNeedsSync(data.needsSync || false);
-      
+
       // Trouver la date de dernière sync
       if (data.products?.length > 0) {
         const dates = data.products.map((p: any) => p.syncedAt).filter(Boolean);
@@ -126,14 +125,13 @@ export default function InventoryPage() {
   // Extraire les types de produits uniques pour les filtres avec comptage
   const productTypes = useMemo(() => {
     const typeCounts = new Map<string, number>();
-    
+
     products.forEach(product => {
       if (product.productType) {
         typeCounts.set(product.productType, (typeCounts.get(product.productType) || 0) + 1);
       }
     });
-    
-    // Convertir en tableau avec le comptage
+
     return Array.from(typeCounts.entries())
       .map(([type, count]) => ({ type, count }))
       .sort((a, b) => a.type.localeCompare(b.type, 'fr'));
@@ -143,35 +141,35 @@ export default function InventoryPage() {
   const filteredProducts = useMemo(() => {
     let result = [...products];
 
-    // Filtre par recherche (titre ou SKU)
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      result = result.filter(product => 
+      result = result.filter(product =>
         product.title.toLowerCase().includes(query) ||
         product.variants.some(v => v.sku?.toLowerCase().includes(query))
       );
     }
 
-    // Filtre par type de produit
     if (productTypeFilter) {
       result = result.filter(product => product.productType === productTypeFilter);
     }
 
-    // Trier par ordre alphabétique
     result.sort((a, b) => a.title.localeCompare(b.title, 'fr'));
 
     return result;
   }, [products, searchQuery, productTypeFilter]);
 
+  // Total variantes affichées (pour le sub head)
+  const totalVariants = useMemo(() => {
+    return filteredProducts.reduce((sum, p) => sum + p.variants.length, 0);
+  }, [filteredProducts]);
+
   // Sélectionner un produit (sauvegarde la position de scroll)
   const handleSelectProduct = useCallback((product: ProductData) => {
-    // Sauvegarder la position de scroll actuelle
     const contentElement = containerRef.current?.closest('[class*="content"]');
     if (contentElement) {
       scrollPositionRef.current = contentElement.scrollTop;
     }
     setSelectedProduct(product);
-    // Scroller en haut pour la vue détail
     requestAnimationFrame(() => {
       const el = containerRef.current?.closest('[class*="content"]');
       if (el) {
@@ -180,10 +178,8 @@ export default function InventoryPage() {
     });
   }, []);
 
-  // Retour à la liste (restaure la position de scroll)
   const handleBackToList = useCallback(() => {
     setSelectedProduct(null);
-    // Restaurer la position de scroll après le rendu
     requestAnimationFrame(() => {
       const contentElement = containerRef.current?.closest('[class*="content"]');
       if (contentElement) {
@@ -192,52 +188,58 @@ export default function InventoryPage() {
     });
   }, []);
 
+  const shopName = currentShop?.name || 'Runes de Chêne';
+
   // Affichage si besoin de sync initial
   if (!loading && needsSync && products.length === 0) {
     return (
       <div className={styles.container}>
-        <div className={styles.header}>
-          <Title order={1}>Inventaire</Title>
+        <div className={styles.pageHead}>
+          <div className={styles.pageHeadLeft}>
+            <div className={styles.eyebrow}>Inventaire · {shopName}</div>
+            <h1 className={styles.title}>
+              Produits <em>du catalogue</em>
+            </h1>
+          </div>
         </div>
 
-        <Center h={400}>
-          <Paper p="xl" withBorder radius="md" style={{ maxWidth: 500, textAlign: 'center' }}>
-            <Stack gap="md">
-              <IconRefresh size={48} style={{ margin: '0 auto', opacity: 0.5 }} />
-              <Title order={3}>Synchronisation requise</Title>
-              <Text c="dimmed">
-                Aucun produit en cache. Cliquez sur le bouton ci-dessous pour récupérer 
-                vos produits depuis Shopify.
-              </Text>
-              <Button
-                size="lg"
-                color="green"
-                leftSection={<IconDownload size={20} />}
-                onClick={() => handleSyncFromShopify()}
-                loading={syncing}
-              >
-                Récupérer depuis Shopify
-              </Button>
-            </Stack>
-          </Paper>
-        </Center>
+        <div className={styles.syncPrompt}>
+          <IconRefresh size={48} className={styles.syncPromptIcon} />
+          <div className={styles.syncPromptTitle}>Synchronisation requise</div>
+          <div className={styles.syncPromptHint}>
+            Aucun produit en cache. Cliquez sur le bouton ci-dessous pour récupérer
+            vos produits depuis Shopify.
+          </div>
+          <Button
+            size="md"
+            color="slate.8"
+            leftSection={<IconDownload size={18} />}
+            onClick={() => handleSyncFromShopify()}
+            loading={syncing}
+            radius="md"
+          >
+            Récupérer depuis Shopify
+          </Button>
+        </div>
       </div>
     );
   }
 
   if (loading) {
     return (
-      <Center h={400}>
-        <Loader size="lg" color="green" />
-      </Center>
+      <div className={styles.container}>
+        <div className={styles.loadingWrap}>
+          <Loader color="moss" />
+        </div>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <Center h={400}>
-        <Text c="red">{error}</Text>
-      </Center>
+      <div className={styles.container}>
+        <div className={styles.errorWrap}>{error}</div>
+      </div>
     );
   }
 
@@ -245,15 +247,14 @@ export default function InventoryPage() {
   if (selectedProduct) {
     return (
       <div className={styles.container} ref={containerRef}>
-        <ProductDetailView 
-          product={selectedProduct} 
+        <ProductDetailView
+          product={selectedProduct}
           onBack={handleBackToList}
           locationName={currentLocation?.name}
           shopId={currentShop?.id}
           locationId={currentLocation?.id}
           onProductUpdated={(updatedProduct) => {
-            // Mettre à jour le produit dans la liste
-            setProducts(prev => prev.map(p => 
+            setProducts(prev => prev.map(p =>
               p.id === updatedProduct.id ? updatedProduct : p
             ));
             setSelectedProduct(updatedProduct);
@@ -261,29 +262,30 @@ export default function InventoryPage() {
         />
 
         {/* Modal de confirmation pour la synchronisation */}
-        <Modal 
-          opened={syncModalOpened} 
+        <Modal
+          opened={syncModalOpened}
           onClose={closeSyncModal}
+          radius="lg"
           title={
-            <Group gap="xs">
-              <IconAlertTriangle size={20} color="var(--mantine-color-orange-6)" />
-              <Text fw={600}>Confirmer la synchronisation</Text>
-            </Group>
+            <span className={styles.modalTitle}>
+              <IconAlertTriangle size={18} />
+              Confirmer la <em>synchronisation</em>
+            </span>
           }
           centered
         >
           <Stack gap="md">
-            <Text size="sm">
+            <Text size="sm" c="slate.7">
               Vous allez écraser vos changements locaux avec les données de la boutique en ligne.
             </Text>
-            <Text size="sm" c="dimmed">
+            <Text size="xs" c="slate.5" fs="italic">
               Cette action est irréversible. Êtes-vous sûr de vouloir continuer ?
             </Text>
             <Group justify="flex-end" gap="sm" mt="md">
-              <Button variant="default" onClick={closeSyncModal}>
+              <Button variant="default" color="slate" onClick={closeSyncModal}>
                 Annuler
               </Button>
-              <Button color="green" onClick={() => handleSyncFromShopify()}>
+              <Button color="moss" onClick={() => handleSyncFromShopify()}>
                 Oui, synchroniser
               </Button>
             </Group>
@@ -295,55 +297,65 @@ export default function InventoryPage() {
 
   return (
     <div className={styles.container} ref={containerRef}>
-      <div className={styles.header}>
-        <Group justify="space-between" align="flex-start">
-          <div>
-            <Title order={1}>Inventaire</Title>
-            <Group gap="xs" mt={4}>
-              <Text c="dimmed" size="sm">
-                {filteredProducts.length} produit{filteredProducts.length > 1 ? 's' : ''}
-              </Text>
-              {currentLocation && (
-                <Badge variant="light" color="green" size="sm">
-                  {currentLocation.name}
-                </Badge>
-              )}
-              {lastSyncedAt && (
-                <Text c="dimmed" size="xs">
-                  • Sync: {new Date(lastSyncedAt).toLocaleString('fr-FR')}
-                </Text>
-              )}
-            </Group>
+      <div className={styles.pageHead}>
+        <div className={styles.pageHeadLeft}>
+          <div className={styles.eyebrow}>Inventaire · {shopName}</div>
+          <h1 className={styles.title}>
+            Produits <em>du catalogue</em>
+          </h1>
+          <div className={styles.sub}>
+            <span>
+              {filteredProducts.length} produit{filteredProducts.length > 1 ? 's' : ''}
+            </span>
+            <span className={styles.subSep}>·</span>
+            <span>
+              {totalVariants} variante{totalVariants > 1 ? 's' : ''}
+            </span>
+            {currentLocation && (
+              <>
+                <span className={styles.subSep}>·</span>
+                <span className={styles.locationChip}>{currentLocation.name}</span>
+              </>
+            )}
+            {lastSyncedAt && (
+              <>
+                <span className={styles.subSep}>·</span>
+                <span>Sync : {new Date(lastSyncedAt).toLocaleString('fr-FR')}</span>
+              </>
+            )}
           </div>
+        </div>
 
-          <Group gap="xs">
-            <Button
-              variant="light"
-              color="green"
-              leftSection={<IconDownload size={16} />}
-              onClick={() => productTypeFilter ? handleSyncFromShopify(productTypeFilter) : openSyncModal()}
-              loading={syncing}
-              size="sm"
-            >
-              {syncing ? 'Synchronisation...' : productTypeFilter ? `Récupérer: ${productTypeFilter}` : 'Récupérer tout'}
-            </Button>
-          </Group>
+        <Group gap="xs">
+          <Button
+            variant="light"
+            color="moss"
+            leftSection={<IconDownload size={16} />}
+            onClick={() => productTypeFilter ? handleSyncFromShopify(productTypeFilter) : openSyncModal()}
+            loading={syncing}
+            size="sm"
+            radius="md"
+          >
+            {syncing ? 'Synchronisation…' : productTypeFilter ? `Récupérer : ${productTypeFilter}` : 'Récupérer tout'}
+          </Button>
         </Group>
       </div>
 
       <div className={styles.filters}>
         <TextInput
           className={styles.searchInput}
-          placeholder="Rechercher par nom ou SKU..."
+          placeholder="Rechercher par nom ou SKU…"
           leftSection={<IconSearch size={16} />}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.currentTarget.value)}
+          radius="md"
         />
-        
+
         {productTypes.length > 0 && (
           <div className={styles.skuFilters}>
-            <span className={styles.skuLabel}>Type:</span>
+            <span className={styles.skuLabel}>Type</span>
             <button
+              type="button"
               className={`${styles.skuButton} ${styles.allButton} ${productTypeFilter === null ? styles.active : ''}`}
               onClick={() => setProductTypeFilter(null)}
             >
@@ -352,10 +364,12 @@ export default function InventoryPage() {
             {productTypes.map(({ type, count }) => (
               <button
                 key={type}
+                type="button"
                 className={`${styles.skuButton} ${productTypeFilter === type ? styles.active : ''}`}
                 onClick={() => setProductTypeFilter(productTypeFilter === type ? null : type)}
               >
-                {type} <span className={styles.skuCount}>({count})</span>
+                {type}
+                <span className={styles.skuCount}>({count})</span>
               </button>
             ))}
           </div>
@@ -373,35 +387,34 @@ export default function InventoryPage() {
       </SimpleGrid>
 
       {filteredProducts.length === 0 && (
-        <Center h={200}>
-          <Text c="dimmed">Aucun produit trouvé</Text>
-        </Center>
+        <div className={styles.emptyState}>Aucun produit trouvé</div>
       )}
 
       {/* Modal de confirmation pour la synchronisation */}
-      <Modal 
-        opened={syncModalOpened} 
+      <Modal
+        opened={syncModalOpened}
         onClose={closeSyncModal}
+        radius="lg"
         title={
-          <Group gap="xs">
-            <IconAlertTriangle size={20} color="var(--mantine-color-orange-6)" />
-            <Text fw={600}>Confirmer la synchronisation</Text>
-          </Group>
+          <span className={styles.modalTitle}>
+            <IconAlertTriangle size={18} />
+            Confirmer la <em>synchronisation</em>
+          </span>
         }
         centered
       >
         <Stack gap="md">
-          <Text size="sm">
+          <Text size="sm" c="slate.7">
             Vous allez écraser vos changements locaux avec les données de la boutique en ligne.
           </Text>
-          <Text size="sm" c="dimmed">
+          <Text size="xs" c="slate.5" fs="italic">
             Cette action est irréversible. Êtes-vous sûr de vouloir continuer ?
           </Text>
           <Group justify="flex-end" gap="sm" mt="md">
-            <Button variant="default" onClick={closeSyncModal}>
+            <Button variant="default" color="slate" onClick={closeSyncModal}>
               Annuler
             </Button>
-            <Button color="green" onClick={() => handleSyncFromShopify()}>
+            <Button color="moss" onClick={() => handleSyncFromShopify()}>
               Oui, synchroniser
             </Button>
           </Group>

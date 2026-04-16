@@ -1,1 +1,1 @@
-export const APP_VERSION = '0.4.7 - Ivy (Atelier boréal — archives inventaire)';
+export const APP_VERSION = '0.4.8 - Ivy (Atelier boréal — inventaire produits)';

@@ -1,6 +1,7 @@
 'use client';
 
-import { Paper, Image, Text, Badge, Group, Stack } from '@mantine/core';
+import { Image, Badge } from '@mantine/core';
+import { StatusBadge } from '@/components/StatusBadge';
 import styles from './ProductCard.module.scss';
 
 export interface ProductData {
@@ -53,17 +54,24 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
 
   // Formater le breakdown des tailles
   const sizeText = Object.entries(product.sizeBreakdown)
-    .filter(([_, qty]) => qty > 0)
+    .filter(([, qty]) => qty > 0)
     .map(([size, qty]) => `${qty} ${size}`)
     .join(', ');
 
+  const inStock = product.totalQuantity > 0;
+
   return (
-    <Paper 
-      className={styles.card} 
-      withBorder 
-      radius="md" 
+    <div
+      className={styles.card}
       onClick={onClick}
-      p={0}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
     >
       <div className={styles.imageContainer}>
         {product.image ? (
@@ -75,62 +83,56 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
           />
         ) : (
           <div className={styles.noImage}>
-            <Text c="dimmed" size="sm">Pas d'image</Text>
+            Pas d&apos;image
           </div>
         )}
-        <Badge 
+        <Badge
           className={styles.quantityBadge}
           size="lg"
-          color={product.totalQuantity > 0 ? 'green' : 'red'}
+          color={inStock ? 'moss' : 'rust'}
           variant="filled"
         >
           {product.totalQuantity}
         </Badge>
       </div>
-      
-      <Stack gap={4} p="sm">
-        <Text fw={600} size="sm" lineClamp={2}>
-          {product.title}
-        </Text>
+
+      <div className={styles.body}>
+        <div className={styles.title}>{product.title}</div>
+
         {sizeText && (
-          <Text size="xs" c="dimmed" lineClamp={1}>
-            {sizeText}
-          </Text>
+          <div className={styles.sizeText}>{sizeText}</div>
         )}
+
         {product.costRange && (
-          <Text size="xs" c={product.costRange.min === 0 ? 'orange' : 'blue'} fw={500}>
+          <div className={`${styles.cost} ${product.costRange.min === 0 ? styles.warn : ''}`}>
             {product.costRange.min === product.costRange.max
               ? `${product.costRange.min.toFixed(2)} €`
-              : `${product.costRange.min.toFixed(2)} - ${product.costRange.max.toFixed(2)} €`
-            }
-          </Text>
+              : `${product.costRange.min.toFixed(2)} – ${product.costRange.max.toFixed(2)} €`}
+          </div>
         )}
-        <Group gap={4} justify="space-between" wrap="nowrap">
-          <Group gap={4}>
+
+        <div className={styles.metaRow}>
+          <div className={styles.badgeGroup}>
             {isLocal ? (
-              <Badge size="xs" color="orange" variant="light">
-                Local seulement
-              </Badge>
+              <StatusBadge variant="clay">Local seulement</StatusBadge>
             ) : (
               <>
-                <Badge size="xs" color="teal" variant="light">
-                  Shopify
-                </Badge>
+                <StatusBadge variant="moss">Shopify</StatusBadge>
                 {localVariants.length > 0 && (
-                  <Badge size="xs" color="orange" variant="light">
+                  <StatusBadge variant="clay">
                     + {localStock} locale{localStock > 1 ? 's' : ''}
-                  </Badge>
+                  </StatusBadge>
                 )}
               </>
             )}
-          </Group>
+          </div>
           {missingMetafieldsCount > 0 && (
-            <Text size="xs" c="orange" fw={500} style={{ whiteSpace: 'nowrap' }}>
+            <span className={styles.warnText}>
               ⚠ {missingMetafieldsCount} ligne{missingMetafieldsCount > 1 ? 's' : ''} sans méta
-            </Text>
+            </span>
           )}
-        </Group>
-      </Stack>
-    </Paper>
+        </div>
+      </div>
+    </div>
   );
 }

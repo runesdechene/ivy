@@ -1,21 +1,25 @@
+@use '@/style/_tokens.scss' as *;
+
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   padding: 6px 12px;
-  background-color: var(--mantine-color-gray-1);
-  border: 1px solid var(--mantine-color-gray-3);
-  border-radius: 20px;
+  background: $cream-warm;
+  border: 1px solid $divider;
+  border-radius: $radius-pill;
   cursor: grab;
   user-select: none;
-  font-size: 13px;
+  font-family: $font-inter;
+  font-size: 12px;
   font-weight: 500;
-  color: var(--mantine-color-gray-7);
-  transition: all 0.15s ease;
+  color: $slate-soft;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 
   &:hover {
-    background-color: var(--mantine-color-gray-2);
-    border-color: var(--mantine-color-gray-4);
+    background: $cream;
+    border-color: $divider-strong;
+    color: $slate;
   }
 
   &:active {
@@ -24,18 +28,24 @@
 }
 
 .dragging {
-  opacity: 0.8;
-  background-color: var(--mantine-color-blue-1);
-  border-color: var(--mantine-color-blue-4);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  opacity: 0.85;
+  background: $slate;
+  border-color: $slate;
+  color: $cream;
+  box-shadow: 0 6px 18px rgba(43, 52, 64, 0.18);
   z-index: 100;
+
+  .gripIcon {
+    color: $cream;
+  }
 }
 
 .gripIcon {
-  color: var(--mantine-color-gray-5);
+  color: $slate-muted;
   flex-shrink: 0;
 }
 
 .label {
   white-space: nowrap;
+  letter-spacing: 0.01em;
 }

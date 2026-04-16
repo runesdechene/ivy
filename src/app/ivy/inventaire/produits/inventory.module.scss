@@ -1,18 +1,93 @@
+@use '@/style/_tokens.scss' as *;
+
 .container {
   position: relative;
   min-height: 100%;
+  padding: $space-xl;
+  max-width: 1600px;
+  margin: 0 auto;
 }
 
-.header {
+// Page head
+.pageHead {
   margin-bottom: 24px;
-}
-
-// Barre de filtres
-.filters {
   display: flex;
   align-items: flex-end;
-  gap: 16px;
-  margin-bottom: 24px;
+  justify-content: space-between;
+  gap: $space-lg;
+  flex-wrap: wrap;
+}
+
+.pageHeadLeft {
+  min-width: 0;
+}
+
+.eyebrow {
+  font-family: $font-inter;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: $slate-muted;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.title {
+  font-family: $font-fraunces;
+  font-size: 40px;
+  font-weight: 500;
+  color: $slate;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin: 0 0 8px;
+
+  em {
+    font-style: italic;
+    font-weight: 400;
+    color: $moss;
+  }
+}
+
+.sub {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 16px;
+  color: $slate-soft;
+  font-weight: 400;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.subSep {
+  color: $slate-muted;
+  font-style: normal;
+}
+
+.locationChip {
+  font-family: $font-inter;
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: $moss;
+  background: $moss-bg;
+  border: 1px solid rgba(107, 122, 85, 0.25);
+  border-radius: $radius-pill;
+  padding: 3px 10px;
+}
+
+// Filter bar
+.filters {
+  display: flex;
+  align-items: center;
+  gap: $space-md;
+  margin: 24px 0 20px;
+  padding: 14px $space-base;
+  background: $cream-soft;
+  border: 1px solid $divider;
+  border-radius: $radius-xl;
   flex-wrap: wrap;
 }
 
@@ -21,78 +96,152 @@
   max-width: 400px;
 }
 
-// Filtres SKU
+// SKU / type filters
 .skuFilters {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
 .skuLabel {
-  font-size: 14px;
-  color: var(--mantine-color-dimmed);
+  font-family: $font-inter;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: $slate-muted;
+  font-weight: 600;
   margin-right: 4px;
 }
 
 .skuButton {
-  padding: 4px 12px;
-  border-radius: 16px;
+  padding: 6px 12px;
+  border-radius: $radius-pill;
+  font-family: $font-inter;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
-  border: 1px solid var(--mantine-color-gray-3);
-  background-color: white;
-  color: var(--mantine-color-gray-7);
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  border: 1px solid transparent;
+  background: transparent;
+  color: $slate-soft;
 
   &:hover {
-    background-color: var(--mantine-color-green-0);
-    border-color: var(--mantine-color-green-4);
-    color: var(--mantine-color-green-7);
+    background: $cream-warm;
+    color: $slate;
   }
 
   &.active {
-    background-color: var(--mantine-color-green-6);
-    border-color: var(--mantine-color-green-6);
-    color: white;
+    background: $slate;
+    border-color: $slate;
+    color: $cream;
   }
 
   &.allButton {
-    background-color: var(--mantine-color-gray-1);
-    border-color: var(--mantine-color-gray-3);
-    color: var(--mantine-color-gray-7);
+    background: transparent;
+    color: $slate-soft;
 
     &:hover {
-      background-color: var(--mantine-color-gray-2);
+      background: $cream-warm;
     }
 
     &.active {
-      background-color: var(--mantine-color-gray-6);
-      border-color: var(--mantine-color-gray-6);
-      color: white;
+      background: $slate;
+      border-color: $slate;
+      color: $cream;
     }
   }
 }
 
 .skuCount {
-  font-weight: 400;
-  opacity: 0.7;
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-weight: 500;
+  opacity: 0.65;
   font-size: 11px;
+  margin-left: 4px;
 }
 
-// Grille de produits
-.productsGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 16px;
+// Sync prompt — full-screen-ish "no products yet" state
+.syncPrompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: $space-md;
+  min-height: 360px;
+  padding: $space-xl;
+  background: $cream-soft;
+  border: 1px dashed $divider-strong;
+  border-radius: $radius-xl;
+  text-align: center;
+  max-width: 540px;
+  margin: 40px auto;
 }
 
-// Message vide
+.syncPromptIcon {
+  color: $slate-muted;
+}
+
+.syncPromptTitle {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 22px;
+  color: $slate;
+  letter-spacing: -0.01em;
+}
+
+.syncPromptHint {
+  font-family: $font-inter;
+  font-size: 13px;
+  color: $slate-muted;
+  max-width: 420px;
+  line-height: 1.5;
+}
+
+// Empty state
 .emptyState {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 200px;
-  color: var(--mantine-color-dimmed);
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 15px;
+  color: $slate-muted;
+}
+
+// Loading
+.loadingWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+
+// Error
+.errorWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  font-family: $font-inter;
+  color: $rust;
+}
+
+// Modal title
+.modalTitle {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  font-family: $font-fraunces;
+  font-size: 17px;
+  font-weight: 500;
+  color: $slate;
+
+  em {
+    font-style: italic;
+    font-weight: 400;
+    color: $clay;
+  }
 }

@@ -1,19 +1,30 @@
+@use '@/style/_tokens.scss' as *;
+
 .container {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: $space-md;
+  padding: 10px 14px;
+  background: $cream-soft;
+  border: 1px solid $divider;
+  border-radius: $radius-xl;
   flex-wrap: wrap;
 }
 
 .label {
-  font-weight: 500;
+  font-family: $font-inter;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: $slate-muted;
+  font-weight: 600;
   white-space: nowrap;
 }
 
 .chipsContainer {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: $space-sm;
   flex-wrap: wrap;
 }
 
@@ -25,12 +36,15 @@
 .priorityBadge {
   position: absolute;
   top: -8px;
-  right: -4px;
-  background-color: var(--mantine-color-blue-6);
-  color: white;
-  font-size: 9px;
-  font-weight: 600;
-  padding: 2px 5px;
-  border-radius: 8px;
+  right: -6px;
+  background: $moss;
+  color: $cream;
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: $radius-pill;
   line-height: 1;
+  border: 1px solid $cream-soft;
 }

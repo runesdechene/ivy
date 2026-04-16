@@ -1,8 +1,9 @@
 'use client';
 
-import { ActionIcon, Image, Text, Badge, Group, Stack, Table, ScrollArea } from '@mantine/core';
+import { ActionIcon, Image, Group, Stack, Table, ScrollArea } from '@mantine/core';
 import { IconArrowLeft } from '@tabler/icons-react';
 import { ProductData } from './ProductCard';
+import { StatusBadge } from '@/components/StatusBadge';
 import styles from './ProductDetailPanel.module.scss';
 
 interface ProductDetailPanelProps {
@@ -26,15 +27,16 @@ export function ProductDetailPanel({ product, onClose }: ProductDetailPanelProps
     <div className={styles.overlay}>
       <div className={styles.panel}>
         <div className={styles.header}>
-          <ActionIcon 
-            variant="subtle" 
-            color="gray" 
+          <ActionIcon
+            variant="subtle"
+            color="slate"
             size="lg"
             onClick={onClose}
+            aria-label="Retour"
           >
             <IconArrowLeft size={20} />
           </ActionIcon>
-          <Text fw={600} size="lg">Détails du produit</Text>
+          <span className={styles.headerTitle}>Détails du produit</span>
         </div>
 
         <ScrollArea className={styles.content}>
@@ -49,43 +51,35 @@ export function ProductDetailPanel({ product, onClose }: ProductDetailPanelProps
                   fit="contain"
                 />
               ) : (
-                <div className={styles.noImage}>
-                  <Text c="dimmed">Pas d'image</Text>
-                </div>
+                <div className={styles.noImage}>Pas d&apos;image</div>
               )}
             </div>
 
             <Stack gap="md" className={styles.infoSection}>
               <div>
-                <Text size="xl" fw={700}>{product.title}</Text>
-                <Text size="sm" c="dimmed">{product.handle}</Text>
+                <h2 className={styles.productTitle}>{product.title}</h2>
+                <div className={styles.productHandle}>{product.handle}</div>
               </div>
 
-              <Group gap="md">
+              <div className={styles.stockTotal}>
+                <div className={styles.stockLabel}>Stock total</div>
                 <div>
-                  <Text size="xs" c="dimmed" tt="uppercase">Stock total</Text>
-                  <Badge 
-                    size="xl" 
-                    color={product.totalQuantity > 0 ? 'green' : 'red'}
-                    variant="light"
-                  >
-                    {product.totalQuantity} unités
-                  </Badge>
+                  <StatusBadge variant={product.totalQuantity > 0 ? 'moss' : 'rust'}>
+                    {product.totalQuantity} unité{product.totalQuantity > 1 ? 's' : ''}
+                  </StatusBadge>
                 </div>
-              </Group>
+              </div>
 
-              <div>
-                <Text size="sm" fw={600} mb="xs">Répartition par taille</Text>
-                <Group gap="xs">
+              <div className={styles.sizeBreakdown}>
+                <div className={styles.sizeBreakdownTitle}>Répartition par taille</div>
+                <Group gap={6} className={styles.sizeBreakdownBadges}>
                   {Object.entries(product.sizeBreakdown).map(([size, qty]) => (
-                    <Badge 
-                      key={size} 
-                      variant="outline" 
-                      color={qty > 0 ? 'gray' : 'red'}
-                      size="lg"
+                    <StatusBadge
+                      key={size}
+                      variant={qty > 0 ? 'slate' : 'rust'}
                     >
                       {size}: {qty}
-                    </Badge>
+                    </StatusBadge>
                   ))}
                 </Group>
               </div>
@@ -93,7 +87,7 @@ export function ProductDetailPanel({ product, onClose }: ProductDetailPanelProps
           </div>
 
           <div className={styles.variantsSection}>
-            <Text size="sm" fw={600} mb="md">Détail des variantes</Text>
+            <div className={styles.variantsTitle}>Détail des variantes</div>
             <Table striped highlightOnHover>
               <Table.Thead>
                 <Table.Tr>
@@ -106,18 +100,15 @@ export function ProductDetailPanel({ product, onClose }: ProductDetailPanelProps
                 {sortedVariants.map((variant) => (
                   <Table.Tr key={variant.id}>
                     <Table.Td>
-                      <Text size="sm">{variant.title}</Text>
+                      <span className={styles.variantName}>{variant.title}</span>
                     </Table.Td>
                     <Table.Td>
-                      <Text size="sm" c="dimmed">{variant.sku || '-'}</Text>
+                      <span className={styles.variantSku}>{variant.sku || '-'}</span>
                     </Table.Td>
                     <Table.Td style={{ textAlign: 'right' }}>
-                      <Badge 
-                        color={variant.quantity > 0 ? 'green' : 'red'} 
-                        variant="light"
-                      >
+                      <StatusBadge variant={variant.quantity > 0 ? 'moss' : 'rust'}>
                         {variant.quantity}
-                      </Badge>
+                      </StatusBadge>
                     </Table.Td>
                   </Table.Tr>
                 ))}

@@ -1,5 +1,7 @@
+@use '@/style/_tokens.scss' as *;
+
 // ===========================================
-// VUE DÉTAIL PRODUIT - Styles personnalisables
+// VUE DÉTAIL PRODUIT — Atelier boréal
 // ===========================================
 
 .container {
@@ -8,146 +10,179 @@
   height: 100%;
 }
 
-// Header avec bouton retour
+// Sticky header band — sits on top of the IvyLayout content padding
 .header {
   position: sticky;
   z-index: 99;
+  top: -44px;
+  margin-top: -44px;
+  margin-left: -44px;
+  margin-right: -44px;
+  margin-bottom: $space-lg;
+  padding: 12px 18px;
   display: flex;
   align-items: center;
-  top: -40px;
-  margin-top: -42px;
-  margin-left: -42px;
-  margin-right: -40px;
-  margin-bottom: 24px;
-  background: #fefefe;
-  padding: 10px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-
-  gap: 10px;
+  gap: 12px;
+  background: $cream-soft;
+  border-bottom: 1px solid $divider;
+  box-shadow: 0 2px 6px rgba(43, 52, 64, 0.06);
 }
 
 .backButton {
+  font-family: $font-inter;
   font-weight: 500;
 }
 
-// Contenu principal
-.content {
-  flex: 1;
-}
-
-// Section info produit (image + détails)
-.productInfo {
-  margin-bottom: 15px;
-}
-
-// Section image
 .imageSection {
   flex-shrink: 0;
-  background-color: var(--mantine-color-gray-0);
-  border-radius: 12px;
+  width: 44px;
+  height: 44px;
+  background: $cream-warm;
+  border: 1px solid $divider;
+  border-radius: $radius-md;
   overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .productImage {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   aspect-ratio: 1;
   object-fit: contain;
 }
 
 .noImage {
-  aspect-ratio: 1;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--mantine-color-gray-1);
-  color: var(--mantine-color-gray-5);
+  background: $cream-warm;
+  color: $slate-muted;
 }
 
-// Section informations
+.productTitle {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 18px;
+  color: $slate;
+  letter-spacing: -0.01em;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.productHandle {
+  font-family: $font-jetbrains;
+  font-size: 11px;
+  color: $slate-muted;
+  letter-spacing: 0.04em;
+  margin-left: 4px;
+}
+
+.saveButtonContainer {
+  margin-left: auto;
+}
+
+// Main content
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: $space-base;
+}
+
+// Product info card
+.productInfo {
+  margin-bottom: 0;
+}
+
 .infoSection {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: $space-base;
 }
 
-.productTitle {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--mantine-color-dark-8);
-  margin: 0;
-}
-
-.productHandle {
-  font-size: 14px;
-  color: var(--mantine-color-dimmed);
-}
-
-// Stock total
+// Stock total row
 .stockTotal {
   display: flex;
   flex-direction: row;
-  gap: 8px;
+  align-items: center;
+  gap: $space-md;
+  flex-wrap: wrap;
 }
 
 .stockLabel {
+  font-family: $font-inter;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: $slate-muted;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: $radius-pill;
+  background: $cream-warm;
+  border: 1px solid $divider;
   width: fit-content;
-  border-radius: 20px;
-  font-size: 14px;
-  color: var(--mantine-color-dark-3);
-  padding: 7px 20px;
-  background-color: var(--mantine-color-gray-0);
 }
 
 .stockBadge {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: -0.01em;
   width: fit-content;
 }
 
-// Répartition par taille
+// Size breakdown
 .sizeBreakdown {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: $space-sm;
 }
 
 .sizeBreakdownBadges {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
 .sizeBadge {
-  &.inStock {
-    color: var(--mantine-color-green-6);
-    border-color: var(--mantine-color-green-6);
-  }
-
-  &.outOfStock {
-    color: var(--mantine-color-gray-6);
-    border-color: var(--mantine-color-gray-6);
-  }
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: -0.01em;
 }
 
-// Section variantes (tableau)
-.variantsSection, .productInfo {
-  background-color: white;
-  border-radius: 12px;
-  padding: 24px;
-  border: 1px solid var(--mantine-color-gray-2);
+// Cards: product info + variants section
+.variantsSection,
+.productInfo {
+  background: $cream-soft;
+  border: 1px solid $divider;
+  border-radius: $radius-xl;
+  padding: $space-lg;
 }
 
 .variantsTitle {
-  font-size: 16px;
-  color: var(--mantine-color-dark-7);
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 15px;
+  color: $slate;
+  letter-spacing: -0.01em;
 }
 
 .variantsTable {
-  // Styles personnalisés pour le tableau
+  // Mantine table tokens — let Mantine theme handle base colors
 }
 
 .variantName {
+  font-family: $font-inter;
   font-weight: 500;
+  color: $slate;
 }
 
 .variantNameContent {
@@ -159,36 +194,26 @@
 
 .colorDot {
   display: inline-block;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  margin-right: 4px;
+  margin-right: 6px;
   vertical-align: middle;
   flex-shrink: 0;
-}
-
-.option3Badge {
-  display: inline-block;
-  padding: 2px 8px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--mantine-color-gray-7);
-  background-color: var(--mantine-color-gray-1);
-  border: 1px solid var(--mantine-color-gray-3);
-  border-radius: 12px;
+  box-shadow: inset 0 0 0 1px rgba(43, 52, 64, 0.08);
 }
 
 .variantSku {
-  color: var(--mantine-color-dimmed);
-  font-family: monospace;
-  font-size: 13px;
+  font-family: $font-jetbrains;
+  color: $slate-muted;
+  font-size: 12px;
+  letter-spacing: 0.02em;
 }
 
 .variantQuantity {
   text-align: right;
 }
 
-// Contrôles de quantité
 .quantityControls {
   display: flex;
   align-items: center;
@@ -196,33 +221,60 @@
 }
 
 .quantityButton {
-  // Boutons +/-
+  // ActionIcon: Mantine handles via color prop
 }
 
 .quantityInput {
   width: 60px;
-  
+
   input {
     text-align: center;
     font-weight: 600;
+    font-family: $font-inter;
   }
 }
 
 .changeBadge {
-  min-width: 40px;
+  min-width: 38px;
   text-align: center;
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-weight: 500;
 }
 
-// Bouton sauvegarder dans le header
-.saveButtonContainer {
-  margin-left: auto;
+// Inline alert (mismatched / local variant blocks)
+.alertCard {
+  background: $clay-bg;
+  border: 1px solid rgba(179, 133, 102, 0.32);
 }
 
-.saveButton {
-  // Style du bouton sauvegarder
+.localGroupCard {
+  background: $cream-warm;
+  border: 1px solid $divider;
 }
 
-// Sélecteur de tri
-.sortControl {
-  // Style du sélecteur de tri
+.localGroupLabel {
+  font-family: $font-inter;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: $slate-muted;
+  font-weight: 600;
+}
+
+// Modal title (shared)
+.modalTitle {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  font-family: $font-fraunces;
+  font-size: 17px;
+  font-weight: 500;
+  color: $slate;
+
+  em {
+    font-style: italic;
+    font-weight: 400;
+    color: $rust;
+  }
 }

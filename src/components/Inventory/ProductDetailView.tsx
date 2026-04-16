@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Button, Title, Text, Badge, Group, Stack, Table, Image, NumberInput, ActionIcon, Loader, Modal, Paper } from '@mantine/core';
+import { Button, Text, Badge, Group, Stack, Table, Image, NumberInput, ActionIcon, Loader, Modal, Paper } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconArrowLeft, IconPhoto, IconPlus, IconMinus, IconDeviceFloppy, IconTrash, IconRefresh, IconArchive, IconUpload } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useTerminalStream } from '@/hooks/useTerminalStream';
 import { ProductData } from './ProductCard';
 import { SortOptionsBar } from './SortOptionsBar';
+import { StatusBadge } from '@/components/StatusBadge';
+import { MetaChip } from '@/components/MetaChip';
 import { getColorHex, isColorOption } from '@/utils/color-transformer';
 import styles from './ProductDetailView.module.scss';
 
@@ -122,14 +124,14 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
       notifications.show({
         title: 'Variantes supprimées',
         message: `${deleteGroup.ids.length} variante${deleteGroup.ids.length > 1 ? 's' : ''} supprimée${deleteGroup.ids.length > 1 ? 's' : ''}`,
-        color: 'green',
+        color: 'moss',
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Une erreur est survenue';
       notifications.show({
         title: 'Erreur de suppression',
         message,
-        color: 'red',
+        color: 'rust',
       });
     } finally {
       setDeleteGroup(null);
@@ -154,13 +156,13 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
       notifications.show({
         title: 'Produit archivé',
         message: `${product.title} a été déplacé dans les archives`,
-        color: 'green',
+        color: 'moss',
       });
       closeArchiveModal();
       onBack();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Erreur';
-      notifications.show({ title: 'Erreur', message, color: 'red' });
+      notifications.show({ title: 'Erreur', message, color: 'rust' });
     } finally {
       setArchiving(false);
     }
@@ -203,13 +205,13 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
       notifications.show({
         title: 'Variantes corrigées',
         message: `${variantIds.length} variante(s) passée(s) en locale`,
-        color: 'green',
+        color: 'moss',
       });
     } catch {
       notifications.show({
         title: 'Erreur',
         message: 'Impossible de corriger les variantes',
-        color: 'red',
+        color: 'rust',
       });
     } finally {
       setFixingStates(false);
@@ -239,7 +241,7 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
       notifications.show({
         title: 'Erreur',
         message: 'Le push vers Shopify a échoué',
-        color: 'red',
+        color: 'rust',
       });
     }
     setPushing(false);
@@ -275,7 +277,7 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
       notifications.show({
         title: 'Erreur de synchronisation',
         message: 'La synchronisation a échoué',
-        color: 'red',
+        color: 'rust',
       });
     }
     setSyncing(false);
@@ -359,7 +361,7 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
       notifications.show({
         title: 'Erreur',
         message: 'Shop ou emplacement non défini',
-        color: 'red',
+        color: 'rust',
       });
       return;
     }
@@ -384,7 +386,7 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
         notifications.show({
           title: 'Aucune modification',
           message: 'Aucun stock n\'a été modifié',
-          color: 'orange',
+          color: 'clay',
         });
         return;
       }
@@ -409,7 +411,7 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
       notifications.show({
         title: 'Stock mis à jour',
         message: `${changes.length} variante${changes.length > 1 ? 's' : ''} mise${changes.length > 1 ? 's' : ''} à jour`,
-        color: 'green',
+        color: 'moss',
       });
 
       // Mettre à jour le produit parent si callback fourni
@@ -437,7 +439,7 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
       notifications.show({
         title: 'Erreur de sauvegarde',
         message: err.message || 'Une erreur est survenue',
-        color: 'red',
+        color: 'rust',
       });
     } finally {
       setSaving(false);
@@ -512,14 +514,14 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
       <div className={styles.header}>
         <Button
           variant="subtle"
-          color="gray"
+          color="slate"
           leftSection={<IconArrowLeft size={18} />}
           onClick={onBack}
           className={styles.backButton}
         >
-          Retour à l'inventaire
+          Retour à l&apos;inventaire
         </Button>
-         {/* Image */}
+        {/* Image */}
         <div className={styles.imageSection}>
           {product.image ? (
             <Image
@@ -530,19 +532,15 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
             />
           ) : (
             <div className={styles.noImage}>
-              <IconPhoto size={48} stroke={1.5} />
+              <IconPhoto size={24} stroke={1.5} />
             </div>
           )}
         </div>
         {/* Title */}
-        <Title order={2} className={styles.productTitle}>
-        {product.title}
-        </Title>
+        <h2 className={styles.productTitle}>{product.title}</h2>
         {/* handle */}
         {product.handle && (
-          <Text size="sm" c="dimmed" className={styles.productHandle}>
-            {product.handle}
-          </Text>
+          <span className={styles.productHandle}>{product.handle}</span>
         )}
 
         {/* Boutons d'action */}
@@ -550,28 +548,28 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
           <Group gap="xs">
             <Button
               variant="light"
-              color="blue"
-              leftSection={syncing ? <Loader size={14} color="blue" /> : <IconRefresh size={16} />}
+              color="slate"
+              leftSection={syncing ? <Loader size={14} color="slate" /> : <IconRefresh size={16} />}
               onClick={handleSyncProduct}
               disabled={syncing || saving}
               size="sm"
             >
-              {syncing ? 'Import...' : 'Importer de Shopify'}
+              {syncing ? 'Import…' : 'Importer de Shopify'}
             </Button>
             <Button
               variant="light"
-              color="teal"
-              leftSection={pushing ? <Loader size={14} color="teal" /> : <IconUpload size={16} />}
+              color="moss"
+              leftSection={pushing ? <Loader size={14} color="moss" /> : <IconUpload size={16} />}
               onClick={openPushModal}
               disabled={saving || syncing || pushing}
               size="sm"
             >
-              {pushing ? 'Push...' : 'Pousser vers Shopify'}
+              {pushing ? 'Push…' : 'Pousser vers Shopify'}
             </Button>
             {isLocalProduct && (
               <Button
                 variant="light"
-                color="orange"
+                color="clay.5"
                 leftSection={<IconArchive size={16} />}
                 onClick={openArchiveModal}
                 disabled={saving || syncing}
@@ -582,7 +580,7 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
             )}
             <Button
               variant="light"
-              color="red"
+              color="rust"
               leftSection={<IconTrash size={16} />}
               onClick={openResetModal}
               disabled={saving || syncing || newTotalQuantity === 0}
@@ -591,13 +589,13 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
               Remettre à zéro
             </Button>
             <Button
-              color="green"
+              color="slate.8"
               leftSection={saving ? <Loader size={16} color="white" /> : <IconDeviceFloppy size={18} />}
               onClick={handleSave}
               disabled={!hasChanges || saving || syncing}
               className={styles.saveButton}
             >
-              {saving ? 'Sauvegarde...' : 'Sauvegarder'}
+              {saving ? 'Sauvegarde…' : 'Sauvegarder'}
             </Button>
           </Group>
         </div>
@@ -613,12 +611,12 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
 
             {/* Stock total */}
             <div className={styles.stockTotal}>
-              <Text size="sm" fw={500} className={styles.stockLabel}>
-                Stock total : {locationName && `${locationName}`}
-              </Text>
+              <span className={styles.stockLabel}>
+                Stock total{locationName ? ` · ${locationName}` : ''}
+              </span>
               <Badge
                 size="xl"
-                color={newTotalQuantity > 0 ? 'green' : 'red'}
+                color={newTotalQuantity > 0 ? 'moss' : 'rust'}
                 variant="light"
                 className={styles.stockBadge}
               >
@@ -630,13 +628,13 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
             {/* Répartition par taille */}
             {Object.keys(product.sizeBreakdown).length > 0 && (
               <div className={styles.sizeBreakdown}>
-                <Group gap="xs" className={styles.sizeBreakdownBadges}>
+                <Group gap={6} className={styles.sizeBreakdownBadges}>
                   {Object.entries(product.sizeBreakdown).map(([size, qty]) => (
                     <Badge
                       key={size}
                       variant="outline"
-                      color={qty > 0 ? 'gray' : 'red'}
-                      className={`${styles.sizeBadge} ${qty > 0 ? styles.inStock : styles.outOfStock}`}
+                      color={qty > 0 ? 'slate' : 'rust'}
+                      className={styles.sizeBadge}
                     >
                       {size}: {qty}
                     </Badge>
@@ -649,15 +647,15 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
 
         {/* Alerte : variantes mal marquées */}
         {mismatchedVariants.length > 0 && (
-          <Paper withBorder radius="md" p="sm" mb="md" style={{ borderColor: 'var(--mantine-color-orange-4)', backgroundColor: 'var(--mantine-color-orange-0)' }}>
+          <Paper radius="md" p="sm" mb="md" className={styles.alertCard}>
             <Group justify="space-between" align="center">
-              <Text size="sm" c="orange" fw={500}>
+              <Text size="sm" c="clay.7" fw={500}>
                 {mismatchedVariants.length} variante{mismatchedVariants.length > 1 ? 's' : ''} marquée{mismatchedVariants.length > 1 ? 's' : ''} Shopify alors que le produit est local
               </Text>
               <Button
                 size="xs"
                 variant="light"
-                color="orange"
+                color="clay.5"
                 leftSection={<IconRefresh size={14} />}
                 onClick={handleFixVariantStates}
                 loading={fixingStates}
@@ -670,32 +668,33 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
 
         {/* Bloc variantes locales (groupées) */}
         {localVariantGroups.length > 0 && (
-          <Paper withBorder radius="md" p="sm" mb="md" style={{ borderColor: 'var(--mantine-color-gray-4)' }}>
+          <Paper radius="md" p="sm" mb="md" className={styles.localGroupCard}>
             <Group gap="xs" mb="xs">
-              <Text size="xs" fw={600} c="dimmed">Variantes locales</Text>
-              <Badge size="xs" color="gray" variant="light">
+              <span className={styles.localGroupLabel}>Variantes locales</span>
+              <StatusBadge variant="slate">
                 {product.variants.filter(v => v.shopifyActive === false).reduce((sum, v) => sum + v.quantity, 0)}/{product.variants.filter(v => v.shopifyActive === false).length}
-              </Badge>
+              </StatusBadge>
             </Group>
             <Stack gap={6}>
               {localVariantGroups.map((group) => (
                 <Group key={group.label} justify="space-between" gap="xs">
                   <Group gap="xs" style={{ flex: 1, minWidth: 0 }}>
-                    <Text size="sm" fw={500}>{group.label}</Text>
-                    <Badge size="xs" color="gray" variant="light">
+                    <Text size="sm" fw={500} c="slate.8">{group.label}</Text>
+                    <StatusBadge variant="slate">
                       {group.totalQuantity}/{group.variants.length}
-                    </Badge>
+                    </StatusBadge>
                     {group.subValues.length > 0 && (
-                      <Text size="xs" c="dimmed" truncate>
+                      <Text size="xs" c="slate.5" truncate>
                         {group.subValues.join(', ')}
                       </Text>
                     )}
                   </Group>
                   <ActionIcon
                     variant="subtle"
-                    color="red"
+                    color="rust"
                     size="sm"
                     onClick={() => setDeleteGroup({ label: group.label, ids: group.subabaseIds })}
+                    aria-label="Supprimer le groupe"
                   >
                     <IconTrash size={14} />
                   </ActionIcon>
@@ -741,7 +740,9 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
                               className={styles.colorDot}
                               style={{
                                 background: part.color,
-                                border: part.color === '#FFFFFF' ? '1px solid #ccc' : 'none'
+                                boxShadow: part.color.toUpperCase() === '#FFFFFF'
+                                  ? 'inset 0 0 0 1px var(--divider-strong)'
+                                  : undefined,
                               }}
                             />
                           )}
@@ -751,17 +752,13 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
                       ))}
                     </span>
                   </Table.Td>
-                  <Table.Td className={styles.variantSku}>
-                    {variant.sku || '-'}
+                  <Table.Td>
+                    <span className={styles.variantSku}>{variant.sku || '-'}</span>
                   </Table.Td>
                   <Table.Td style={{ textAlign: 'center' }}>
-                    <Badge
-                      size="xs"
-                      color={variant.shopifyActive === false ? 'orange' : 'teal'}
-                      variant="light"
-                    >
+                    <StatusBadge variant={variant.shopifyActive === false ? 'clay' : 'moss'}>
                       {variant.shopifyActive === false ? 'Locale' : 'Shopify'}
-                    </Badge>
+                    </StatusBadge>
                   </Table.Td>
                   <Table.Td style={{ textAlign: 'right' }}>
                     <NumberInput
@@ -791,13 +788,11 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
                     {variant.metafields && variant.metafields.length > 0 ? (
                       <Group gap={4} wrap="wrap">
                         {variant.metafields.map((mf, i) => (
-                          <Badge key={i} size="xs" variant="light" color="violet">
-                            {mf.key}: {mf.value}
-                          </Badge>
+                          <MetaChip key={i} keyName={mf.key} value={mf.value} />
                         ))}
                       </Group>
                     ) : (
-                      <Text size="xs" c="dimmed">-</Text>
+                      <Text size="xs" c="slate.5">—</Text>
                     )}
                   </Table.Td>
                   <Table.Td className={styles.variantQuantity}>
@@ -805,7 +800,7 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
                       {quantities[variant.id] !== variant.quantity && (
                         <Badge
                           size="xs"
-                          color={quantities[variant.id] > variant.quantity ? 'green' : 'red'}
+                          color={quantities[variant.id] > variant.quantity ? 'moss' : 'rust'}
                           variant="light"
                           className={styles.changeBadge}
                         >
@@ -814,11 +809,12 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
                       )}
                       <ActionIcon
                         variant="light"
-                        color="red"
+                        color="rust"
                         size="sm"
                         onClick={() => handleDecrement(variant.id)}
                         disabled={quantities[variant.id] <= 0}
                         className={styles.quantityButton}
+                        aria-label="Décrémenter"
                       >
                         <IconMinus size={14} />
                       </ActionIcon>
@@ -832,10 +828,11 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
                       />
                       <ActionIcon
                         variant="light"
-                        color="green"
+                        color="moss"
                         size="sm"
                         onClick={() => handleIncrement(variant.id)}
                         className={styles.quantityButton}
+                        aria-label="Incrémenter"
                       >
                         <IconPlus size={14} />
                       </ActionIcon>
@@ -852,26 +849,27 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
       <Modal
         opened={resetModalOpened}
         onClose={closeResetModal}
+        radius="lg"
         title={
-          <Group gap="xs">
-            <IconTrash size={20} color="var(--mantine-color-red-6)" />
-            <Text fw={600}>Remettre le stock à zéro</Text>
-          </Group>
+          <span className={styles.modalTitle}>
+            <IconTrash size={18} />
+            Remettre <em>à zéro</em>
+          </span>
         }
         centered
       >
         <Stack gap="md">
-          <Text size="sm">
-            Toutes les quantités de <Text span fw={600}>{product.title}</Text> seront mises à zéro.
+          <Text size="sm" c="slate.7">
+            Toutes les quantités de <Text span fw={600} c="slate.8">{product.title}</Text> seront mises à zéro.
           </Text>
-          <Text size="sm" c="dimmed">
-            Les modifications ne seront effectives qu'après avoir cliqué sur Sauvegarder.
+          <Text size="xs" c="slate.5" fs="italic">
+            Les modifications ne seront effectives qu&apos;après avoir cliqué sur Sauvegarder.
           </Text>
           <Group justify="flex-end" gap="sm" mt="md">
-            <Button variant="default" onClick={closeResetModal}>
+            <Button variant="default" color="slate" onClick={closeResetModal}>
               Annuler
             </Button>
-            <Button color="red" onClick={handleResetStock}>
+            <Button color="rust" onClick={handleResetStock}>
               Remettre à zéro
             </Button>
           </Group>
@@ -882,27 +880,28 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
       <Modal
         opened={!!deleteGroup}
         onClose={() => setDeleteGroup(null)}
+        radius="lg"
         title={
-          <Group gap="xs">
-            <IconTrash size={20} color="var(--mantine-color-red-6)" />
-            <Text fw={600}>Supprimer {deleteGroup?.ids.length === 1 ? 'la variante' : 'les variantes'}</Text>
-          </Group>
+          <span className={styles.modalTitle}>
+            <IconTrash size={18} />
+            Supprimer <em>{deleteGroup?.ids.length === 1 ? 'la variante' : 'les variantes'}</em>
+          </span>
         }
         centered
       >
         <Stack gap="md">
-          <Text size="sm">
-            Supprimer définitivement <Text span fw={600}>{deleteGroup?.label}</Text>{' '}
+          <Text size="sm" c="slate.7">
+            Supprimer définitivement <Text span fw={600} c="slate.8">{deleteGroup?.label}</Text>{' '}
             ({deleteGroup?.ids.length} variante{(deleteGroup?.ids.length || 0) > 1 ? 's' : ''}) ?
           </Text>
-          <Text size="sm" c="dimmed">
+          <Text size="xs" c="slate.5" fs="italic">
             Le stock associé sera perdu. Cette action est irréversible.
           </Text>
           <Group justify="flex-end" gap="sm" mt="md">
-            <Button variant="default" onClick={() => setDeleteGroup(null)}>
+            <Button variant="default" color="slate" onClick={() => setDeleteGroup(null)}>
               Annuler
             </Button>
-            <Button color="red" onClick={handleDeleteVariants}>
+            <Button color="rust" onClick={handleDeleteVariants}>
               Supprimer
             </Button>
           </Group>
@@ -913,26 +912,27 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
       <Modal
         opened={archiveModalOpened}
         onClose={closeArchiveModal}
+        radius="lg"
         title={
-          <Group gap="xs">
-            <IconArchive size={20} color="var(--mantine-color-orange-6)" />
-            <Text fw={600}>Archiver le produit</Text>
-          </Group>
+          <span className={styles.modalTitle}>
+            <IconArchive size={18} />
+            Archiver <em>le produit</em>
+          </span>
         }
         centered
       >
         <Stack gap="md">
-          <Text size="sm">
-            Déplacer <Text span fw={600}>{product.title}</Text> dans les archives ?
+          <Text size="sm" c="slate.7">
+            Déplacer <Text span fw={600} c="slate.8">{product.title}</Text> dans les archives ?
           </Text>
-          <Text size="sm" c="dimmed">
-            Le produit ne sera plus visible dans l'inventaire. Vous pourrez le restaurer depuis la page Archives.
+          <Text size="xs" c="slate.5" fs="italic">
+            Le produit ne sera plus visible dans l&apos;inventaire. Vous pourrez le restaurer depuis la page Archives.
           </Text>
           <Group justify="flex-end" gap="sm" mt="md">
-            <Button variant="default" onClick={closeArchiveModal}>
+            <Button variant="default" color="slate" onClick={closeArchiveModal}>
               Annuler
             </Button>
-            <Button color="orange" onClick={handleArchive} loading={archiving}>
+            <Button color="clay.5" onClick={handleArchive} loading={archiving}>
               Archiver
             </Button>
           </Group>
@@ -943,26 +943,27 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
       <Modal
         opened={pushModalOpened}
         onClose={closePushModal}
+        radius="lg"
         title={
-          <Group gap="xs">
-            <IconUpload size={20} color="var(--mantine-color-teal-6)" />
-            <Text fw={600}>Pousser le stock vers Shopify</Text>
-          </Group>
+          <span className={styles.modalTitle}>
+            <IconUpload size={18} />
+            Pousser <em>vers Shopify</em>
+          </span>
         }
         centered
       >
         <Stack gap="md">
-          <Text size="sm">
-            Envoyer le stock de <Text span fw={600}>{product.title}</Text> vers Shopify ?
+          <Text size="sm" c="slate.7">
+            Envoyer le stock de <Text span fw={600} c="slate.8">{product.title}</Text> vers Shopify ?
           </Text>
-          <Text size="sm" c="dimmed">
-            Les quantités d'Ivy remplaceront celles de Shopify. Seules les variantes existantes sur Shopify seront mises à jour.
+          <Text size="xs" c="slate.5" fs="italic">
+            Les quantités d&apos;Ivy remplaceront celles de Shopify. Seules les variantes existantes sur Shopify seront mises à jour.
           </Text>
           <Group justify="flex-end" gap="sm" mt="md">
-            <Button variant="default" onClick={closePushModal}>
+            <Button variant="default" color="slate" onClick={closePushModal}>
               Annuler
             </Button>
-            <Button color="teal" onClick={handlePushToShopify}>
+            <Button color="moss" onClick={handlePushToShopify}>
               Pousser vers Shopify
             </Button>
           </Group>
