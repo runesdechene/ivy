@@ -67,10 +67,12 @@ const theme = createTheme({
   },
   // Atelier boréal palettes. Mantine resolves <Button color="x"> to shade[6] by
   // default. Our design tokens (var(--x) / $x) don't always equal shade 6:
-  //   - moss/plum/rust/slate : shade 6 == design token
-  //   - clay                 : shade 5 == design token (--clay = #b38566)
-  //   - sand                 : shade 3 == design token (--sand = #d4c5a9)
-  //   - cream                : used as BACKGROUND only — shade 2 == --cream.
+  //   - moss/plum/rust      : shade 6 == design token
+  //   - slate               : shade 6 == --slate-soft; spec --slate is shade 8
+  //                            (use <Badge color="slate.8" /> for exact --slate)
+  //   - clay                : shade 5 == design token (--clay = #b38566)
+  //   - sand                : shade 3 == design token (--sand = #d4c5a9)
+  //   - cream               : used as BACKGROUND only — shade 2 == --cream.
   //     Avoid <Mantine color="cream">; use var(--cream) or $cream in styles.
   // When a component needs the spec color from Mantine, use the exact shade
   // (e.g., <Badge color="clay.5" />).
