@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import {
-  Title, Text, Paper, Group, Stack, Badge, Image, Button,
-  SimpleGrid, Loader, Center, Modal, ActionIcon,
-} from '@mantine/core';
+import { Loader, Modal } from '@mantine/core';
 import { IconArchive, IconArrowBack, IconTrash, IconPhoto } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useShop } from '@/context/ShopContext';
+import { StatusBadge } from '@/components/StatusBadge';
+import { ProductThumbnail } from '@/components/ProductThumbnail';
+import styles from './archives.module.scss';
 
 interface ArchivedProduct {
   id: string;
@@ -71,11 +71,11 @@ export default function ArchivesPage() {
       notifications.show({
         title: 'Produit restauré',
         message: `${product.title} est maintenant visible dans l'inventaire`,
-        color: 'green',
+        color: 'moss',
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Erreur';
-      notifications.show({ title: 'Erreur', message, color: 'red' });
+      notifications.show({ title: 'Erreur', message, color: 'rust' });
     } finally {
       setRestoring(null);
     }
@@ -95,104 +95,106 @@ export default function ArchivesPage() {
       notifications.show({
         title: 'Produit supprimé',
         message: `${deleteTarget.title} a été supprimé définitivement`,
-        color: 'green',
+        color: 'moss',
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Erreur';
-      notifications.show({ title: 'Erreur', message, color: 'red' });
+      notifications.show({ title: 'Erreur', message, color: 'rust' });
     } finally {
       setDeleting(false);
       setDeleteTarget(null);
     }
   };
 
+  const shopName = currentShop?.name || 'Runes de Chêne';
+
   if (loading) {
     return (
-      <Center h={400}>
-        <Loader size="lg" />
-      </Center>
+      <div className={styles.page}>
+        <div className={styles.loadingWrap}>
+          <Loader />
+        </div>
+      </div>
     );
   }
 
   return (
-    <div>
-      <Group justify="space-between" mb="xl">
-        <Group gap="sm">
-          <IconArchive size={24} />
-          <Title order={2}>Archives</Title>
-          <Badge size="lg" variant="light" color="gray">{products.length}</Badge>
-        </Group>
-      </Group>
+    <div className={styles.page}>
+      <div className={styles.pageHead}>
+        <div className={styles.eyebrow}>Inventaire · {shopName}</div>
+        <h1 className={styles.title}>
+          Archives <em>produits</em>
+        </h1>
+        <div className={styles.sub}>
+          {products.length} produit{products.length > 1 ? 's' : ''} archivé{products.length > 1 ? 's' : ''}
+        </div>
+      </div>
 
       {products.length === 0 ? (
-        <Center h={300}>
-          <Stack align="center" gap="sm">
-            <IconArchive size={48} color="var(--mantine-color-dimmed)" />
-            <Text c="dimmed" size="lg">Aucun produit archivé</Text>
-            <Text c="dimmed" size="sm">
-              Les produits supprimés ou désactivés sur Shopify apparaîtront ici après une synchronisation.
-            </Text>
-          </Stack>
-        </Center>
+        <div className={styles.empty}>
+          <IconArchive size={48} className={styles.emptyIcon} />
+          <div className={styles.emptyTitle}>Aucun produit archivé</div>
+          <div className={styles.emptyHint}>
+            Les produits supprimés ou désactivés sur Shopify apparaîtront ici après une synchronisation.
+          </div>
+        </div>
       ) : (
-        <Stack gap="md">
+        <div className={styles.list}>
           {products.map(product => (
-            <Paper key={product.id} withBorder radius="md" p="md">
-              <Group justify="space-between" wrap="nowrap">
-                <Group gap="md" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
+            <div key={product.id} className={styles.card}>
+              <div className={styles.cardLeft}>
+                <div className={styles.thumbWrap}>
                   {product.image_url ? (
-                    <Image
-                      src={product.image_url}
+                    <ProductThumbnail
+                      imageUrl={product.image_url}
                       alt={product.title}
-                      w={60}
-                      h={60}
-                      radius="sm"
-                      fit="cover"
+                      size={60}
                     />
                   ) : (
-                    <Center w={60} h={60} bg="gray.1" style={{ borderRadius: 'var(--mantine-radius-sm)' }}>
-                      <IconPhoto size={24} color="var(--mantine-color-dimmed)" />
-                    </Center>
+                    <div className={styles.thumbFallback} aria-hidden="true">
+                      <IconPhoto size={24} />
+                    </div>
                   )}
-                  <Stack gap={2} style={{ minWidth: 0 }}>
-                    <Text fw={600} truncate>{product.title}</Text>
-                    <Group gap="xs">
-                      {product.product_type && (
-                        <Badge size="xs" variant="light" color="gray">
-                          {product.product_type}
-                        </Badge>
-                      )}
-                      <Text size="xs" c="dimmed">
-                        {product.variants.length} variante{product.variants.length > 1 ? 's' : ''}
-                      </Text>
-                    </Group>
-                  </Stack>
-                </Group>
+                </div>
+                <div className={styles.info}>
+                  <div className={styles.titleRow}>
+                    <span className={styles.productTitle}>{product.title}</span>
+                    <StatusBadge variant="slate">Archivé</StatusBadge>
+                  </div>
+                  <div className={styles.metaRow}>
+                    {product.product_type && (
+                      <span className={styles.typeChip}>{product.product_type}</span>
+                    )}
+                    <span className={styles.variantCount}>
+                      {product.variants.length} variante{product.variants.length > 1 ? 's' : ''}
+                    </span>
+                  </div>
+                </div>
+              </div>
 
-                <Group gap="xs" wrap="nowrap">
-                  <Button
-                    variant="light"
-                    color="blue"
-                    size="xs"
-                    leftSection={<IconArrowBack size={14} />}
-                    loading={restoring === product.id}
-                    onClick={() => handleRestore(product)}
-                  >
-                    Restaurer
-                  </Button>
-                  <ActionIcon
-                    variant="light"
-                    color="red"
-                    size="lg"
-                    onClick={() => setDeleteTarget(product)}
-                  >
-                    <IconTrash size={16} />
-                  </ActionIcon>
-                </Group>
-              </Group>
-            </Paper>
+              <div className={styles.actions}>
+                <button
+                  type="button"
+                  className={styles.btnRestore}
+                  onClick={() => handleRestore(product)}
+                  disabled={restoring === product.id}
+                >
+                  <IconArrowBack size={14} />
+                  {restoring === product.id ? 'Restauration…' : 'Restaurer'}
+                </button>
+                <button
+                  type="button"
+                  className={styles.btnDelete}
+                  onClick={() => setDeleteTarget(product)}
+                  aria-label="Supprimer définitivement"
+                  title="Supprimer définitivement"
+                >
+                  <IconTrash size={16} />
+                </button>
+              </div>
+            </div>
           ))}
-        </Stack>
+        </div>
       )}
 
       {/* Modal de confirmation suppression */}
@@ -200,30 +202,43 @@ export default function ArchivesPage() {
         opened={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
         title={
-          <Group gap="xs">
-            <IconTrash size={20} color="var(--mantine-color-red-6)" />
-            <Text fw={600}>Supprimer définitivement</Text>
-          </Group>
+          <span className={styles.modalTitle}>
+            <IconTrash size={18} />
+            Supprimer <em>définitivement</em>
+          </span>
         }
         centered
+        radius="lg"
+        withCloseButton
       >
-        <Stack gap="md">
-          <Text size="sm">
-            Supprimer définitivement <Text span fw={600}>{deleteTarget?.title}</Text> et
-            ses {deleteTarget?.variants.length} variante{(deleteTarget?.variants.length || 0) > 1 ? 's' : ''} ?
-          </Text>
-          <Text size="sm" c="dimmed">
+        <div className={styles.modalBody}>
+          <div className={styles.modalText}>
+            Supprimer définitivement <strong>{deleteTarget?.title}</strong> et ses{' '}
+            {deleteTarget?.variants.length} variante
+            {(deleteTarget?.variants.length || 0) > 1 ? 's' : ''} ?
+          </div>
+          <div className={styles.modalWarn}>
             Tout le stock associé sera perdu. Cette action est irréversible.
-          </Text>
-          <Group justify="flex-end" gap="sm" mt="md">
-            <Button variant="default" onClick={() => setDeleteTarget(null)}>
+          </div>
+          <div className={styles.modalActions}>
+            <button
+              type="button"
+              className={styles.btnCancel}
+              onClick={() => setDeleteTarget(null)}
+            >
               Annuler
-            </Button>
-            <Button color="red" onClick={handleDelete} loading={deleting}>
-              Supprimer
-            </Button>
-          </Group>
-        </Stack>
+            </button>
+            <button
+              type="button"
+              className={styles.btnConfirmDelete}
+              onClick={handleDelete}
+              disabled={deleting}
+            >
+              <IconTrash size={14} />
+              {deleting ? 'Suppression…' : 'Supprimer'}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );
