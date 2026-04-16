@@ -1,34 +1,33 @@
-@use "../style/_mantine.scss" as *;
+@use '@/style/_tokens.scss' as *;
 
 .fullscreen {
-  min-height: calc(100vh - 60px);
-  max-height: calc(100vh - 60px);
+  min-height: calc(100vh - 68px);
+  max-height: calc(100vh - 68px);
   overflow: hidden;
 }
 
 .view {
   display: flex;
-  min-height: calc(100vh - 60px);
-  max-height: calc(100vh - 60px);
+  min-height: calc(100vh - 68px);
+  max-height: calc(100vh - 68px);
 
   .menu {
     position: sticky;
-    top: 60px;
-    height: calc(100vh - 60px);
-    width: $app-menu-width;
-    min-width: $app-menu-width;
-    padding-inline: 24px;
-    padding-block: 20px;
-    background-color: white;
-    border-right: 1px solid var(--mantine-color-gray-2);
+    top: 68px;
+    height: calc(100vh - 68px);
+    width: 260px;
+    min-width: 260px;
+    padding: $space-lg $space-base;
+    background-color: $cream-soft;
+    border-right: 1px solid $divider;
     display: flex;
     flex-direction: column;
     overflow-y: auto;
 
     &_header {
-      margin-bottom: 20px;
-      padding-bottom: 16px;
-      border-bottom: 1px solid var(--mantine-color-gray-2);
+      margin-bottom: $space-lg;
+      padding-bottom: $space-base;
+      border-bottom: 1px solid $divider;
     }
 
     &_links {
@@ -38,15 +37,16 @@
       flex-grow: 1;
 
       .menu_category {
-        margin-bottom: 24px;
+        margin-bottom: $space-lg;
 
         &_title {
-          font-size: 14px;
+          font-size: 10px;
           font-weight: 600;
-          color: var(--mantine-color-gray-6);
-          padding: 0 16px;
-          margin-bottom: 8px;
           text-transform: uppercase;
+          letter-spacing: 0.16em;
+          color: $slate-muted;
+          padding: 0 $space-md;
+          margin-bottom: $space-sm;
         }
 
         ul {
@@ -55,7 +55,7 @@
           padding: 0;
 
           li {
-            margin-bottom: 4px;
+            margin-bottom: 2px;
           }
         }
       }
@@ -63,39 +63,90 @@
       a {
         display: flex;
         align-items: center;
-        gap: 8px;
-        padding: 8px 16px;
-        border-radius: 8px;
-        color: var(--mantine-color-gray-7);
+        gap: $space-sm;
+        padding: 9px $space-md;
+        border-radius: $radius-md;
+        color: $slate-soft;
         text-decoration: none;
         font-weight: 500;
-        transition: all 0.2s ease;
+        transition: all 0.15s ease;
+        position: relative;
 
         &:hover {
-          background-color: var(--mantine-color-green-0);
-          color: var(--mantine-color-green-8);
+          background-color: $cream-warm;
+          color: $slate;
         }
 
         &.active {
-          background-color: var(--mantine-color-green-0);
-          color: var(--mantine-color-green-7);
+          background-color: $moss-bg;
+          color: $moss;
           font-weight: 600;
+
+          &::before {
+            content: '';
+            position: absolute;
+            left: -$space-base;
+            top: 10px;
+            bottom: 10px;
+            width: 3px;
+            background: $moss;
+            border-radius: 0 3px 3px 0;
+          }
         }
       }
-    }
-
-    &_footer {
-      margin-top: auto;
-      padding-top: 20px;
     }
   }
 
   .content {
     flex: 1;
-    padding: 40px;
-    background-color: var(--mantine-color-gray-0);
-    min-height: calc(100vh - 60px);
+    padding: $space-2xl;
+    background-color: $cream;
+    min-height: calc(100vh - 68px);
     overflow-x: auto;
     position: relative;
   }
+}
+
+.syncButton {
+  background: $slate;
+  color: $cream;
+  border: none;
+  padding: 12px $space-base;
+  border-radius: $radius-lg;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  width: 100%;
+  transition: transform 0.15s ease;
+  font-family: inherit;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &_label {
+    display: flex;
+    align-items: center;
+    gap: $space-sm;
+  }
+}
+
+.navBadge {
+  margin-left: auto;
+  background: $clay;
+  color: $cream;
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: $radius-pill;
+  font-weight: 600;
+  font-family: $font-fraunces;
+  font-style: italic;
 }

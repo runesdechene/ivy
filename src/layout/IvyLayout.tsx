@@ -5,12 +5,12 @@ import styles from './IvyLayout.module.scss';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import clsx from 'clsx';
-import { Badge, Button } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconHome, IconPackage, IconTruck, IconChartBar, IconPrinter, IconShoppingCart, IconFileInvoice, IconArchive, IconRefresh, IconChecklist, IconChartPie } from '@tabler/icons-react';
+import { IconHome, IconPackage, IconTruck, IconChartBar, IconShoppingCart, IconFileInvoice, IconArchive, IconRefresh, IconChecklist, IconChartPie } from '@tabler/icons-react';
 import { LocationProvider } from '@/context/LocationContext';
 import { LocationSelector } from '@/components/LocationSelector';
 import { useShop } from '@/context/ShopContext';
+import { LastSyncTime } from '@/components/LastSyncTime';
 
 interface IvyLayoutProps {
   children: React.ReactNode;
@@ -29,7 +29,7 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
 
   const handleSync = async () => {
     if (!currentShop || syncing) return;
-    
+
     setSyncing(true);
     try {
       const response = await fetch('/api/sync', {
@@ -37,19 +37,18 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ shopId: currentShop.id }),
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         const newCount = data.newOrdersCount || 0;
-        
+
         notifications.show({
           title: 'Synchronisation terminée',
-          message: newCount > 0 
-            ? `${newCount} nouvelle(s) commande(s) importée(s)` 
+          message: newCount > 0
+            ? `${newCount} nouvelle(s) commande(s) importée(s)`
             : 'Aucune nouvelle commande',
-          color: 'green',
+          color: 'moss',
         });
-        // Déclencher un refresh des pages et des compteurs
         window.dispatchEvent(new CustomEvent('orders-synced'));
       } else {
         throw new Error('Sync failed');
@@ -59,14 +58,13 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
       notifications.show({
         title: 'Erreur',
         message: 'Impossible de synchroniser les commandes',
-        color: 'red',
+        color: 'rust',
       });
     } finally {
       setSyncing(false);
     }
   };
 
-  // Charger les compteurs de commandes actives
   const fetchOrderCounts = useCallback(async () => {
     if (!currentShop) return;
     try {
@@ -76,7 +74,7 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
         setOrderCounts({ atelier: data.atelier || 0, stock: data.stock || 0 });
       }
     } catch {
-      // Silencieux
+      // silencieux
     }
   }, [currentShop]);
 
@@ -86,64 +84,32 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
     }
   }, [isCommandesSection, fetchOrderCounts]);
 
-  // Rafraîchir les compteurs après une sync
   useEffect(() => {
     const handler = () => fetchOrderCounts();
     window.addEventListener('orders-synced', handler);
     return () => window.removeEventListener('orders-synced', handler);
   }, [fetchOrderCounts]);
 
-  // Menu contextuel selon la section
   const commandesMenu = [
     {
       title: '',
       items: [
-        {
-          href: '/ivy/commandes',
-          label: 'Vue d\'ensemble',
-          icon: IconHome,
-        },
+        { href: '/ivy/commandes', label: 'Vue d\'ensemble', icon: IconHome },
       ],
     },
     {
       title: 'Atelier',
       items: [
-        {
-          href: '/ivy/commandes/boutique',
-          label: 'Commandes',
-          icon: IconShoppingCart,
-          exact: true,
-          badge: orderCounts.atelier > 0 ? orderCounts.atelier : null,
-        },
-        {
-          href: '/ivy/commandes/boutique/suivi',
-          label: 'Suivi interne',
-          icon: IconChecklist,
-          exact: true,
-        },
-        {
-          href: '/ivy/commandes/boutique/facturation',
-          label: 'Facturation',
-          icon: IconFileInvoice,
-          exact: true,
-        },
-        {
-          href: '/ivy/commandes/boutique/archives',
-          label: 'Archives',
-          icon: IconArchive,
-          exact: true,
-        },
+        { href: '/ivy/commandes/boutique', label: 'Commandes', icon: IconShoppingCart, exact: true, badge: orderCounts.atelier > 0 ? orderCounts.atelier : null },
+        { href: '/ivy/commandes/boutique/suivi', label: 'Suivi interne', icon: IconChecklist, exact: true },
+        { href: '/ivy/commandes/boutique/facturation', label: 'Facturation', icon: IconFileInvoice, exact: true },
+        { href: '/ivy/commandes/boutique/archives', label: 'Archives', icon: IconArchive, exact: true },
       ],
     },
     {
       title: 'Commandes stock',
       items: [
-        {
-          href: '/ivy/commandes/stock',
-          label: 'Commandes',
-          icon: IconTruck,
-          badge: orderCounts.stock > 0 ? orderCounts.stock : null,
-        },
+        { href: '/ivy/commandes/stock', label: 'Commandes', icon: IconTruck, badge: orderCounts.stock > 0 ? orderCounts.stock : null },
       ],
     },
   ];
@@ -152,27 +118,10 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
     {
       title: 'Inventaire',
       items: [
-        {
-          href: '/ivy/inventaire',
-          label: 'Tableau de bord',
-          icon: IconHome,
-          exact: true,
-        },
-        {
-          href: '/ivy/inventaire/produits',
-          label: 'Produits',
-          icon: IconPackage,
-        },
-        {
-          href: '/ivy/inventaire/statistiques',
-          label: 'Statistiques',
-          icon: IconChartBar,
-        },
-        {
-          href: '/ivy/inventaire/archives',
-          label: 'Archives',
-          icon: IconArchive,
-        },
+        { href: '/ivy/inventaire', label: 'Tableau de bord', icon: IconHome, exact: true },
+        { href: '/ivy/inventaire/produits', label: 'Produits', icon: IconPackage },
+        { href: '/ivy/inventaire/statistiques', label: 'Statistiques', icon: IconChartBar },
+        { href: '/ivy/inventaire/archives', label: 'Archives', icon: IconArchive },
       ],
     },
   ];
@@ -181,17 +130,8 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
     {
       title: 'Festivals',
       items: [
-        {
-          href: '/ivy/stand',
-          label: 'Tableau de bord',
-          icon: IconHome,
-          exact: true,
-        },
-        {
-          href: '/ivy/stand/zones',
-          label: 'Zones d\'étude',
-          icon: IconChartPie,
-        },
+        { href: '/ivy/stand', label: 'Tableau de bord', icon: IconHome, exact: true },
+        { href: '/ivy/stand/zones', label: 'Zones d\'étude', icon: IconChartPie },
       ],
     },
   ];
@@ -202,7 +142,6 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
       ? standMenu
       : inventaireMenu;
 
-  // Section HUB : pas de sidebar, layout plein écran
   if (isHubSection) {
     return <div className={styles.fullscreen}>{children}</div>;
   }
@@ -215,16 +154,17 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
       <div className={styles.menu}>
         <div className={styles.menu_header}>
           {showSyncButton ? (
-            <Button
-              variant="light"
-              leftSection={<IconRefresh size={16} />}
-              fullWidth
+            <button
+              className={styles.syncButton}
               onClick={handleSync}
-              loading={syncing}
-              disabled={!currentShop}
+              disabled={!currentShop || syncing}
             >
-              Synchroniser
-            </Button>
+              <span className={styles.syncButton_label}>
+                <IconRefresh size={14} />
+                {syncing ? 'Synchronisation…' : 'Synchroniser'}
+              </span>
+              <LastSyncTime />
+            </button>
           ) : showLocationSelector ? (
             <LocationSelector />
           ) : null}
@@ -238,23 +178,19 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
               <ul>
                 {category.items.map((item: any) => {
                   const Icon = item.icon;
-                  const isActive = item.exact 
-                    ? pathname === item.href 
+                  const isActive = item.exact
+                    ? pathname === item.href
                     : pathname === item.href || pathname.startsWith(item.href + '/');
                   return (
                     <li key={item.href}>
                       <Link
                         href={item.href}
-                        className={clsx({
-                          [styles.active]: isActive,
-                        })}
+                        className={clsx({ [styles.active]: isActive })}
                       >
                         <Icon size={16} />
                         {item.label}
                         {item.badge && (
-                          <Badge size="xs" variant="filled" color="orange" ml="auto">
-                            {item.badge}
-                          </Badge>
+                          <span className={styles.navBadge}>{item.badge}</span>
                         )}
                       </Link>
                     </li>
@@ -270,7 +206,6 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
   );
 }
 
-// Wrapper avec le LocationProvider
 export const IvyLayout = ({ children }: IvyLayoutProps) => {
   return (
     <LocationProvider>
