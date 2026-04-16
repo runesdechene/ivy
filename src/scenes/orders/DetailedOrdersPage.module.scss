@@ -503,3 +503,45 @@
   display: flex;
   justify-content: center;
 }
+
+// ---------------------------------------------------------------------------
+// Archives-only additions (read-only items + simplified foot)
+// ---------------------------------------------------------------------------
+
+.itemArchived {
+  background: rgba(122, 138, 124, 0.04); // very subtle moss tint
+}
+
+.itemCheckArchived {
+  padding-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.checkDone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: $moss-bg;
+  color: $moss;
+  border: 1px solid rgba(122, 138, 124, 0.25);
+}
+
+.footStaticLabel {
+  flex: 1;
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 13px;
+  color: $moss;
+  font-weight: 500;
+}
+
+.paginationWrap {
+  display: flex;
+  justify-content: center;
+  margin: 16px 0 24px;
+}
