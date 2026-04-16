@@ -1,28 +1,348 @@
-.pageContainer {
-  padding: 0;
+@use '@/style/_tokens.scss' as *;
+
+// ---------------------------------------------------------------------------
+// Page shell
+// ---------------------------------------------------------------------------
+
+.page {
+  padding: $space-xl;
+  max-width: 1600px;
+  margin: 0 auto;
 }
 
-.tableContainer {
-  overflow: hidden;
+.pageHead {
+  margin-bottom: 24px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: $space-lg;
+  flex-wrap: wrap;
 }
 
-.tableRow {
-  &:hover {
-    background-color: var(--mantine-color-gray-0);
+.pageHeadLeft {
+  min-width: 0;
+}
+
+.eyebrow {
+  font-family: $font-inter;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: $slate-muted;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.title {
+  font-family: $font-fraunces;
+  font-size: 40px;
+  font-weight: 500;
+  color: $slate;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin: 0 0 8px;
+
+  em {
+    font-style: italic;
+    font-weight: 400;
+    color: $moss;
   }
 }
 
-.skuTitle {
+.sub {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 16px;
+  color: $slate-soft;
+  font-weight: 400;
   display: flex;
   align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.subSep {
+  color: $slate-muted;
+  font-style: normal;
+}
+
+.headTotal {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 14px;
+  background: $moss-bg;
+  border: 1px solid rgba(107, 122, 85, 0.25);
+  border-radius: $radius-pill;
+  font-family: $font-fraunces;
+  font-weight: 500;
+  font-size: 16px;
+  color: $moss;
+  letter-spacing: -0.01em;
+
+  em {
+    font-style: italic;
+    font-size: 12px;
+    color: $slate-muted;
+    font-weight: 400;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Empty state
+// ---------------------------------------------------------------------------
+
+.emptyState {
+  padding: 56px 24px;
+  text-align: center;
+  color: $slate-muted;
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 15px;
+  background: $cream-soft;
+  border: 1px dashed $divider-strong;
+  border-radius: $radius-xl;
+}
+
+// ---------------------------------------------------------------------------
+// Sku group
+// ---------------------------------------------------------------------------
+
+.skuGroup {
+  background: $cream-soft;
+  border: 1px solid $divider;
+  border-radius: $radius-xl;
+  overflow: hidden;
+  margin-bottom: $space-lg;
+}
+
+.skuHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $space-base;
+  padding: 14px $space-lg;
+  background: $cream-warm;
+  border-bottom: 1px solid $divider;
+  flex-wrap: wrap;
+}
+
+.skuHeaderLeft {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+
+.skuLabel {
+  font-family: $font-fraunces;
+  font-size: 22px;
+  font-weight: 500;
+  color: $slate;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.skuMeta {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 13px;
+  color: $slate-soft;
+
+  em {
+    font-style: italic;
+    font-weight: 500;
+    color: $slate;
+    margin-right: 2px;
+  }
+}
+
+.skuActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.skuActionBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid $divider-strong;
+  border-radius: $radius-md;
+  color: $slate-soft;
+  font-family: $font-inter;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: $cream;
+    color: $slate;
+  }
+
+  &.skuActionBtnMoss {
+    border-color: rgba(107, 122, 85, 0.35);
+    color: $moss;
+
+    &:hover:not(:disabled) {
+      background: $moss-bg;
+      color: $moss;
+      border-color: $moss;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Table
+// ---------------------------------------------------------------------------
+
+.tableWrapper {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.th {
+  font-family: $font-inter;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: $slate-muted;
+  font-weight: 600;
+  padding: 12px $space-lg;
+  text-align: left;
+  border-bottom: 1px solid $divider;
+  background: $cream-soft;
+  white-space: nowrap;
+}
+
+.row {
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: $cream-warm;
+  }
+
+  & + & .td {
+    border-top: 1px dashed $divider;
+  }
+}
+
+.td {
+  padding: 14px $space-lg;
+  font-family: $font-inter;
+  font-size: 13px;
+  color: $slate;
+  vertical-align: middle;
+}
+
+.checkboxCell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.variantCell {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.variantQty {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 18px;
+  color: $slate;
+  letter-spacing: -0.01em;
+
+  em {
+    font-style: italic;
+    font-weight: 400;
+    color: $slate-muted;
+    font-size: 13px;
+    margin-left: 2px;
+  }
+}
+
+.variantSku {
+  font-family: $font-jetbrains, ui-monospace, monospace;
+  font-size: 12px;
+  color: $slate-soft;
+  letter-spacing: 0.02em;
+}
+
+.variantSep {
+  color: $slate-muted;
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 13px;
+}
+
+.variantOption {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 13.5px;
+  color: $slate;
+}
+
+.variantOptionMuted {
+  color: $slate-muted;
+}
+
+.ordersCell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
 }
 
 .orderNumber {
   cursor: pointer;
-  color: var(--mantine-color-blue-6);
-  font-size: 0.85rem;
-  
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 15px;
+  color: $slate;
+  letter-spacing: -0.01em;
+  transition: color 0.15s ease;
+
   &:hover {
+    color: $moss;
     text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Loader
+// ---------------------------------------------------------------------------
+
+.loaderWrap {
+  padding: 80px 24px;
+  display: flex;
+  justify-content: center;
+}
+
+.errorWrap {
+  padding: 56px 24px;
+  text-align: center;
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 15px;
+  color: $rust;
+  background: $cream-soft;
+  border: 1px dashed $divider-strong;
+  border-radius: $radius-xl;
 }

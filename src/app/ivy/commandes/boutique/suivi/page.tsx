@@ -1,19 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { 
-  Table, 
-  Loader, 
-  Text, 
-  Stack, 
-  Title, 
-  Group, 
-  Paper, 
-  Badge,
-  Center,
-  ActionIcon,
-  Tooltip
-} from '@mantine/core';
+import { Loader } from '@mantine/core';
 import { IconCheckbox, IconSquare } from '@tabler/icons-react';
 import { transformColor, loadColorMappingsFromSupabase } from '@/utils/color-transformer';
 import { VariantCheckbox } from '@/components/VariantCheckbox';
@@ -51,13 +39,13 @@ export default function SuiviInternePage() {
 
   const loadVariants = useCallback(async () => {
     if (!currentShop) return;
-    
+
     try {
       setLoading(true);
-      
+
       // Charger les mappings de couleurs
       await loadColorMappingsFromSupabase(currentShop.id);
-      
+
       // Récupérer toutes les commandes en cours (non expédiées, non remboursées, non annulées)
       const { data: orders, error: ordersError } = await supabase
         .from('orders')
@@ -74,11 +62,11 @@ export default function SuiviInternePage() {
 
       orders?.forEach((order: any) => {
         const lineItems = order.line_items || [];
-        
+
         lineItems.forEach((item: any, productIndex: number) => {
           // Ignorer les articles annulés
           if (item.isCancelled) return;
-          
+
           const sku = item.sku || 'Sans SKU';
           if (!groupedVariants.has(sku)) {
             groupedVariants.set(sku, []);
@@ -91,9 +79,9 @@ export default function SuiviInternePage() {
 
           // Chercher un groupe existant avec le même SKU, couleur et taille
           const variants = groupedVariants.get(sku)!;
-          const existingGroup = variants.find(g => 
-            g.sku === sku && 
-            g.color === color && 
+          const existingGroup = variants.find(g =>
+            g.sku === sku &&
+            g.color === color &&
             g.size === size
           );
 
@@ -121,7 +109,7 @@ export default function SuiviInternePage() {
           } else {
             // Créer un nouveau groupe
             const displayName = `${sku} - ${color} - ${size}`.trim();
-            
+
             variants.push({
               sku,
               color,
@@ -162,11 +150,11 @@ export default function SuiviInternePage() {
 
   const handleOrderClick = async (orderId: string) => {
     if (!currentShop) return;
-    
+
     try {
       // Décoder l'ID pour récupérer l'ID Shopify
       const shopifyId = `gid://shopify/Order/${orderId}`;
-      
+
       const { data: order } = await supabase
         .from('orders')
         .select('*')
@@ -190,13 +178,13 @@ export default function SuiviInternePage() {
 
   const checkAllForSku = async (sku: string, check: boolean) => {
     if (!currentShop) return;
-    
+
     const variants = variantsBySku.get(sku);
     if (!variants) return;
 
     // Collecter tous les variantIds pour ce SKU
     const allVariantIds: { variantId: string; orderId: string; color: string; size: string; productIndex: number; quantityIndex: number }[] = [];
-    
+
     variants.forEach(group => {
       group.variants.forEach(v => {
         allVariantIds.push({
@@ -256,23 +244,23 @@ export default function SuiviInternePage() {
     });
 
     return (
-      <Paper withBorder className={styles.tableContainer}>
-        <Table>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th style={{ width: 200 }}>Commandé</Table.Th>
-              <Table.Th style={{ width: '100%' }}>Variante</Table.Th>
-              <Table.Th style={{ width: 150 }}>Commandes</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
+      <div className={styles.tableWrapper}>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th className={styles.th} style={{ width: 220 }}>Commandé</th>
+              <th className={styles.th}>Variante</th>
+              <th className={styles.th} style={{ width: 200 }}>Commandes</th>
+            </tr>
+          </thead>
+          <tbody>
             {sortedVariants.map((group) => (
-              <Table.Tr 
+              <tr
                 key={`${group.sku}-${group.color}-${group.size}`}
-                className={styles.tableRow}
+                className={styles.row}
               >
-                <Table.Td>
-                  <Group gap="xs">
+                <td className={styles.td}>
+                  <div className={styles.checkboxCell}>
                     {group.variants.map(({ orderId, productIndex, quantityIndex, variantId }) => (
                       <VariantCheckbox
                         key={variantId}
@@ -286,18 +274,32 @@ export default function SuiviInternePage() {
                         variantId={variantId}
                       />
                     ))}
-                  </Group>
-                </Table.Td>
-                <Table.Td>
-                  <Text>
-                    <Badge variant="light" color="gray" mr="xs">{group.totalQuantity}×</Badge>
-                    {group.sku} - {group.color} - {group.size}
-                  </Text>
-                </Table.Td>
-                <Table.Td>
-                  <Group gap={4}>
+                  </div>
+                </td>
+                <td className={styles.td}>
+                  <div className={styles.variantCell}>
+                    <span className={styles.variantQty}>
+                      {group.totalQuantity}<em>×</em>
+                    </span>
+                    <span className={styles.variantSku}>{group.sku}</span>
+                    {group.color && (
+                      <>
+                        <span className={styles.variantSep}>·</span>
+                        <span className={styles.variantOption}>{group.color}</span>
+                      </>
+                    )}
+                    {group.size && (
+                      <>
+                        <span className={styles.variantSep}>·</span>
+                        <span className={styles.variantOption}>{group.size}</span>
+                      </>
+                    )}
+                  </div>
+                </td>
+                <td className={styles.td}>
+                  <div className={styles.ordersCell}>
                     {[...new Set(group.variants.map(v => v.orderNumber))].map((orderNumber) => (
-                      <Text 
+                      <span
                         key={orderNumber}
                         className={styles.orderNumber}
                         onClick={(e) => {
@@ -307,94 +309,107 @@ export default function SuiviInternePage() {
                         }}
                       >
                         #{orderNumber}
-                      </Text>
+                      </span>
                     ))}
-                  </Group>
-                </Table.Td>
-              </Table.Tr>
+                  </div>
+                </td>
+              </tr>
             ))}
-          </Table.Tbody>
-        </Table>
-      </Paper>
+          </tbody>
+        </table>
+      </div>
     );
   };
-
-  if (loading) {
-    return (
-      <Center h={400}>
-        <Loader size="lg" />
-      </Center>
-    );
-  }
-
-  if (error) {
-    return (
-      <Center h={400}>
-        <Text c="red">{error}</Text>
-      </Center>
-    );
-  }
 
   const totalVariants = Array.from(variantsBySku.values()).reduce(
     (acc, variants) => acc + variants.reduce((sum, g) => sum + g.totalQuantity, 0),
     0
   );
 
-  return (
-    <div className={styles.pageContainer}>
-      <Group justify="space-between" align="center" mb="lg">
-        <Title order={2}>Suivi interne</Title>
-        <Badge size="lg" variant="light" color="blue">
-          {totalVariants} articles à traiter
-        </Badge>
-      </Group>
+  const totalSkus = variantsBySku.size;
 
-      {variantsBySku.size === 0 ? (
-        <Paper withBorder p="xl" radius="md">
-          <Center>
-            <Text c="dimmed">
-              Aucune variante textile à afficher. Toutes les commandes sont traitées.
-            </Text>
-          </Center>
-        </Paper>
+  return (
+    <div className={styles.page}>
+      <header className={styles.pageHead}>
+        <div className={styles.pageHeadLeft}>
+          <div className={styles.eyebrow}>Atelier · Runes de Chêne</div>
+          <h1 className={styles.title}>
+            Suivi <em>interne</em>
+          </h1>
+          <div className={styles.sub}>
+            {loading ? (
+              <span>Chargement…</span>
+            ) : error ? (
+              <span>Erreur de chargement</span>
+            ) : totalVariants === 0 ? (
+              <span>Aucune variante en attente</span>
+            ) : (
+              <>
+                <span>{totalVariants} article{totalVariants > 1 ? 's' : ''} à traiter</span>
+                <span className={styles.subSep}>·</span>
+                <span>{totalSkus} référence{totalSkus > 1 ? 's' : ''}</span>
+              </>
+            )}
+          </div>
+        </div>
+        {!loading && !error && totalVariants > 0 && (
+          <div className={styles.headTotal}>
+            {totalVariants} <em>en production</em>
+          </div>
+        )}
+      </header>
+
+      {loading ? (
+        <div className={styles.loaderWrap}>
+          <Loader size="lg" color="var(--moss)" />
+        </div>
+      ) : error ? (
+        <div className={styles.errorWrap}>{error}</div>
+      ) : variantsBySku.size === 0 ? (
+        <div className={styles.emptyState}>
+          Aucune variante textile à afficher. Toutes les commandes sont traitées.
+        </div>
       ) : (
-        <Stack gap="lg">
+        <div>
           {Array.from(variantsBySku.entries())
             .sort(([skuA], [skuB]) => skuA.localeCompare(skuB))
-            .map(([sku, variants]) => (
-              <Stack key={sku} gap="xs">
-                <Group gap="sm">
-                  <Title order={4} className={styles.skuTitle}>
-                    {sku}
-                    <Badge ml="sm" variant="light" color="gray">
-                      {variants.reduce((sum, g) => sum + g.totalQuantity, 0)} articles
-                    </Badge>
-                  </Title>
-                  <Tooltip label="Tout cocher">
-                    <ActionIcon 
-                      variant="light" 
-                      color="green" 
-                      size="sm"
-                      onClick={() => checkAllForSku(sku, true)}
-                    >
-                      <IconCheckbox size={16} />
-                    </ActionIcon>
-                  </Tooltip>
-                  <Tooltip label="Tout décocher">
-                    <ActionIcon 
-                      variant="light" 
-                      color="gray" 
-                      size="sm"
-                      onClick={() => checkAllForSku(sku, false)}
-                    >
-                      <IconSquare size={16} />
-                    </ActionIcon>
-                  </Tooltip>
-                </Group>
-                {renderVariantsTable(variants)}
-              </Stack>
-            ))}
-        </Stack>
+            .map(([sku, variants]) => {
+              const skuTotal = variants.reduce((sum, g) => sum + g.totalQuantity, 0);
+              return (
+                <section key={sku} className={styles.skuGroup}>
+                  <header className={styles.skuHeader}>
+                    <div className={styles.skuHeaderLeft}>
+                      <h2 className={styles.skuLabel}>{sku}</h2>
+                      <span className={styles.skuMeta}>
+                        <em>{skuTotal}</em> article{skuTotal > 1 ? 's' : ''}
+                      </span>
+                    </div>
+                    <div className={styles.skuActions}>
+                      <button
+                        type="button"
+                        className={`${styles.skuActionBtn} ${styles.skuActionBtnMoss}`}
+                        onClick={() => checkAllForSku(sku, true)}
+                        title="Tout cocher"
+                      >
+                        <IconCheckbox size={14} />
+                        Tout cocher
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.skuActionBtn}
+                        onClick={() => checkAllForSku(sku, false)}
+                        title="Tout décocher"
+                      >
+                        <IconSquare size={14} />
+                        Tout décocher
+                      </button>
+                    </div>
+                  </header>
+                  {renderVariantsTable(variants)}
+                </section>
+              );
+            })}
+        </div>
       )}
 
       <OrderDrawer

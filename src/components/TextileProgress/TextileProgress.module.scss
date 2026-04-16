@@ -1,24 +1,33 @@
+@use '@/style/_tokens.scss' as *;
+
 .progress {
   border-width: 1px !important;
   border-style: solid !important;
   background: transparent !important;
+  font-family: $font-inter !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em !important;
+  text-transform: none !important;
 
   // Nouveau
   &.new {
-    border-color: #845ef7 !important;
-    color: #845ef7 !important;
+    border-color: $plum !important;
+    color: $plum !important;
+    background-color: $plum-bg !important;
   }
 
   // Incomplet
   &.incomplete {
-    border-color: #646261 !important;
-    color: #5c5a55 !important;
+    border-color: $clay !important;
+    color: $clay !important;
+    background-color: $clay-bg !important;
   }
 
   // Complet
   &.complete {
-    border-color: #53c593 !important;
-    color: #1b774f !important;
-    background-color: #cff8e7 !important;
+    border-color: $moss !important;
+    color: $moss !important;
+    background-color: $moss-bg !important;
   }
 }
