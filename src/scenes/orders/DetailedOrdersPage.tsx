@@ -36,6 +36,8 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { ShopifyOrder } from '@/types/shopify';
 import * as ordersService from '@/supabase/services/orders';
 import { useShop } from '@/context/ShopContext';
+import { generatePrintContent } from '@/utils/print-content';
+import { printInIframe } from '@/utils/print-helpers';
 
 interface MetafieldConfig {
   namespace: string;
@@ -189,6 +191,7 @@ function OrderCard({ order, progress, metafieldConfigs, onOpen }: OrderCardProps
   const [isMarkingAsFulfilled, setIsMarkingAsFulfilled] = useState(false);
   const [kebabOpen, setKebabOpen] = useState(false);
   const kebabRef = useRef<HTMLDivElement | null>(null);
+  const suppressNextCardClickRef = useRef(false);
   const { currentShop } = useShop();
 
   useEffect(() => {
@@ -196,11 +199,19 @@ function OrderCard({ order, progress, metafieldConfigs, onOpen }: OrderCardProps
     const onClick = (e: MouseEvent) => {
       if (kebabRef.current && !kebabRef.current.contains(e.target as Node)) {
         setKebabOpen(false);
+        // Prevent the subsequent click from bubbling to the card root and opening the drawer.
+        suppressNextCardClickRef.current = true;
       }
     };
     window.addEventListener('mousedown', onClick);
     return () => window.removeEventListener('mousedown', onClick);
   }, [kebabOpen]);
+
+  const handlePrint = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const content = generatePrintContent({ order });
+    printInIframe({ content });
+  };
 
   const handleMarkAsFulfilled = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -268,7 +279,18 @@ function OrderCard({ order, progress, metafieldConfigs, onOpen }: OrderCardProps
     days <= 7 ? styles.daysRecent : days <= 14 ? styles.daysMedium : styles.daysOld;
 
   return (
-    <div className={styles.card} onClick={onOpen} role="button" tabIndex={0}>
+    <div
+      className={styles.card}
+      onClick={() => {
+        if (suppressNextCardClickRef.current) {
+          suppressNextCardClickRef.current = false;
+          return;
+        }
+        onOpen();
+      }}
+      role="button"
+      tabIndex={0}
+    >
       <div className={styles.cardHead}>
         <div className={styles.cardHeadTop}>
           <div className={styles.orderNum}>{order.name}</div>
@@ -329,14 +351,7 @@ function OrderCard({ order, progress, metafieldConfigs, onOpen }: OrderCardProps
           <button
             type="button"
             className={styles.btnGhost}
-            onClick={(e) => {
-              e.stopPropagation();
-              notifications.show({
-                title: 'Feuillet',
-                message: "Le feuillet d'impression n'est pas encore disponible pour les commandes boutique.",
-                color: 'gray',
-              });
-            }}
+            onClick={handlePrint}
           >
             <IconPrinter size={14} /> Feuillet
           </button>
@@ -422,11 +437,20 @@ export function DetailedOrdersPage() {
 
   const getProgress = useCallback(
     (orderId: string): OrderProgress => {
+      // Two writers exist with different order_id key formats:
+      // - /api/sync writes with the full gid (e.g. "gid://shopify/Order/N") AND sets total_count.
+      // - VariantCheckbox writes with the encoded id and leaves total_count at 0.
+      // Merge both rows: prefer the non-zero total_count, take the max checked_count.
       const enc = encodeFirestoreId(orderId);
-      return (
-        progressByOrder[enc] ??
-        progressByOrder[orderId] ?? { checkedCount: 0, totalCount: 0 }
-      );
+      const a = progressByOrder[enc];
+      const b = progressByOrder[orderId];
+      if (!a && !b) return { checkedCount: 0, totalCount: 0 };
+      const totalCount =
+        (a?.totalCount ?? 0) > 0
+          ? (a!.totalCount)
+          : (b?.totalCount ?? 0);
+      const checkedCount = Math.max(a?.checkedCount ?? 0, b?.checkedCount ?? 0);
+      return { checkedCount, totalCount };
     },
     [progressByOrder],
   );
@@ -551,7 +575,7 @@ export function DetailedOrdersPage() {
           className={styles.search}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Rechercher un N° ou un client…"
+          placeholder="Rechercher un numéro de commande…"
         />
       </div>
 
