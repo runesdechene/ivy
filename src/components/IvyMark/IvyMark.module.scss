@@ -1,0 +1,64 @@
+@use '@/style/_tokens.scss' as *;
+
+.mark {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: $font-fraunces;
+  font-style: italic;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  color: $slate;
+  font-weight: 500;
+}
+
+.word {
+  display: inline-block;
+}
+
+.dot {
+  display: inline-block;
+  border-radius: 50%;
+  background: $moss;
+  position: relative;
+  margin-left: -4px;
+  flex-shrink: 0;
+}
+
+.parent {
+  font-family: $font-inter;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: $slate-muted;
+  font-weight: 500;
+  font-style: normal;
+  margin-left: 6px;
+  align-self: center;
+}
+
+/* Sizes */
+.mark_sm {
+  font-size: 24px;
+  .dot { width: 5px; height: 5px; top: -1px; }
+}
+.mark_md {
+  font-size: 30px;
+  .dot { width: 6px; height: 6px; top: -2px; }
+}
+.mark_lg {
+  font-size: 44px;
+  .dot { width: 9px; height: 9px; top: -4px; }
+}
+.mark_xl {
+  font-size: 64px;
+  font-weight: 400;
+  .dot { width: 12px; height: 12px; top: -5px; }
+}
+
+/* Themes */
+.mark_dark {
+  color: $cream-soft;
+  .dot { background: $moss-soft; }
+  .parent { color: rgba(244, 240, 232, 0.6); }
+}
