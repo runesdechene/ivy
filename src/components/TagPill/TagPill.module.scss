@@ -1,0 +1,16 @@
+@use '@/style/_tokens.scss' as *;
+
+.pill {
+  font-family: $font-inter;
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: $radius-xs;
+  background: rgba(43, 52, 64, 0.06);
+  color: $slate-soft;
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+  border: 1px dashed rgba(43, 52, 64, 0.15);
+  display: inline-block;
+  line-height: 1.4;
+}
