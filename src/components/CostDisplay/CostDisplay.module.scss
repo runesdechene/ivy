@@ -1,0 +1,50 @@
+@use '@/style/_tokens.scss' as *;
+
+.cost {
+  text-align: right;
+  min-width: 108px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  padding-left: 6px;
+  padding-top: 4px;
+}
+
+.qtyUnit {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 12px;
+  color: $slate-muted;
+  font-family: $font-inter;
+}
+
+.qty {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-weight: 500;
+  color: $slate;
+}
+
+.unit {
+  color: $slate-muted;
+}
+
+.total {
+  font-family: $font-fraunces;
+  font-weight: 500;
+  font-size: 15px;
+  color: $moss;
+  letter-spacing: -0.01em;
+}
+
+.label {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: $slate-muted;
+  font-weight: 600;
+  margin-top: 1px;
+  font-family: $font-inter;
+}
