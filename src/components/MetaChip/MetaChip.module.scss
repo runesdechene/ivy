@@ -1,0 +1,26 @@
+@use '@/style/_tokens.scss' as *;
+
+.chip {
+  font-size: 10.5px;
+  padding: 2px 8px;
+  border-radius: $radius-sm;
+  background: $plum-bg;
+  color: $plum;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 500;
+  line-height: 1.4;
+  font-family: $font-inter;
+}
+
+.key {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+.value {
+  font-family: $font-inter;
+}
