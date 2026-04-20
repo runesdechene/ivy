@@ -1,15 +1,97 @@
+@use '@/style/_tokens.scss' as *;
+
 .container {
-  padding: 1.5rem;
-  max-width: 1400px;
-  margin: 0 auto;
+  max-width: 900px;
+}
+
+.eyebrow {
+  font-family: $font-inter;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: $slate-muted;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.title {
+  font-family: $font-fraunces;
+  font-size: 40px;
+  font-weight: 500;
+  color: $slate;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.sub {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 16px;
+  color: $slate-soft;
+  font-weight: 400;
+  margin-bottom: 32px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: $space-lg;
 }
 
 .card {
+  display: flex;
+  align-items: flex-start;
+  gap: $space-lg;
+  padding: 28px 24px;
+  background: $cream-soft;
+  border: 1px solid $divider;
+  border-radius: $radius-xl;
   cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
-  
+  transition: all 0.2s ease;
+  text-align: left;
+  font-family: inherit;
+
   &:hover {
     transform: translateY(-2px);
-    box-shadow: var(--mantine-shadow-md);
+    box-shadow: 0 8px 24px rgba(43, 52, 64, 0.06);
+    border-color: $divider-strong;
   }
+}
+
+.cardIcon {
+  width: 52px;
+  height: 52px;
+  border-radius: $radius-lg;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.cardBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.cardTitle {
+  font-family: $font-fraunces;
+  font-size: 20px;
+  font-weight: 500;
+  color: $slate;
+  letter-spacing: -0.01em;
+  margin-bottom: 8px;
+
+  em {
+    font-style: italic;
+    font-weight: 400;
+    color: $moss;
+  }
+}
+
+.cardText {
+  font-family: $font-inter;
+  font-size: 14px;
+  color: $slate-soft;
+  line-height: 1.5;
 }
