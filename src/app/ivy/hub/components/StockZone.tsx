@@ -34,7 +34,7 @@ export function StockZone({
       <div className={styles.cartHeader}>
         <div className={styles.cartTitle}>
           <IconPackage size={20} />
-          <span>Sorties</span>
+          <span>{isReturnMode ? 'Entrées' : 'Sorties'}</span>
           {(totalOut + totalReturn) > 0 && (
             <span className={styles.countBadge}>
               {totalOut + totalReturn}
