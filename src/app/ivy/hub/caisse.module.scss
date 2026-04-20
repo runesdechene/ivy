@@ -383,24 +383,42 @@
 .returnModeToggle {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0.5rem;
+  gap: 0.5rem;
+  padding: 10px 14px;
   background: $cream-soft;
-  border-radius: $radius-sm;
+  border: 1px solid $divider;
+  border-radius: $radius-md;
   margin-bottom: 0.75rem;
-  font-size: 0.85rem;
+  font-size: 13px;
+  font-weight: 500;
   color: $slate-soft;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  width: 100%;
+
+  &:hover {
+    background: $cream-warm;
+  }
 
   &.active {
     background: $clay-bg;
+    border-color: $clay;
     color: $clay;
+    font-weight: 600;
   }
 }
 
-.returnModeLabel {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+.returnModeDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: $divider-strong;
+  margin-left: auto;
+  transition: background 0.15s ease;
+
+  .active & {
+    background: $clay;
+  }
 }
 
 .confirmButton {

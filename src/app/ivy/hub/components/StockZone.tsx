@@ -100,11 +100,9 @@ export function StockZone({
           className={`${styles.returnModeToggle} ${isReturnMode ? styles.active : ''}`}
           onClick={() => onToggleReturnMode(!isReturnMode)}
         >
-          <div className={styles.returnModeLabel}>
-            <IconRotate size={16} />
-            <span>Mode retour</span>
-          </div>
-          <span className={styles.returnModeStatus}>{isReturnMode ? 'Actif' : 'Inactif'}</span>
+          <IconRotate size={16} />
+          <span>Mode retour</span>
+          <span className={styles.returnModeDot} />
         </button>
 
         {movements.length > 0 && (
