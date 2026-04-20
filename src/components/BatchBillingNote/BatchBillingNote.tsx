@@ -66,7 +66,7 @@ export function BatchBillingNote({ orderId }: BatchBillingNoteProps) {
         onClick={saveNote}
         loading={isSaving}
         variant="light"
-        color="blue"
+        color="slate"
       >
         Enregistrer
       </Button>

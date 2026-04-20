@@ -125,11 +125,11 @@ export default function CommandesStockPage() {
       case 'draft':
         return <Badge color="gray" leftSection={<IconEdit size={12} />}>Brouillon</Badge>;
       case 'requested':
-        return <Badge color="blue" leftSection={<IconClock size={12} />}>Demandée</Badge>;
+        return <Badge color="slate" leftSection={<IconClock size={12} />}>Demandée</Badge>;
       case 'produced':
-        return <Badge color="teal" leftSection={<IconCheck size={12} />}>Produite</Badge>;
+        return <Badge color="moss" leftSection={<IconCheck size={12} />}>Produite</Badge>;
       case 'completed':
-        return <Badge color="green" leftSection={<IconCheck size={12} />}>Terminée</Badge>;
+        return <Badge color="moss" leftSection={<IconCheck size={12} />}>Terminée</Badge>;
       default:
         return <Badge color="gray">{status}</Badge>;
     }
@@ -286,7 +286,7 @@ export default function CommandesStockPage() {
                     {order.status === 'draft' && (
                       <ActionIcon
                         variant="subtle"
-                        color="red"
+                        color="rust"
                         onClick={() => deleteOrder(order.id)}
                       >
                         <IconTrash size={16} />

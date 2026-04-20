@@ -119,7 +119,7 @@ export function OrderDrawerContent({ order }: OrderDrawerContentProps) {
                     </Stack>
                     <Group gap="xs" style={{ flex: 1, justifyContent: 'flex-end', display: 'flex' }}>
                       {item.isCancelled ? (
-                        <Badge color="red" variant="light">Annulée</Badge>
+                        <Badge color="rust" variant="light">Annulée</Badge>
                       ) : (
                         <Group gap={4} style={{ flex: 1, justifyContent: 'flex-end', display: 'flex' }}>
                           {Array.from({ length: item.quantity }).map((_, index) => {
@@ -163,7 +163,7 @@ export function OrderDrawerContent({ order }: OrderDrawerContentProps) {
         <Alert 
           icon={<IconMessage size={16} />}
           title="Note"
-          color="blue"
+          color="slate"
           variant="light"
         >
           {order.note}

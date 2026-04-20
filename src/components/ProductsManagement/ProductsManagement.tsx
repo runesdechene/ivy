@@ -93,7 +93,7 @@ export function ProductsManagement() {
                           />
                           <ActionIcon
                             variant="filled"
-                            color="green"
+                            color="moss"
                             onClick={() => {
                               if (editingInventory) {
                                 handleInventoryUpdate(

@@ -35,16 +35,16 @@ export function TextileStatus({ orderId, itemId }: TextileStatusProps) {
   }
 
   if (!status) {
-    return <Badge color="red">Non commencé</Badge>;
+    return <Badge color="rust">Non commencé</Badge>;
   }
 
   switch (status.toLowerCase()) {
     case 'done':
-      return <Badge color="green">Terminé</Badge>;
+      return <Badge color="moss">Terminé</Badge>;
     case 'in_progress':
-      return <Badge color="yellow">En cours</Badge>;
+      return <Badge color="sand">En cours</Badge>;
     case 'blocked':
-      return <Badge color="red">Bloqué</Badge>;
+      return <Badge color="rust">Bloqué</Badge>;
     default:
       return <Badge color="gray">{status}</Badge>;
   }

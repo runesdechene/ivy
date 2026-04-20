@@ -210,7 +210,7 @@ export function MonthlyInvoiceButton({ orders, monthId }: MonthlyInvoiceButtonPr
         onClick={handleInvoiceMonth}
         loading={isInvoicing}
         variant="light"
-        color="blue"
+        color="slate"
       >
         Facturer tout le mois
       </Button>
@@ -218,7 +218,7 @@ export function MonthlyInvoiceButton({ orders, monthId }: MonthlyInvoiceButtonPr
         onClick={handleUninvoiceMonth}
         loading={isUninvoicing}
         variant="light"
-        color="red"
+        color="rust"
       >
         Défacturer le mois
       </Button>

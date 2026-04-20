@@ -98,7 +98,7 @@ export const SkuGroupActions = ({
       <Button
         size="sm"
         variant="light"
-        color="blue"
+        color="slate"
         onClick={handleCheck}
       >
         Tout cocher {sku} ({variants.length})
@@ -106,7 +106,7 @@ export const SkuGroupActions = ({
       <Button
         size="sm"
         variant="light"
-        color="red"
+        color="rust"
         onClick={handleUncheck}
       >
         Tout décocher

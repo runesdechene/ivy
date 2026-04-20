@@ -10,16 +10,16 @@ interface DaysElapsedProps {
 export function DaysElapsed({ createdAt, isFulfilled }: DaysElapsedProps) {
   if (isFulfilled) {
     return (
-      <Badge color="green" variant="light">
+      <Badge color="moss" variant="light">
         Expédié
       </Badge>
     );
   }
 
   const getColor = (days: number) => {
-    if (days <= 7) return 'green';
-    if (days <= 14) return 'yellow';
-    return 'red';
+    if (days <= 7) return 'moss';
+    if (days <= 14) return 'sand';
+    return 'rust';
   };
 
   const getDaysElapsed = (date: string) => {

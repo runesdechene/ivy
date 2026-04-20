@@ -67,7 +67,7 @@ export function BatchBalance({ orderId }: BatchBalanceProps) {
         onClick={saveBalance}
         loading={isSaving}
         variant="light"
-        color="blue"
+        color="slate"
       >
         Enregistrer
       </Button>

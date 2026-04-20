@@ -219,7 +219,7 @@ export default function TextileBatchPage() {
 
   if (error) {
     return (
-      <Alert icon={<IconAlertTriangle size={16} />} title="Erreur" color="red">
+      <Alert icon={<IconAlertTriangle size={16} />} title="Erreur" color="rust">
         {error}
       </Alert>
     );
@@ -250,7 +250,7 @@ export default function TextileBatchPage() {
 
     if (error) {
       return (
-        <Alert icon={<IconAlertTriangle size={16} />} title="Erreur" color="red">
+        <Alert icon={<IconAlertTriangle size={16} />} title="Erreur" color="rust">
           {error}
         </Alert>
       );
@@ -301,7 +301,7 @@ export default function TextileBatchPage() {
         )}
 
           {error && (
-            <Alert icon={<IconAlertTriangle size={16} />} title="Erreur" color="red">
+            <Alert icon={<IconAlertTriangle size={16} />} title="Erreur" color="rust">
               Une erreur est survenue lors du chargement des variantes.
             </Alert>
           )}

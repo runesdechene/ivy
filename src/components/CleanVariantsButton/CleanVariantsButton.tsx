@@ -73,7 +73,7 @@ export function CleanVariantsButton({ orderId, orderName }: CleanVariantsButtonP
       onClick={handleClean}
       loading={isLoading}
       variant="light"
-      color="orange"
+      color="clay"
       size="xs"
     >
       Réinitialiser les checkboxes

@@ -39,7 +39,7 @@ export function LocationSelector() {
       <Menu.Target>
         <Button 
           variant="light" 
-          color="green" 
+          color="moss" 
           size="sm"
           rightSection={<IconChevronDown size={14} />}
         >
@@ -56,7 +56,7 @@ export function LocationSelector() {
           <Menu.Item
             key={location.id}
             leftSection={<IconMapPin size={14} />}
-            rightSection={location.id === currentLocation?.id ? <Badge size="xs" color="green">Actif</Badge> : null}
+            rightSection={location.id === currentLocation?.id ? <Badge size="xs" color="moss">Actif</Badge> : null}
             onClick={() => setCurrentLocation(location)}
           >
             <div>

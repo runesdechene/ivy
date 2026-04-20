@@ -52,7 +52,7 @@ export function ShopSelector() {
           <Menu.Item
             key={shop.id}
             leftSection={<IconBuilding size={14} />}
-            rightSection={shop.id === currentShop.id ? <Badge size="xs" color="green">Active</Badge> : null}
+            rightSection={shop.id === currentShop.id ? <Badge size="xs" color="moss">Active</Badge> : null}
             onClick={() => setCurrentShop(shop)}
           >
             {shop.name}

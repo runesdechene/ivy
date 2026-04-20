@@ -242,7 +242,7 @@ export function OrderItemsList({ order }: OrderItemsListProps) {
       <Button 
         fullWidth 
         variant="light" 
-        color="blue"
+        color="slate"
         onClick={handleGenerateWorkshopSheet}
         mb="md"
       >
@@ -322,7 +322,7 @@ export function OrderItemsList({ order }: OrderItemsListProps) {
                 
                 if (missingTerms.size > 0) {
                   return (
-                    <Alert icon={<IconAlertTriangle size="1rem" />} color="red" title="⚠️ Règles de prix manquantes" mb="md">
+                    <Alert icon={<IconAlertTriangle size="1rem" />} color="rust" title="⚠️ Règles de prix manquantes" mb="md">
                       <Text size="sm" mb="xs" fw={500}>
                         Les termes suivants n'ont pas de règle de prix définie :
                       </Text>

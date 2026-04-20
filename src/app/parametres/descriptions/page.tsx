@@ -290,7 +290,7 @@ export default function DescriptionsPage() {
                   <Switch
                     checked={desc.is_active}
                     onChange={() => toggleActive(desc)}
-                    color="green"
+                    color="moss"
                     size="sm"
                     styles={{
                       track: desc.is_active ? { backgroundColor: 'var(--moss)', borderColor: 'var(--moss)' } : {},

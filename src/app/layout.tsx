@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Inter, Alegreya, Fraunces, JetBrains_Mono } from 'next/font/google';
+import { Inter, Fraunces, JetBrains_Mono } from 'next/font/google';
 import React from 'react';
 import { ColorSchemeScript } from '@mantine/core';
 import { createTheme } from '@mantine/core';
@@ -14,13 +14,6 @@ import './globals.scss';
 const inter = Inter({
   subsets: ['latin'],
   variable: '--font-inter',
-  display: 'swap',
-});
-
-const alegreya = Alegreya({
-  weight: ['400', '500', '700'],
-  subsets: ['latin'],
-  variable: '--font-alegreya',
   display: 'swap',
 });
 
@@ -119,7 +112,7 @@ export default function RootLayout({
         <ColorSchemeScript />
       </head>
       <body
-        className={`${inter.variable} ${alegreya.variable} ${fraunces.variable} ${jetbrainsMono.variable}`}
+        className={`${inter.variable} ${fraunces.variable} ${jetbrainsMono.variable}`}
       >
         <AuthProvider>
           <ShopProvider>
