@@ -1,13 +1,123 @@
+@use '@/style/_tokens.scss' as *;
+
 .container {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--mantine-color-gray-0);
+  background-color: $cream;
+  padding: $space-base;
 }
 
-.formContainer {
+.card {
   width: 100%;
-  max-width: 400px;
-  background-color: white;
+  max-width: 420px;
+  background-color: $cream-soft;
+  border-radius: $radius-xl;
+  box-shadow: 0 8px 32px rgba(43, 52, 64, 0.08);
+  padding: $space-2xl $space-xl;
+}
+
+.markWrapper {
+  display: flex;
+  justify-content: center;
+  margin-bottom: $space-lg;
+}
+
+.subtitle {
+  text-align: center;
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 15px;
+  color: $slate-soft;
+  margin-bottom: $space-xl;
+  font-weight: 400;
+}
+
+.input {
+  input {
+    background-color: $cream;
+    border: 1px solid $divider;
+    font-family: $font-inter;
+    font-size: 14px;
+    border-radius: $radius-sm;
+    color: $ink;
+
+    &:focus {
+      border-color: $moss;
+    }
+  }
+
+  label {
+    font-family: $font-inter;
+    font-size: 13px;
+    font-weight: 500;
+    color: $slate;
+    margin-bottom: 4px;
+  }
+}
+
+.submitBtn {
+  background-color: $slate;
+  color: $cream-soft;
+  font-family: $font-inter;
+  font-size: 14px;
+  font-weight: 500;
+  height: 42px;
+  border-radius: $radius-sm;
+  width: 100%;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+
+  &:hover {
+    background-color: $ink;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.error {
+  color: $rust;
+  font-family: $font-inter;
+  font-size: 13px;
+  text-align: center;
+  padding: $space-sm $space-md;
+  background-color: rgba(160, 75, 61, 0.08);
+  border-radius: $radius-sm;
+  margin-bottom: $space-md;
+}
+
+.success {
+  color: $moss;
+  font-family: $font-inter;
+  font-size: 13px;
+  text-align: center;
+  padding: $space-sm $space-md;
+  background-color: $moss-bg;
+  border-radius: $radius-sm;
+  margin-bottom: $space-md;
+}
+
+.linkText {
+  text-align: center;
+  font-family: $font-inter;
+  font-size: 13px;
+  color: $slate-soft;
+  margin-top: $space-lg;
+
+  a {
+    color: $slate;
+    font-weight: 500;
+    text-decoration: none;
+    transition: color 0.15s ease;
+
+    &:hover {
+      color: $moss;
+      text-decoration: underline;
+    }
+  }
 }

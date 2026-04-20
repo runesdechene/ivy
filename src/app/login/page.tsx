@@ -4,8 +4,8 @@ import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { TextInput, Button, Paper, Title, Stack, Alert, Text, Anchor } from '@mantine/core';
-import { IconAlertCircle } from '@tabler/icons-react';
+import { TextInput, Button, Stack } from '@mantine/core';
+import { IvyMark } from '@/components/IvyMark';
 import styles from './login.module.scss';
 
 export default function LoginPage() {
@@ -37,46 +37,50 @@ export default function LoginPage() {
 
   return (
     <div className={styles.container}>
-      <Paper className={styles.formContainer} shadow="md" p="xl">
-        <Title order={2} mb="lg">Connexion à Ivy</Title>
-        
-        {error && (
-          <Alert icon={<IconAlertCircle size={16} />} color="red" mb="md">
-            {error}
-          </Alert>
-        )}
+      <div className={styles.card}>
+        <div className={styles.markWrapper}>
+          <IvyMark size="xl" withParent />
+        </div>
+        <p className={styles.subtitle}>Gestion de production textile</p>
+
+        {error && <p className={styles.error}>{error}</p>}
 
         <form onSubmit={handleSubmit}>
-          <Stack>
+          <Stack gap="sm">
             <TextInput
               label="Email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              classNames={{ root: styles.input }}
             />
-            
+
             <TextInput
               label="Mot de passe"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              classNames={{ root: styles.input }}
             />
 
-            <Button type="submit" loading={loading}>
+            <Button
+              type="submit"
+              loading={loading}
+              className={styles.submitBtn}
+              mt="sm"
+            >
               Se connecter
             </Button>
-
-            <Text size="sm" ta="center">
-              Pas encore de compte ?{' '}
-              <Anchor component={Link} href="/signup">
-                Créer un compte
-              </Anchor>
-            </Text>
           </Stack>
         </form>
-      </Paper>
+
+        <p className={styles.linkText}>
+          Pas encore de compte ?{' '}
+          <Link href="/signup">Cr&eacute;er un compte</Link>
+        </p>
+      </div>
     </div>
   );
 }

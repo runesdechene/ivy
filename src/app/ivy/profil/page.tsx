@@ -1,14 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { Title, Text, Paper, Stack, TextInput, PasswordInput, Button, Group, Divider } from '@mantine/core';
-import { IconUser, IconLock, IconCheck } from '@tabler/icons-react';
+import { Stack, PasswordInput, Button, Group, Divider } from '@mantine/core';
+import { IconCheck, IconLogout } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useAuth } from '@/context/AuthContext';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/supabase/client';
+import styles from './profil.module.scss';
 
 export default function ProfilPage() {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
+  const router = useRouter();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -44,7 +47,6 @@ export default function ProfilPage() {
 
     setSaving(true);
     try {
-      // Vérifier l'ancien mot de passe en se reconnectant
       if (currentPassword && user?.email) {
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email: user.email,
@@ -94,63 +96,105 @@ export default function ProfilPage() {
     }
   };
 
+  const handleSignOut = async () => {
+    await signOut();
+    router.push('/login');
+  };
+
   return (
-    <Stack gap="lg" maw={500} mx="auto" mt="xl">
-      <Group>
-        <IconUser size={28} />
-        <Title order={2}>Profil</Title>
-      </Group>
+    <div className={styles.page}>
+      <div className={styles.header}>
+        <p className={styles.eyebrow}>Profil &middot; Runes de Ch&ecirc;ne</p>
+        <h1 className={styles.title}>Mon profil</h1>
+      </div>
 
-      <Paper withBorder p="lg" radius="md">
-        <Stack gap="md">
-          <Title order={4}>Informations</Title>
-          <TextInput
-            label="Email"
-            value={user?.email || ''}
-            disabled
-          />
-          <Text size="sm" c="dimmed">
-            Compte créé le {user?.created_at ? new Date(user.created_at).toLocaleDateString('fr-FR') : '—'}
-          </Text>
-        </Stack>
-      </Paper>
+      <Stack gap="lg" maw={500}>
+        <div className={styles.card}>
+          <h3 className={styles.sectionTitle}>Informations</h3>
+          <div className={styles.infoRow}>
+            <span className={styles.infoLabel}>Email</span>
+            <span className={styles.infoValue}>{user?.email || '\u2014'}</span>
+          </div>
+          <div className={styles.infoRow}>
+            <span className={styles.infoLabel}>Compte cr&eacute;&eacute; le</span>
+            <span className={styles.infoValue}>
+              {user?.created_at ? new Date(user.created_at).toLocaleDateString('fr-FR') : '\u2014'}
+            </span>
+          </div>
+        </div>
 
-      <Paper withBorder p="lg" radius="md">
-        <Stack gap="md">
-          <Group>
-            <IconLock size={20} />
-            <Title order={4}>Changer le mot de passe</Title>
-          </Group>
-          <Divider />
-          <PasswordInput
-            label="Mot de passe actuel"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            placeholder="Entrez votre mot de passe actuel"
-          />
-          <PasswordInput
-            label="Nouveau mot de passe"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            placeholder="Au moins 6 caractères"
-          />
-          <PasswordInput
-            label="Confirmer le nouveau mot de passe"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="Retapez le nouveau mot de passe"
-          />
-          <Group justify="flex-end">
-            <Button
-              onClick={handleChangePassword}
-              loading={saving}
-              disabled={!newPassword || !confirmPassword}
-            >
-              Modifier le mot de passe
-            </Button>
-          </Group>
-        </Stack>
-      </Paper>
-    </Stack>
+        <div className={styles.card}>
+          <h3 className={styles.sectionTitle}>Changer le mot de passe</h3>
+          <Divider color="var(--divider)" mb="md" />
+          <Stack gap="sm">
+            <PasswordInput
+              label="Mot de passe actuel"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              placeholder="Entrez votre mot de passe actuel"
+              classNames={{ root: styles.input }}
+            />
+            <PasswordInput
+              label="Nouveau mot de passe"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Au moins 6 caractères"
+              classNames={{ root: styles.input }}
+            />
+            <PasswordInput
+              label="Confirmer le nouveau mot de passe"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Retapez le nouveau mot de passe"
+              classNames={{ root: styles.input }}
+            />
+            <Group justify="flex-end" mt="xs">
+              <Button
+                onClick={handleChangePassword}
+                loading={saving}
+                disabled={!newPassword || !confirmPassword}
+                styles={{
+                  root: {
+                    backgroundColor: 'var(--slate)',
+                    color: 'var(--cream-soft)',
+                    fontFamily: 'var(--font-inter)',
+                    fontSize: 13,
+                    fontWeight: 500,
+                    borderRadius: 6,
+                    height: 38,
+                    border: 'none',
+                  },
+                }}
+              >
+                Modifier le mot de passe
+              </Button>
+            </Group>
+          </Stack>
+        </div>
+
+        <div className={styles.card}>
+          <h3 className={styles.sectionTitle}>Session</h3>
+          <Divider color="var(--divider)" mb="md" />
+          <Button
+            onClick={handleSignOut}
+            leftSection={<IconLogout size={16} />}
+            styles={{
+              root: {
+                backgroundColor: 'rgba(160, 75, 61, 0.08)',
+                color: 'var(--rust)',
+                fontFamily: 'var(--font-inter)',
+                fontSize: 13,
+                fontWeight: 500,
+                borderRadius: 6,
+                height: 38,
+                border: 'none',
+              },
+            }}
+          >
+            D&eacute;connexion
+          </Button>
+        </div>
+      </Stack>
+    </div>
   );
 }

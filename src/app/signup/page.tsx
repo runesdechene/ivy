@@ -4,8 +4,8 @@ import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { TextInput, Button, Paper, Title, Stack, Alert, Text, Anchor, PasswordInput } from '@mantine/core';
-import { IconAlertCircle, IconCheck } from '@tabler/icons-react';
+import { TextInput, Button, Stack, PasswordInput } from '@mantine/core';
+import { IvyMark } from '@/components/IvyMark';
 import styles from '../login/login.module.scss';
 
 export default function SignupPage() {
@@ -22,7 +22,7 @@ export default function SignupPage() {
     e.preventDefault();
     setError('');
     setSuccess(false);
-    
+
     if (password !== confirmPassword) {
       setError('Les mots de passe ne correspondent pas');
       return;
@@ -45,7 +45,6 @@ export default function SignupPage() {
         }
       } else {
         setSuccess(true);
-        // Rediriger vers l'onboarding après inscription
         setTimeout(() => {
           router.push('/onboarding');
         }, 2000);
@@ -59,23 +58,17 @@ export default function SignupPage() {
 
   return (
     <div className={styles.container}>
-      <Paper className={styles.formContainer} shadow="md" p="xl">
-        <Title order={2} mb="lg">Créer un compte Ivy</Title>
-        
-        {error && (
-          <Alert icon={<IconAlertCircle size={16} />} color="red" mb="md">
-            {error}
-          </Alert>
-        )}
+      <div className={styles.card}>
+        <div className={styles.markWrapper}>
+          <IvyMark size="xl" withParent />
+        </div>
+        <p className={styles.subtitle}>Créer votre espace de production</p>
 
-        {success && (
-          <Alert icon={<IconCheck size={16} />} color="green" mb="md">
-            Compte créé avec succès ! Redirection...
-          </Alert>
-        )}
+        {error && <p className={styles.error}>{error}</p>}
+        {success && <p className={styles.success}>Compte créé avec succès ! Redirection...</p>}
 
         <form onSubmit={handleSubmit}>
-          <Stack>
+          <Stack gap="sm">
             <TextInput
               label="Email"
               type="email"
@@ -83,14 +76,16 @@ export default function SignupPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
               disabled={success}
+              classNames={{ root: styles.input }}
             />
-            
+
             <PasswordInput
               label="Mot de passe"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               disabled={success}
+              classNames={{ root: styles.input }}
             />
 
             <PasswordInput
@@ -99,21 +94,26 @@ export default function SignupPage() {
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
               disabled={success}
+              classNames={{ root: styles.input }}
             />
 
-            <Button type="submit" loading={loading} disabled={success}>
+            <Button
+              type="submit"
+              loading={loading}
+              disabled={success}
+              className={styles.submitBtn}
+              mt="sm"
+            >
               Créer mon compte
             </Button>
-
-            <Text size="sm" ta="center">
-              Déjà un compte ?{' '}
-              <Anchor component={Link} href="/login">
-                Se connecter
-              </Anchor>
-            </Text>
           </Stack>
         </form>
-      </Paper>
+
+        <p className={styles.linkText}>
+          Déjà un compte ?{' '}
+          <Link href="/login">Se connecter</Link>
+        </p>
+      </div>
     </div>
   );
 }

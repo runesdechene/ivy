@@ -4,8 +4,9 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useShop } from '@/context/ShopContext';
 import { useAuth } from '@/context/AuthContext';
-import { TextInput, Button, Paper, Title, Stack, Alert, Text, Stepper, Group, PasswordInput, Loader, Center } from '@mantine/core';
-import { IconAlertCircle, IconCheck, IconBuilding, IconBrandShopee, IconKey } from '@tabler/icons-react';
+import { TextInput, Button, Stack, PasswordInput, Loader, Center, Stepper, Group } from '@mantine/core';
+import { IconBuilding, IconBrandShopee, IconKey, IconCheck } from '@tabler/icons-react';
+import { IvyMark } from '@/components/IvyMark';
 import styles from '../login/login.module.scss';
 
 function OnboardingContent() {
@@ -18,13 +19,11 @@ function OnboardingContent() {
   const [shopifyLocationId, setShopifyLocationId] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  
+
   const { createShop, hasShops, loading: shopLoading } = useShop();
   const { user } = useAuth();
   const router = useRouter();
 
-  // Rediriger vers la page principale si l'utilisateur a déjà des boutiques
-  // SAUF si on est en mode "ajout de boutique"
   useEffect(() => {
     if (!shopLoading && hasShops && !isAddingShop) {
       router.push('/');
@@ -39,7 +38,7 @@ function OnboardingContent() {
     setLoading(true);
 
     try {
-      const { shop, error } = await createShop({
+      const { error } = await createShop({
         name: shopName,
         shopify_url: shopifyUrl,
         shopify_token: shopifyToken,
@@ -49,7 +48,6 @@ function OnboardingContent() {
       if (error) {
         setError('Erreur lors de la création de la boutique');
       } else {
-        // Rediriger vers la page principale
         router.push('/');
       }
     } catch (error) {
@@ -59,36 +57,43 @@ function OnboardingContent() {
     }
   };
 
-  // Afficher un loader pendant le chargement ou si redirection en cours
   if (!user || shopLoading || (hasShops && !isAddingShop)) {
     return (
-      <Center h="100vh">
-        <Loader size="lg" />
+      <Center h="100vh" bg="var(--cream)">
+        <Loader size="lg" color="var(--moss)" />
       </Center>
     );
   }
 
   return (
     <div className={styles.container}>
-      <Paper className={styles.formContainer} shadow="md" p="xl" style={{ maxWidth: 600, width: '100%' }}>
-        <Title order={2} mb="lg">{isAddingShop ? 'Ajouter une boutique' : 'Bienvenue sur Ivy !'}</Title>
-        <Text c="dimmed" mb="xl">
-          {isAddingShop ? 'Configurons votre nouvelle boutique Shopify.' : 'Configurons votre première boutique Shopify.'}
-        </Text>
+      <div className={styles.card} style={{ maxWidth: 560 }}>
+        <div className={styles.markWrapper}>
+          <IvyMark size="xl" withParent />
+        </div>
+        <p className={styles.subtitle}>
+          {isAddingShop ? 'Ajouter une boutique' : 'Configurons votre espace de production'}
+        </p>
 
-        {error && (
-          <Alert icon={<IconAlertCircle size={16} />} color="red" mb="md">
-            {error}
-          </Alert>
-        )}
+        {error && <p className={styles.error}>{error}</p>}
 
-        <Stepper active={active} onStepClick={setActive} mb="xl">
-          <Stepper.Step 
-            label="Nom de la boutique" 
+        <Stepper
+          active={active}
+          onStepClick={setActive}
+          mb="xl"
+          color="var(--moss)"
+          styles={{
+            stepIcon: { borderColor: 'var(--divider-strong)' },
+            stepLabel: { fontFamily: 'var(--font-inter)', fontSize: 13, color: 'var(--slate)' },
+            stepDescription: { fontFamily: 'var(--font-inter)', fontSize: 12, color: 'var(--slate-muted)' },
+          }}
+        >
+          <Stepper.Step
+            label="Boutique"
             description="Identifiez votre boutique"
             icon={<IconBuilding size={18} />}
           >
-            <Stack mt="md">
+            <Stack mt="md" gap="sm">
               <TextInput
                 label="Nom de la boutique"
                 placeholder="Ma Boutique"
@@ -96,16 +101,17 @@ function OnboardingContent() {
                 value={shopName}
                 onChange={(e) => setShopName(e.target.value)}
                 required
+                classNames={{ root: styles.input }}
               />
             </Stack>
           </Stepper.Step>
 
-          <Stepper.Step 
-            label="URL Shopify" 
+          <Stepper.Step
+            label="URL Shopify"
             description="Connectez votre boutique"
             icon={<IconBrandShopee size={18} />}
           >
-            <Stack mt="md">
+            <Stack mt="md" gap="sm">
               <TextInput
                 label="URL de la boutique Shopify"
                 placeholder="ma-boutique.myshopify.com"
@@ -113,16 +119,17 @@ function OnboardingContent() {
                 value={shopifyUrl}
                 onChange={(e) => setShopifyUrl(e.target.value)}
                 required
+                classNames={{ root: styles.input }}
               />
             </Stack>
           </Stepper.Step>
 
-          <Stepper.Step 
-            label="Clé API" 
+          <Stepper.Step
+            label="Clé API"
             description="Autorisez l'accès"
             icon={<IconKey size={18} />}
           >
-            <Stack mt="md">
+            <Stack mt="md" gap="sm">
               <PasswordInput
                 label="Token d'accès Shopify"
                 placeholder="shpat_xxxxx"
@@ -130,6 +137,7 @@ function OnboardingContent() {
                 value={shopifyToken}
                 onChange={(e) => setShopifyToken(e.target.value)}
                 required
+                classNames={{ root: styles.input }}
               />
               <TextInput
                 label="Location ID (optionnel)"
@@ -137,65 +145,107 @@ function OnboardingContent() {
                 description="L'ID de l'emplacement pour le fulfillment (optionnel)"
                 value={shopifyLocationId}
                 onChange={(e) => setShopifyLocationId(e.target.value)}
+                classNames={{ root: styles.input }}
               />
             </Stack>
           </Stepper.Step>
 
           <Stepper.Completed>
-            <Stack mt="md" align="center">
-              <IconCheck size={48} color="green" />
-              <Title order={3}>Tout est prêt !</Title>
-              <Text c="dimmed" ta="center">
-                Cliquez sur "Créer la boutique" pour commencer à utiliser Ivy.
-              </Text>
+            <Stack mt="md" align="center" gap="sm">
+              <IconCheck size={48} color="var(--moss)" />
+              <p style={{
+                fontFamily: 'var(--font-fraunces)',
+                fontStyle: 'italic',
+                fontSize: 22,
+                color: 'var(--slate)',
+                fontWeight: 400,
+              }}>
+                Tout est prêt !
+              </p>
+              <p style={{
+                fontFamily: 'var(--font-inter)',
+                fontSize: 13,
+                color: 'var(--slate-muted)',
+                textAlign: 'center',
+              }}>
+                Cliquez sur &laquo; Créer la boutique &raquo; pour commencer.
+              </p>
             </Stack>
           </Stepper.Completed>
         </Stepper>
 
         <Group justify="space-between" mt="xl">
           {active > 0 && active < 3 && (
-            <Button variant="default" onClick={prevStep}>
+            <Button
+              variant="default"
+              onClick={prevStep}
+              styles={{
+                root: {
+                  backgroundColor: 'var(--cream)',
+                  borderColor: 'var(--divider-strong)',
+                  color: 'var(--slate)',
+                  fontFamily: 'var(--font-inter)',
+                  fontSize: 14,
+                },
+              }}
+            >
               Retour
             </Button>
           )}
           {active === 0 && <div />}
-          
+
           {active < 2 && (
-            <Button 
+            <Button
               onClick={nextStep}
               disabled={
                 (active === 0 && !shopName) ||
                 (active === 1 && !shopifyUrl)
               }
+              className={styles.submitBtn}
+              style={{ width: 'auto', paddingInline: 24 }}
             >
               Suivant
             </Button>
           )}
-          
+
           {active === 2 && (
-            <Button 
+            <Button
               onClick={() => {
                 if (shopifyToken) {
                   setActive(3);
                 }
               }}
               disabled={!shopifyToken}
+              className={styles.submitBtn}
+              style={{ width: 'auto', paddingInline: 24 }}
             >
               Vérifier
             </Button>
           )}
 
           {active === 3 && (
-            <Button 
+            <Button
               onClick={handleSubmit}
               loading={loading}
-              color="green"
+              styles={{
+                root: {
+                  backgroundColor: 'var(--moss)',
+                  color: 'var(--cream-soft)',
+                  fontFamily: 'var(--font-inter)',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  borderRadius: 6,
+                  height: 42,
+                  paddingInline: 24,
+                  border: 'none',
+                },
+              }}
             >
               Créer la boutique
             </Button>
           )}
         </Group>
-      </Paper>
+      </div>
     </div>
   );
 }
@@ -203,8 +253,8 @@ function OnboardingContent() {
 export default function OnboardingPage() {
   return (
     <Suspense fallback={
-      <Center h="100vh">
-        <Loader size="lg" />
+      <Center h="100vh" bg="var(--cream)">
+        <Loader size="lg" color="var(--moss)" />
       </Center>
     }>
       <OnboardingContent />

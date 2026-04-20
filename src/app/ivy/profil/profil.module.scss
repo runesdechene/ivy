@@ -1,0 +1,93 @@
+@use '@/style/_tokens.scss' as *;
+
+.page {
+  padding: $space-xl $space-base;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.header {
+  margin-bottom: $space-xl;
+}
+
+.eyebrow {
+  font-family: $font-inter;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: $slate-muted;
+  font-weight: 500;
+  margin-bottom: $space-xs;
+}
+
+.title {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 32px;
+  font-weight: 400;
+  color: $slate;
+  line-height: 1.2;
+}
+
+.card {
+  background-color: $cream-soft;
+  border-radius: $radius-xl;
+  box-shadow: 0 4px 16px rgba(43, 52, 64, 0.06);
+  padding: $space-lg;
+}
+
+.sectionTitle {
+  font-family: $font-inter;
+  font-size: 14px;
+  font-weight: 600;
+  color: $slate;
+  margin-bottom: $space-md;
+}
+
+.infoRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: $space-sm 0;
+  border-bottom: 1px solid $divider;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.infoLabel {
+  font-family: $font-inter;
+  font-size: 13px;
+  color: $slate-muted;
+}
+
+.infoValue {
+  font-family: $font-inter;
+  font-size: 13px;
+  font-weight: 500;
+  color: $slate;
+}
+
+.input {
+  input {
+    background-color: $cream;
+    border: 1px solid $divider;
+    font-family: $font-inter;
+    font-size: 14px;
+    border-radius: $radius-sm;
+    color: $ink;
+
+    &:focus {
+      border-color: $moss;
+    }
+  }
+
+  label {
+    font-family: $font-inter;
+    font-size: 13px;
+    font-weight: 500;
+    color: $slate;
+    margin-bottom: 4px;
+  }
+}
