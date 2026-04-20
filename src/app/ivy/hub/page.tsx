@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { notifications } from '@mantine/notifications';
-import { Checkbox, Group } from '@mantine/core';
+import { Checkbox } from '@mantine/core';
 import { useShop } from '@/context/ShopContext';
 import { useLocation } from '@/context/LocationContext';
 import { loadColorMappingsFromSupabase } from '@/utils/color-transformer';
@@ -105,7 +105,7 @@ export default function CaissePage() {
       notifications.show({
         title: 'Stock mis à jour',
         message: `${total} mouvement${total > 1 ? 's' : ''} enregistré${total > 1 ? 's' : ''}`,
-        color: 'teal',
+        color: 'moss',
       });
 
       tracker.clearMovements();
@@ -115,7 +115,7 @@ export default function CaissePage() {
       notifications.show({
         title: 'Erreur',
         message: 'Une erreur est survenue lors de la mise à jour du stock',
-        color: 'orange',
+        color: 'rust',
       });
     } finally {
       setProcessing(false);
@@ -127,7 +127,7 @@ export default function CaissePage() {
       {/* Column visibility checkboxes */}
       {optionColumnKeys.length > 0 && (
         <div className={styles.columnToggles}>
-          <Group gap="md">
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
             {optionColumnKeys.map(key => (
               <Checkbox
                 key={key}
@@ -135,10 +135,10 @@ export default function CaissePage() {
                 checked={!hiddenColumns.has(key)}
                 onChange={() => toggleColumn(key)}
                 size="xs"
-                color="gray"
+                color="moss"
               />
             ))}
-          </Group>
+          </div>
         </div>
       )}
 

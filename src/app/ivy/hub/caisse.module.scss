@@ -442,6 +442,69 @@
   color: $moss;
 }
 
+.emptyLabel {
+  font-size: 12px;
+  color: $slate-muted;
+  text-align: center;
+}
+
+.clearButton {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: $radius-sm;
+  cursor: pointer;
+  color: $slate-muted;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover {
+    background: $cream-warm;
+    color: $rust;
+  }
+}
+
+.undoButton {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  border-radius: $radius-xs;
+  cursor: pointer;
+  color: $slate-muted;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover {
+    background: $cream-warm;
+    color: $slate;
+  }
+}
+
+.emptyText {
+  font-size: 13px;
+  color: $slate-muted;
+}
+
+.emptyTextSm {
+  font-size: 12px;
+  color: $slate-muted;
+}
+
+.variantText {
+  font-size: 12px;
+  color: $slate-muted;
+}
+
+.returnModeStatus {
+  font-size: 12px;
+  font-weight: 600;
+  color: inherit;
+}
+
 .countBadge {
   background: $slate;
   color: $cream;

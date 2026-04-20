@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Button, Text } from '@mantine/core';
+import { Button } from '@mantine/core';
 import { IconPackage, IconTrash, IconArrowBackUp, IconRotate } from '@tabler/icons-react';
 import { StockMovement } from '../types';
 import styles from '../caisse.module.scss';
@@ -42,14 +42,13 @@ export function StockZone({
           )}
         </div>
         {movements.length > 0 && (
-          <ActionIcon
-            variant="subtle"
-            color="gray"
+          <button
+            className={styles.clearButton}
             onClick={onClear}
             title="Réinitialiser"
           >
             <IconTrash size={18} />
-          </ActionIcon>
+          </button>
         )}
       </div>
 
@@ -58,8 +57,8 @@ export function StockZone({
         {movements.length === 0 ? (
           <div className={styles.emptyCart}>
             <div className={styles.emptyCartIcon}>📦</div>
-            <Text size="sm" c="dimmed">Aucun mouvement</Text>
-            <Text size="xs" c="dimmed">Sélectionnez des produits</Text>
+            <span className={styles.emptyText}>Aucun mouvement</span>
+            <span className={styles.emptyTextSm}>Sélectionnez des produits</span>
           </div>
         ) : (
           movements.map(movement => (
@@ -71,17 +70,15 @@ export function StockZone({
                 <div className={styles.cartItemName}>
                   {movement.productTitle}
                   <br />
-                  <Text size="xs" c="dimmed">{movement.variantTitle}</Text>
+                  <span className={styles.variantText}>{movement.variantTitle}</span>
                 </div>
-                <ActionIcon
-                  variant="subtle"
-                  color="gray"
-                  size="sm"
+                <button
+                  className={styles.undoButton}
                   onClick={() => onUndo(movement.variantId)}
                   title="Annuler un"
                 >
                   <IconArrowBackUp size={14} />
-                </ActionIcon>
+                </button>
               </div>
               <div className={styles.cartItemDetails}>
                 <div className={styles.movementQuantity}>
@@ -107,7 +104,7 @@ export function StockZone({
             <IconRotate size={16} />
             <span>Mode retour</span>
           </div>
-          <Text size="xs" fw={600}>{isReturnMode ? 'Actif' : 'Inactif'}</Text>
+          <span className={styles.returnModeStatus}>{isReturnMode ? 'Actif' : 'Inactif'}</span>
         </button>
 
         {movements.length > 0 && (
@@ -127,7 +124,7 @@ export function StockZone({
 
         <Button
           className={styles.confirmButton}
-          color="dark"
+          color="slate"
           disabled={movements.length === 0}
           loading={processing}
           onClick={onConfirm}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader, Center, Text } from '@mantine/core';
+import { Loader } from '@mantine/core';
 import { StockMovement, VariantOption } from '../types';
 import { ColumnKey, ColumnValue } from '../hooks/useProductSelection';
 import { getColorHex } from '@/utils/color-transformer';
@@ -77,9 +77,9 @@ export function SelectionZone({
   if (loading) {
     return (
       <div className={styles.selectionZone}>
-        <Center style={{ flex: 1 }}>
-          <Loader size="lg" />
-        </Center>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Loader size="lg" color="moss" />
+        </div>
       </div>
     );
   }
@@ -124,11 +124,11 @@ export function SelectionZone({
             <div className={styles.columnContent}>
               {(!previousFilled && position > 0) ? (
                 <div className={styles.columnEmpty}>
-                  <Text size="xs" c="dimmed" ta="center">—</Text>
+                  <span className={styles.emptyLabel}>—</span>
                 </div>
               ) : values.length === 0 ? (
                 <div className={styles.columnEmpty}>
-                  <Text size="xs" c="dimmed" ta="center">—</Text>
+                  <span className={styles.emptyLabel}>—</span>
                 </div>
               ) : (
                 values.map(item => {
