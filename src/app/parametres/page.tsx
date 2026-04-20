@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Title, Text, Paper, Stack, TextInput, Button, Group, ActionIcon, Badge, Loader, Center, NumberInput } from '@mantine/core';
+import { Stack, TextInput, NumberInput, Loader, Group } from '@mantine/core';
 import { IconPlus, IconTrash, IconMapPin } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useShop } from '@/context/ShopContext';
+import styles from './parametres.module.scss';
 
 interface Location {
   id: string;
@@ -21,26 +22,26 @@ export default function CommandesSettingsPage() {
   const { currentShop } = useShop();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  
+
   const [orderSettings, setOrderSettings] = useState<OrderSettings>({ printer_notes: [], sync_location_ids: [], handling_fee: 0 });
   const [locations, setLocations] = useState<Location[]>([]);
   const [newPrinterNote, setNewPrinterNote] = useState('');
 
   const fetchSettings = useCallback(async () => {
     if (!currentShop) return;
-    
+
     setLoading(true);
     try {
       const [orderSettingsRes, locationsRes] = await Promise.all([
         fetch(`/api/settings/orders?shopId=${currentShop.id}`),
         fetch(`/api/locations?shopId=${currentShop.id}`),
       ]);
-      
+
       if (orderSettingsRes.ok) {
         const data = await orderSettingsRes.json();
         setOrderSettings(data.settings || { printer_notes: [], sync_location_ids: [], handling_fee: 0 });
       }
-      
+
       if (locationsRes.ok) {
         const data = await locationsRes.json();
         setLocations(data.locations || []);
@@ -58,7 +59,7 @@ export default function CommandesSettingsPage() {
 
   const saveOrderSettings = async (settings: OrderSettings) => {
     if (!currentShop) return;
-    
+
     setSaving(true);
     try {
       const response = await fetch('/api/settings/orders', {
@@ -76,16 +77,16 @@ export default function CommandesSettingsPage() {
         const data = await response.json();
         setOrderSettings(data.settings);
         notifications.show({
-          title: 'Succès',
+          title: 'Enregistré',
           message: 'Paramètres sauvegardés',
-          color: 'green',
+          color: 'moss',
         });
       }
     } catch (err) {
       notifications.show({
         title: 'Erreur',
         message: 'Impossible de sauvegarder les paramètres',
-        color: 'red',
+        color: 'rust',
       });
     } finally {
       setSaving(false);
@@ -94,7 +95,7 @@ export default function CommandesSettingsPage() {
 
   const addPrinterNote = async () => {
     if (!newPrinterNote.trim()) return;
-    
+
     const updatedNotes = [...orderSettings.printer_notes, newPrinterNote.trim()];
     await saveOrderSettings({ ...orderSettings, printer_notes: updatedNotes });
     setNewPrinterNote('');
@@ -110,154 +111,170 @@ export default function CommandesSettingsPage() {
     const updatedIds = currentIds.includes(locationId)
       ? currentIds.filter(id => id !== locationId)
       : [...currentIds, locationId];
-    
+
     await saveOrderSettings({ ...orderSettings, sync_location_ids: updatedIds });
   };
 
+  const shopName = currentShop?.name || 'Runes de Chêne';
+
   if (loading) {
     return (
-      <Center h={400}>
+      <div className={styles.loadingWrap}>
         <Loader size="lg" />
-      </Center>
+      </div>
     );
   }
 
   return (
     <div>
-      <Title order={2} mb="lg">Commandes</Title>
-      
+      <div className={styles.pageHead}>
+        <div className={styles.pageHeadLeft}>
+          <div className={styles.eyebrow}>Paramètres · {shopName}</div>
+          <h1 className={styles.title}>
+            Commandes <em>générales</em>
+          </h1>
+          <div className={styles.sub}>
+            Rappels imprimeur, frais de manutention, emplacements
+          </div>
+        </div>
+      </div>
+
       <Stack gap="lg">
         {/* Notes pour l'imprimeur */}
-        <Paper withBorder p="md" radius="md">
-          <Group justify="space-between" mb="md">
+        <div className={styles.card}>
+          <div className={styles.cardHead}>
             <div>
-              <Text fw={600}>Notes pour l'imprimeur</Text>
-              <Text size="sm" c="dimmed">
+              <h3 className={styles.cardHeadTitle}>Notes pour l&apos;imprimeur</h3>
+              <p className={styles.cardHeadSub}>
                 Ces rappels seront affichés en haut de la page des commandes boutique
-              </Text>
+              </p>
             </div>
-          </Group>
+          </div>
+          <div className={styles.cardBody}>
+            <Group mb="md" gap="sm">
+              <TextInput
+                placeholder="Ajouter un rappel (ex: Retirer les étiquettes Stanley)"
+                value={newPrinterNote}
+                onChange={(e) => setNewPrinterNote(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addPrinterNote()}
+                style={{ flex: 1 }}
+                styles={{
+                  input: {
+                    backgroundColor: 'var(--cream-soft)',
+                    borderColor: 'var(--divider)',
+                    '&:focus': { borderColor: 'var(--moss)' },
+                  },
+                }}
+              />
+              <button
+                className={styles.primaryButton}
+                onClick={addPrinterNote}
+                disabled={saving || !newPrinterNote.trim()}
+              >
+                <IconPlus size={14} />
+                Ajouter
+              </button>
+            </Group>
 
-          <Group mb="md">
-            <TextInput
-              placeholder="Ajouter un rappel (ex: Retirer les étiquettes Stanley)"
-              value={newPrinterNote}
-              onChange={(e) => setNewPrinterNote(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && addPrinterNote()}
-              style={{ flex: 1 }}
-            />
-            <Button
-              leftSection={<IconPlus size={16} />}
-              onClick={addPrinterNote}
-              loading={saving}
-              disabled={!newPrinterNote.trim()}
-            >
-              Ajouter
-            </Button>
-          </Group>
-
-          {orderSettings.printer_notes.length > 0 ? (
-            <Group gap="sm">
-              {orderSettings.printer_notes.map((note, index) => (
-                <Badge
-                  key={index}
-                  size="lg"
-                  variant="light"
-                  color="gray"
-                  rightSection={
-                    <ActionIcon
-                      size="xs"
-                      variant="transparent"
-                      color="red"
+            {orderSettings.printer_notes.length > 0 ? (
+              <Group gap="sm">
+                {orderSettings.printer_notes.map((note, index) => (
+                  <span key={index} className={styles.badge + ' ' + styles.badge_sand} style={{ fontSize: 12, padding: '5px 12px' }}>
+                    {note}
+                    <button
+                      className={styles.iconButton + ' ' + styles.iconButton_danger}
+                      style={{ width: 20, height: 20, marginLeft: 4, border: 'none' }}
                       onClick={() => removePrinterNote(index)}
                     >
                       <IconTrash size={12} />
-                    </ActionIcon>
-                  }
-                  style={{ textTransform: 'uppercase' }}
-                >
-                  {note}
-                </Badge>
-              ))}
-            </Group>
-          ) : (
-            <Text c="dimmed" ta="center" py="md">
-              Aucun rappel configuré
-            </Text>
-          )}
-        </Paper>
+                    </button>
+                  </span>
+                ))}
+              </Group>
+            ) : (
+              <p className={styles.emptyStateText} style={{ fontSize: 13, minHeight: 'auto', padding: '16px 0' }}>
+                Aucun rappel configuré
+              </p>
+            )}
+          </div>
+        </div>
 
         {/* Coût de manutention */}
-        <Paper withBorder p="md" radius="md">
-          <Group justify="space-between" mb="md">
+        <div className={styles.card}>
+          <div className={styles.cardHead}>
             <div>
-              <Text fw={600}>Coût de manutention</Text>
-              <Text size="sm" c="dimmed">
+              <h3 className={styles.cardHeadTitle}>Coût de manutention</h3>
+              <p className={styles.cardHeadSub}>
                 Ce montant sera ajouté à chaque commande dans la facturation
-              </Text>
+              </p>
             </div>
-          </Group>
-
-          <NumberInput
-            value={orderSettings.handling_fee}
-            onChange={(value) => {
-              const newValue = typeof value === 'string' ? parseFloat(value) || 0 : value;
-              saveOrderSettings({ ...orderSettings, handling_fee: newValue });
-            }}
-            suffix=" € HT"
-            decimalScale={2}
-            fixedDecimalScale
-            min={0}
-            step={0.5}
-            w={200}
-          />
-        </Paper>
+          </div>
+          <div className={styles.cardBody}>
+            <NumberInput
+              value={orderSettings.handling_fee}
+              onChange={(value) => {
+                const newValue = typeof value === 'string' ? parseFloat(value) || 0 : value;
+                saveOrderSettings({ ...orderSettings, handling_fee: newValue });
+              }}
+              suffix=" € HT"
+              decimalScale={2}
+              fixedDecimalScale
+              min={0}
+              step={0.5}
+              w={200}
+              styles={{
+                input: {
+                  backgroundColor: 'var(--cream-soft)',
+                  borderColor: 'var(--divider)',
+                  fontFamily: 'var(--font-fraunces)',
+                  fontStyle: 'italic',
+                },
+              }}
+            />
+          </div>
+        </div>
 
         {/* Emplacements à synchroniser */}
-        <Paper withBorder p="md" radius="md">
-          <Group justify="space-between" mb="md">
+        <div className={styles.card}>
+          <div className={styles.cardHead}>
             <div>
-              <Text fw={600}>Emplacements à synchroniser</Text>
-              <Text size="sm" c="dimmed">
-                Sélectionnez les emplacements dont les commandes doivent être synchronisées. Si aucun n'est sélectionné, toutes les commandes seront synchronisées.
-              </Text>
+              <h3 className={styles.cardHeadTitle}>Emplacements à synchroniser</h3>
+              <p className={styles.cardHeadSub}>
+                Sélectionnez les emplacements dont les commandes doivent être synchronisées
+              </p>
             </div>
-          </Group>
-
-          {locations.length > 0 ? (
-            <Stack gap="xs">
-              {locations.map((location) => {
-                const isSelected = orderSettings.sync_location_ids?.includes(location.id);
-                return (
-                  <Paper
-                    key={location.id}
-                    withBorder
-                    p="sm"
-                    radius="sm"
-                    style={{
-                      cursor: 'pointer',
-                      backgroundColor: isSelected ? 'var(--mantine-color-blue-light)' : undefined,
-                      borderColor: isSelected ? 'var(--mantine-color-blue-filled)' : undefined,
-                    }}
-                    onClick={() => toggleSyncLocation(location.id)}
-                  >
-                    <Group>
-                      <IconMapPin size={18} color={isSelected ? 'var(--mantine-color-blue-filled)' : 'gray'} />
-                      <Text fw={isSelected ? 600 : 400}>{location.name}</Text>
+          </div>
+          <div className={styles.cardBody}>
+            {locations.length > 0 ? (
+              <Stack gap="xs">
+                {locations.map((location) => {
+                  const isSelected = orderSettings.sync_location_ids?.includes(location.id);
+                  return (
+                    <div
+                      key={location.id}
+                      className={`${styles.locationCard} ${isSelected ? styles.locationCard_active : ''}`}
+                      onClick={() => toggleSyncLocation(location.id)}
+                    >
+                      <IconMapPin size={18} color={isSelected ? 'var(--moss)' : 'var(--slate-muted)'} />
+                      <span style={{ fontWeight: isSelected ? 600 : 400, color: isSelected ? 'var(--moss)' : 'var(--slate)', fontSize: 13 }}>
+                        {location.name}
+                      </span>
                       {isSelected && (
-                        <Badge color="blue" size="sm" ml="auto">Sélectionné</Badge>
+                        <span className={styles.badge + ' ' + styles.badge_moss} style={{ marginLeft: 'auto' }}>
+                          Sélectionné
+                        </span>
                       )}
-                    </Group>
-                  </Paper>
-                );
-              })}
-            </Stack>
-          ) : (
-            <Text c="dimmed" ta="center" py="md">
-              Aucun emplacement trouvé. Synchronisez d'abord vos emplacements Shopify.
-            </Text>
-          )}
-        </Paper>
+                    </div>
+                  );
+                })}
+              </Stack>
+            ) : (
+              <p className={styles.emptyStateText} style={{ fontSize: 13, minHeight: 'auto', padding: '16px 0' }}>
+                Aucun emplacement trouvé. Synchronisez d&apos;abord vos emplacements Shopify.
+              </p>
+            )}
+          </div>
+        </div>
       </Stack>
     </div>
   );

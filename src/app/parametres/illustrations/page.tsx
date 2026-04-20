@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Title, Text, Paper, Stack, Group, Button, Switch, Badge,
-  SimpleGrid, Loader, Center, Image, Tooltip,
+  Stack, Group, Switch, SimpleGrid, Loader, Image, Tooltip,
 } from '@mantine/core';
 import { IconRefresh, IconPhoto, IconPhotoOff } from '@tabler/icons-react';
 import { useShop } from '@/context/ShopContext';
 import { useTerminalStream } from '@/hooks/useTerminalStream';
 import { createClient } from '@supabase/supabase-js';
+import styles from '../parametres.module.scss';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -91,54 +91,60 @@ export default function IllustrationsPage() {
 
     terminalLog('', 'info');
     terminalLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-    terminalLog(`✅ Terminé: ${totalUpdated} avec illustration, ${totalMissing} sans, ${totalErrors} erreur(s)`, 'success');
+    terminalLog(`Terminé: ${totalUpdated} avec illustration, ${totalMissing} sans, ${totalErrors} erreur(s)`, 'success');
     endSync();
 
     await fetchProducts();
     setSyncing(false);
   };
 
+  const shopName = currentShop?.name || 'Runes de Chêne';
+
   if (loading) {
-    return <Center h={400}><Loader size="lg" /></Center>;
+    return <div className={styles.loadingWrap}><Loader size="lg" /></div>;
   }
 
   return (
-    <Stack gap="lg">
-      <div>
-        <Title order={2}>Illustrations produits</Title>
-        <Text c="dimmed" size="sm">
-          Les illustrations sont récupérées depuis les métaobjets Shopify (metafield <code>custom.illustration_produit</code>).
-          Elles sont affichées sur le feuillet de production pour guider l'atelier.
-        </Text>
+    <div>
+      <div className={styles.pageHead}>
+        <div className={styles.pageHeadLeft}>
+          <div className={styles.eyebrow}>Paramètres · {shopName}</div>
+          <h1 className={styles.title}>
+            <em>Illustrations</em> produits
+          </h1>
+          <div className={styles.sub}>
+            Récupérées depuis les métaobjets Shopify, affichées sur le feuillet de production
+          </div>
+        </div>
       </div>
 
-      <Group justify="space-between">
-        <Group gap="md">
-          <Badge variant="light" color="blue" size="lg">
-            {products.length} produit(s)
-          </Badge>
-          <Badge variant="light" color={missingCount > 0 ? 'orange' : 'green'} size="lg">
-            {missingCount} sans illustration
-          </Badge>
+      <Stack gap="lg">
+        <Group justify="space-between">
+          <Group gap="md">
+            <span className={styles.badge + ' ' + styles.badge_plum} style={{ fontSize: 12, padding: '5px 12px' }}>
+              {products.length} produit(s)
+            </span>
+            <span className={`${styles.badge} ${missingCount > 0 ? styles.badge_clay : styles.badge_moss}`} style={{ fontSize: 12, padding: '5px 12px' }}>
+              {missingCount} sans illustration
+            </span>
+          </Group>
+          <Switch
+            label="Afficher uniquement les produits sans illustration"
+            checked={onlyMissing}
+            onChange={(e) => setOnlyMissing(e.currentTarget.checked)}
+          />
         </Group>
-        <Switch
-          label="Afficher uniquement les produits sans illustration"
-          checked={onlyMissing}
-          onChange={(e) => setOnlyMissing(e.currentTarget.checked)}
-        />
-      </Group>
 
-      {visible.length === 0 ? (
-        <Paper withBorder p="xl" radius="md">
-          <Text c="dimmed" ta="center">
-            {onlyMissing ? 'Toutes les illustrations sont à jour.' : 'Aucun produit.'}
-          </Text>
-        </Paper>
-      ) : (
-        <SimpleGrid cols={{ base: 2, sm: 3, md: 4, lg: 6 }} spacing="md">
-          {visible.map(p => (
-            <Paper key={p.id} withBorder p="sm" radius="md">
-              <Stack gap="xs" align="center">
+        {visible.length === 0 ? (
+          <div className={styles.emptyState}>
+            <p className={styles.emptyStateText}>
+              {onlyMissing ? 'Toutes les illustrations sont à jour.' : 'Aucun produit.'}
+            </p>
+          </div>
+        ) : (
+          <SimpleGrid cols={{ base: 2, sm: 3, md: 4, lg: 6 }} spacing="md">
+            {visible.map(p => (
+              <div key={p.id} className={styles.illustrationCard}>
                 {p.illustration_url ? (
                   <Image
                     src={p.illustration_url}
@@ -150,46 +156,41 @@ export default function IllustrationsPage() {
                   />
                 ) : (
                   <Tooltip label="Illustration manquante">
-                    <div style={{
-                      width: 80, height: 80, display: 'flex', alignItems: 'center',
-                      justifyContent: 'center', background: '#f4f4f4', borderRadius: 6,
-                    }}>
-                      <IconPhotoOff size={24} color="#999" />
+                    <div className={styles.illustrationPlaceholder}>
+                      <IconPhotoOff size={24} />
                     </div>
                   </Tooltip>
                 )}
-                <Text size="xs" ta="center" lineClamp={2} fw={500}>{p.title}</Text>
+                <span className={styles.illustrationTitle}>{p.title}</span>
                 {p.illustration_url ? (
-                  <Badge size="xs" color="green" variant="light" leftSection={<IconPhoto size={10} />}>
+                  <span className={styles.badge + ' ' + styles.badge_moss}>
+                    <IconPhoto size={10} />
                     OK
-                  </Badge>
+                  </span>
                 ) : (
-                  <Badge size="xs" color="orange" variant="light">
+                  <span className={styles.badge + ' ' + styles.badge_clay}>
                     Manquante
-                  </Badge>
+                  </span>
                 )}
-              </Stack>
-            </Paper>
-          ))}
-        </SimpleGrid>
-      )}
+              </div>
+            ))}
+          </SimpleGrid>
+        )}
 
-      <Paper withBorder p="md" radius="md" bg="gray.0">
-        <Group justify="space-between">
-          <Text size="sm" c="dimmed">
+        <div className={styles.syncBar}>
+          <span className={styles.syncBarHint}>
             Opération rare. À lancer après avoir ajouté ou modifié des illustrations côté Shopify.
-          </Text>
-          <Button
-            variant="light"
-            color="gray"
-            leftSection={<IconRefresh size={16} />}
+          </span>
+          <button
+            className={styles.ghostButton}
             onClick={runSync}
-            loading={syncing}
+            disabled={syncing}
           >
+            {syncing ? <Loader size={14} /> : <IconRefresh size={16} />}
             Resynchroniser depuis Shopify
-          </Button>
-        </Group>
-      </Paper>
-    </Stack>
+          </button>
+        </div>
+      </Stack>
+    </div>
   );
 }

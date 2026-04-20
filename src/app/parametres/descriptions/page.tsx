@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Title, Text, Paper, Stack, Group, Button, Modal, TextInput, Switch,
-  ActionIcon, Card, Badge, Select, Loader, Center,
+  Stack, Group, Modal, TextInput, Switch,
+  Select, Loader,
 } from '@mantine/core';
 import { RichTextEditor, Link } from '@mantine/tiptap';
 import { useEditor } from '@tiptap/react';
@@ -15,6 +15,7 @@ import { IconPlus, IconTrash, IconEdit, IconPlayerPlay, IconCopy } from '@tabler
 import { notifications } from '@mantine/notifications';
 import { useShop } from '@/context/ShopContext';
 import { useTerminalStream } from '@/hooks/useTerminalStream';
+import styles from '../parametres.module.scss';
 
 interface Condition {
   field: 'title' | 'product_type';
@@ -114,12 +115,12 @@ export default function DescriptionsPage() {
 
   const saveDescription = async () => {
     if (!currentShop || !formName.trim()) {
-      notifications.show({ title: 'Erreur', message: 'Le nom est obligatoire', color: 'red' });
+      notifications.show({ title: 'Erreur', message: 'Le nom est obligatoire', color: 'rust' });
       return;
     }
 
     if (formConditions.length === 0) {
-      notifications.show({ title: 'Erreur', message: 'Ajoutez au moins une condition', color: 'red' });
+      notifications.show({ title: 'Erreur', message: 'Ajoutez au moins une condition', color: 'rust' });
       return;
     }
 
@@ -151,18 +152,18 @@ export default function DescriptionsPage() {
 
       if (res.ok) {
         notifications.show({
-          title: 'Succès',
+          title: 'Enregistré',
           message: editingDesc ? 'Description modifiée' : 'Description créée',
-          color: 'green',
+          color: 'moss',
         });
         setModalOpen(false);
         fetchData();
       } else {
         const err = await res.json();
-        notifications.show({ title: 'Erreur', message: err.error || 'Erreur', color: 'red' });
+        notifications.show({ title: 'Erreur', message: err.error || 'Erreur', color: 'rust' });
       }
     } catch {
-      notifications.show({ title: 'Erreur', message: 'Erreur réseau', color: 'red' });
+      notifications.show({ title: 'Erreur', message: 'Erreur réseau', color: 'rust' });
     } finally {
       setSaving(false);
     }
@@ -173,7 +174,7 @@ export default function DescriptionsPage() {
 
     const res = await fetch(`/api/settings/product-descriptions?id=${id}`, { method: 'DELETE' });
     if (res.ok) {
-      notifications.show({ title: 'Supprimé', message: 'Description supprimée', color: 'green' });
+      notifications.show({ title: 'Supprimé', message: 'Description supprimée', color: 'moss' });
       fetchData();
     }
   };
@@ -227,7 +228,7 @@ export default function DescriptionsPage() {
 
     terminalLog('', 'info');
     terminalLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-    terminalLog(`✅ Terminé: ${totalUpdated} mis à jour, ${totalSkipped} déjà identique(s), ${totalErrors} erreur(s)`, 'success');
+    terminalLog(`Terminé: ${totalUpdated} mis à jour, ${totalSkipped} déjà identique(s), ${totalErrors} erreur(s)`, 'success');
     endSync();
 
     fetchData();
@@ -243,86 +244,98 @@ export default function DescriptionsPage() {
     setModalOpen(true);
   };
 
+  const shopName = currentShop?.name || 'Runes de Chêne';
+
   if (loading) {
-    return <Center h={400}><Loader size="lg" /></Center>;
+    return <div className={styles.loadingWrap}><Loader size="lg" /></div>;
   }
 
+  // Render the HTML preview safely - this is admin-created content from
+  // the rich text editor, not user-submitted data.
+  const renderDescPreview = (html: string) => {
+    return { __html: html };
+  };
+
   return (
-    <Stack gap="lg">
-      <Group justify="space-between">
-        <div>
-          <Title order={2}>Descriptions produits</Title>
-          <Text c="dimmed" size="sm">Créez des modèles de description et appliquez-les en masse sur Shopify</Text>
+    <div>
+      <div className={styles.pageHead}>
+        <div className={styles.pageHeadLeft}>
+          <div className={styles.eyebrow}>Paramètres · {shopName}</div>
+          <h1 className={styles.title}>
+            Descriptions <em>produits</em>
+          </h1>
+          <div className={styles.sub}>
+            Créez des modèles de description et appliquez-les en masse sur Shopify
+          </div>
         </div>
-        <Button leftSection={<IconPlus size={16} />} onClick={openCreateModal}>
+        <button className={styles.primaryButton} onClick={openCreateModal}>
+          <IconPlus size={14} />
           Nouvelle description
-        </Button>
-      </Group>
+        </button>
+      </div>
 
       {descriptions.length === 0 ? (
-        <Paper withBorder p="xl" radius="md">
-          <Center>
-            <Stack align="center" gap="sm">
-              <Text c="dimmed">Aucune description créée</Text>
-              <Text c="dimmed" size="sm">Créez un modèle de description pour l'appliquer à vos produits Shopify.</Text>
-            </Stack>
-          </Center>
-        </Paper>
+        <div className={styles.emptyState}>
+          <p className={styles.emptyStateText}>Aucune description créée</p>
+          <p className={styles.emptyStateHint}>
+            Créez un modèle de description pour l&apos;appliquer à vos produits Shopify.
+          </p>
+        </div>
       ) : (
         <Stack gap="md">
           {descriptions.map(desc => (
-            <Card key={desc.id} withBorder padding="lg" radius="md">
-              <Group justify="space-between" mb="sm">
+            <div key={desc.id} className={styles.descCard}>
+              <div className={styles.descCardHead}>
                 <Group gap="sm">
                   <Switch
                     checked={desc.is_active}
                     onChange={() => toggleActive(desc)}
                     color="green"
                     size="sm"
+                    styles={{
+                      track: desc.is_active ? { backgroundColor: 'var(--moss)', borderColor: 'var(--moss)' } : {},
+                    }}
                   />
-                  <Text fw={600} size="lg">{desc.name}</Text>
+                  <span className={styles.descCardName}>{desc.name}</span>
                 </Group>
                 <Group gap="xs">
                   {desc.conditions.map((c, i) => (
-                    <Badge key={i} variant="light" color={c.field === 'title' ? 'blue' : 'orange'} size="sm">
-                      {c.field === 'title' ? 'Nom' : 'Type'} contient "{c.value}"
-                    </Badge>
+                    <span key={i} className={styles.badge + ' ' + (c.field === 'title' ? styles.badge_plum : styles.badge_clay)}>
+                      {c.field === 'title' ? 'Nom' : 'Type'} contient &ldquo;{c.value}&rdquo;
+                    </span>
                   ))}
                 </Group>
-              </Group>
+              </div>
 
               {desc.description_html && (
-                <Paper withBorder p="sm" radius="sm" mb="sm" bg="gray.0">
-                  <div
-                    style={{ fontSize: '0.85rem', maxHeight: 100, overflow: 'hidden' }}
-                    dangerouslySetInnerHTML={{ __html: desc.description_html }}
-                  />
-                </Paper>
+                <div
+                  className={styles.descPreview}
+                  dangerouslySetInnerHTML={renderDescPreview(desc.description_html)}
+                />
               )}
 
               <Group justify="space-between">
                 <Group gap="xs">
-                  <ActionIcon variant="light" color="blue" onClick={() => openEditModal(desc)}>
+                  <button className={styles.iconButton} onClick={() => openEditModal(desc)}>
                     <IconEdit size={16} />
-                  </ActionIcon>
-                  <ActionIcon variant="light" color="gray" onClick={() => duplicateDescription(desc)}>
+                  </button>
+                  <button className={styles.iconButton} onClick={() => duplicateDescription(desc)}>
                     <IconCopy size={16} />
-                  </ActionIcon>
-                  <ActionIcon variant="light" color="red" onClick={() => deleteDescription(desc.id)}>
+                  </button>
+                  <button className={`${styles.iconButton} ${styles.iconButton_danger}`} onClick={() => deleteDescription(desc.id)}>
                     <IconTrash size={16} />
-                  </ActionIcon>
+                  </button>
                 </Group>
-                <Button
-                  leftSection={applying === desc.id ? <Loader size={14} /> : <IconPlayerPlay size={16} />}
-                  color="green"
+                <button
+                  className={styles.mossButton}
                   onClick={() => applyDescription(desc)}
-                  loading={applying === desc.id}
-                  disabled={!desc.is_active}
+                  disabled={applying === desc.id || !desc.is_active}
                 >
+                  {applying === desc.id ? <Loader size={14} color="var(--cream)" /> : <IconPlayerPlay size={16} />}
                   Appliquer sur Shopify
-                </Button>
+                </button>
               </Group>
-            </Card>
+            </div>
           ))}
         </Stack>
       )}
@@ -331,8 +344,12 @@ export default function DescriptionsPage() {
       <Modal
         opened={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editingDesc ? 'Modifier la description' : 'Nouvelle description'}
+        title={<span className={styles.modalTitle}>{editingDesc ? 'Modifier la description' : 'Nouvelle description'}</span>}
         size="xl"
+        styles={{
+          content: { backgroundColor: 'var(--cream-soft)' },
+          header: { backgroundColor: 'var(--cream-soft)' },
+        }}
       >
         <Stack gap="md">
           <TextInput
@@ -341,57 +358,75 @@ export default function DescriptionsPage() {
             value={formName}
             onChange={(e) => setFormName(e.target.value)}
             required
+            styles={{
+              input: { backgroundColor: 'var(--cream)', borderColor: 'var(--divider)' },
+            }}
           />
 
           {/* Conditions */}
-          <Paper withBorder p="md" radius="md">
-            <Text fw={600} mb="sm">Conditions (toutes doivent correspondre)</Text>
+          <div className={styles.card}>
+            <div className={styles.cardHead}>
+              <h3 className={styles.cardHeadTitle}>Conditions (toutes doivent correspondre)</h3>
+            </div>
+            <div className={styles.cardBody}>
+              {formConditions.length > 0 && (
+                <Stack gap="xs" mb="md">
+                  {formConditions.map((cond, i) => (
+                    <Group key={i} gap="xs">
+                      <span className={styles.badge + ' ' + (cond.field === 'title' ? styles.badge_plum : styles.badge_clay)}>
+                        {cond.field === 'title' ? 'Nom' : 'Type'}
+                      </span>
+                      <span style={{ fontSize: 13, color: 'var(--slate-soft)' }}>contient</span>
+                      <span className={styles.badge + ' ' + styles.badge_slate}>&ldquo;{cond.value}&rdquo;</span>
+                      <button
+                        className={`${styles.iconButton} ${styles.iconButton_danger}`}
+                        style={{ width: 24, height: 24 }}
+                        onClick={() => removeCondition(i)}
+                      >
+                        <IconTrash size={14} />
+                      </button>
+                    </Group>
+                  ))}
+                </Stack>
+              )}
 
-            {formConditions.length > 0 && (
-              <Stack gap="xs" mb="md">
-                {formConditions.map((cond, i) => (
-                  <Group key={i} gap="xs">
-                    <Badge variant="light" color={cond.field === 'title' ? 'blue' : 'orange'}>
-                      {cond.field === 'title' ? 'Nom' : 'Type'}
-                    </Badge>
-                    <Text size="sm">contient</Text>
-                    <Badge variant="outline">"{cond.value}"</Badge>
-                    <ActionIcon variant="subtle" color="red" size="sm" onClick={() => removeCondition(i)}>
-                      <IconTrash size={14} />
-                    </ActionIcon>
-                  </Group>
-                ))}
-              </Stack>
-            )}
-
-            <Group gap="xs" align="flex-end">
-              <Select
-                label="Champ"
-                data={[
-                  { value: 'title', label: 'Nom du produit' },
-                  { value: 'product_type', label: 'Type de produit' },
-                ]}
-                value={newCondField}
-                onChange={(v) => setNewCondField((v as 'title' | 'product_type') || 'title')}
-                style={{ width: 180 }}
-              />
-              <TextInput
-                label="Contient"
-                placeholder="Ex: Morrigan, T-shirt..."
-                value={newCondValue}
-                onChange={(e) => setNewCondValue(e.target.value)}
-                style={{ flex: 1 }}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCondition(); } }}
-              />
-              <Button variant="light" onClick={addCondition} disabled={!newCondValue.trim()}>
-                Ajouter
-              </Button>
-            </Group>
-          </Paper>
+              <Group gap="xs" align="flex-end">
+                <Select
+                  label="Champ"
+                  data={[
+                    { value: 'title', label: 'Nom du produit' },
+                    { value: 'product_type', label: 'Type de produit' },
+                  ]}
+                  value={newCondField}
+                  onChange={(v) => setNewCondField((v as 'title' | 'product_type') || 'title')}
+                  style={{ width: 180 }}
+                  styles={{
+                    input: { backgroundColor: 'var(--cream)', borderColor: 'var(--divider)' },
+                  }}
+                />
+                <TextInput
+                  label="Contient"
+                  placeholder="Ex: Morrigan, T-shirt..."
+                  value={newCondValue}
+                  onChange={(e) => setNewCondValue(e.target.value)}
+                  style={{ flex: 1 }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCondition(); } }}
+                  styles={{
+                    input: { backgroundColor: 'var(--cream)', borderColor: 'var(--divider)' },
+                  }}
+                />
+                <button className={styles.ghostButton} onClick={addCondition} disabled={!newCondValue.trim()}>
+                  Ajouter
+                </button>
+              </Group>
+            </div>
+          </div>
 
           {/* Rich Text Editor */}
           <div>
-            <Text fw={600} mb="xs">Description HTML</Text>
+            <label style={{ fontSize: 14, fontWeight: 600, color: 'var(--slate)', display: 'block', marginBottom: 8 }}>
+              Description HTML
+            </label>
             <RichTextEditor editor={editor}>
               <RichTextEditor.Toolbar sticky stickyOffset={60}>
                 <RichTextEditor.ControlsGroup>
@@ -431,16 +466,19 @@ export default function DescriptionsPage() {
             label="Règle active"
             checked={formIsActive}
             onChange={(e) => setFormIsActive(e.currentTarget.checked)}
+            styles={{
+              track: formIsActive ? { backgroundColor: 'var(--moss)', borderColor: 'var(--moss)' } : {},
+            }}
           />
 
-          <Group justify="flex-end" gap="sm">
-            <Button variant="subtle" onClick={() => setModalOpen(false)}>Annuler</Button>
-            <Button onClick={saveDescription} loading={saving}>
+          <div className={styles.modalActions}>
+            <button className={styles.ghostButton} onClick={() => setModalOpen(false)}>Annuler</button>
+            <button className={styles.primaryButton} onClick={saveDescription} disabled={saving}>
               {editingDesc ? 'Mettre à jour' : 'Créer'}
-            </Button>
-          </Group>
+            </button>
+          </div>
         </Stack>
       </Modal>
-    </Stack>
+    </div>
   );
 }

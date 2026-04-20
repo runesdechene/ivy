@@ -1,1 +1,1 @@
-export const APP_VERSION = '0.4.12 - Ivy (Atelier boréal — HUB de stand)';
+export const APP_VERSION = '0.4.13 - Ivy (Atelier boréal — paramètres)';

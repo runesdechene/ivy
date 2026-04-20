@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Title, Text, Paper, Stack, Table, TextInput, Button, Group, ActionIcon, Badge, ColorSwatch, Modal, Loader, Center, ColorPicker, Popover } from '@mantine/core';
+import { Stack, TextInput, Group, ColorSwatch, Modal, ColorPicker, Popover, Loader } from '@mantine/core';
 import { IconPlus, IconTrash, IconEdit } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useDisclosure } from '@mantine/hooks';
 import { useShop } from '@/context/ShopContext';
+import styles from '../parametres.module.scss';
 
 interface ColorRule {
   id?: string;
@@ -18,7 +19,7 @@ export default function CouleursPage() {
   const { currentShop } = useShop();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  
+
   const [colorRules, setColorRules] = useState<ColorRule[]>([]);
   const [editingColor, setEditingColor] = useState<ColorRule | null>(null);
   const [colorModalOpened, { open: openColorModal, close: closeColorModal }] = useDisclosure(false);
@@ -26,7 +27,7 @@ export default function CouleursPage() {
 
   const fetchRules = useCallback(async () => {
     if (!currentShop) return;
-    
+
     setLoading(true);
     try {
       const response = await fetch(`/api/settings?shopId=${currentShop.id}`);
@@ -47,7 +48,7 @@ export default function CouleursPage() {
 
   const saveColorRule = async (rule: ColorRule) => {
     if (!currentShop) return;
-    
+
     setSaving(true);
     try {
       const response = await fetch('/api/settings/colors', {
@@ -61,9 +62,9 @@ export default function CouleursPage() {
 
       if (response.ok) {
         notifications.show({
-          title: 'Succès',
+          title: 'Enregistré',
           message: 'Règle de couleur sauvegardée',
-          color: 'green',
+          color: 'moss',
         });
         closeColorModal();
         fetchRules();
@@ -74,7 +75,7 @@ export default function CouleursPage() {
       notifications.show({
         title: 'Erreur',
         message: 'Impossible de sauvegarder la règle',
-        color: 'red',
+        color: 'rust',
       });
     } finally {
       setSaving(false);
@@ -83,7 +84,7 @@ export default function CouleursPage() {
 
   const deleteColorRule = async (id: string) => {
     if (!currentShop) return;
-    
+
     try {
       const response = await fetch(`/api/settings/colors?id=${id}&shopId=${currentShop.id}`, {
         method: 'DELETE',
@@ -91,9 +92,9 @@ export default function CouleursPage() {
 
       if (response.ok) {
         notifications.show({
-          title: 'Succès',
+          title: 'Supprimé',
           message: 'Règle supprimée',
-          color: 'green',
+          color: 'moss',
         });
         fetchRules();
       }
@@ -101,118 +102,132 @@ export default function CouleursPage() {
       notifications.show({
         title: 'Erreur',
         message: 'Impossible de supprimer la règle',
-        color: 'red',
+        color: 'rust',
       });
     }
   };
 
+  const shopName = currentShop?.name || 'Runes de Chêne';
+
+  const filteredRules = colorRules.filter(rule =>
+    colorSearch === '' ||
+    rule.reception_name.toLowerCase().includes(colorSearch.toLowerCase()) ||
+    (rule.display_name && rule.display_name.toLowerCase().includes(colorSearch.toLowerCase()))
+  );
+
   if (loading) {
     return (
-      <Center h={400}>
+      <div className={styles.loadingWrap}>
         <Loader size="lg" />
-      </Center>
+      </div>
     );
   }
 
   return (
     <div>
-      <Title order={2} mb="lg">Couleurs</Title>
-      
-      <Paper withBorder p="md" radius="md">
-        <Group justify="space-between" mb="md">
-          <div>
-            <Text fw={600}>Mapping des couleurs</Text>
-            <Text size="sm" c="dimmed">
-              Définissez comment les noms de couleurs reçus de Shopify sont affichés dans l'application.
-              La recherche est insensible à la casse.
-            </Text>
+      <div className={styles.pageHead}>
+        <div className={styles.pageHeadLeft}>
+          <div className={styles.eyebrow}>Paramètres · {shopName}</div>
+          <h1 className={styles.title}>
+            Mapping des <em>couleurs</em>
+          </h1>
+          <div className={styles.sub}>
+            Définissez comment les noms de couleurs Shopify sont affichés dans Ivy
           </div>
-          <Button
-            leftSection={<IconPlus size={16} />}
-            onClick={() => {
-              setEditingColor({ reception_name: '', display_name: null, hex_value: '#808080' });
-              openColorModal();
-            }}
-          >
-            Ajouter une couleur
-          </Button>
-        </Group>
+        </div>
+        <button
+          className={styles.primaryButton}
+          onClick={() => {
+            setEditingColor({ reception_name: '', display_name: null, hex_value: '#808080' });
+            openColorModal();
+          }}
+        >
+          <IconPlus size={14} />
+          Ajouter une couleur
+        </button>
+      </div>
 
+      <div className={styles.card}>
         {colorRules.length > 0 && (
-          <TextInput
-            placeholder="Rechercher une couleur..."
-            value={colorSearch}
-            onChange={(e) => setColorSearch(e.target.value)}
-            mb="md"
-          />
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--divider)' }}>
+            <TextInput
+              placeholder="Rechercher une couleur..."
+              value={colorSearch}
+              onChange={(e) => setColorSearch(e.target.value)}
+              styles={{
+                input: {
+                  backgroundColor: 'var(--cream-soft)',
+                  borderColor: 'var(--divider)',
+                },
+              }}
+            />
+          </div>
         )}
 
         {colorRules.length > 0 ? (
-          <Table striped highlightOnHover>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Couleur</Table.Th>
-                <Table.Th>Nom de réception</Table.Th>
-                <Table.Th>Nom sur Ivy</Table.Th>
-                <Table.Th style={{ width: 100 }}>Actions</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {colorRules
-                .filter(rule => 
-                  colorSearch === '' || 
-                  rule.reception_name.toLowerCase().includes(colorSearch.toLowerCase()) ||
-                  (rule.display_name && rule.display_name.toLowerCase().includes(colorSearch.toLowerCase()))
-                )
-                .map((rule) => (
-                <Table.Tr key={rule.id || rule.reception_name}>
-                  <Table.Td>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th className={styles.th} style={{ width: 60 }}>Couleur</th>
+                <th className={styles.th}>Nom de réception</th>
+                <th className={styles.th}>Nom sur Ivy</th>
+                <th className={styles.th} style={{ width: 100 }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredRules.map((rule) => (
+                <tr key={rule.id || rule.reception_name} className={styles.tr}>
+                  <td className={styles.td}>
                     <ColorSwatch color={rule.hex_value} size={24} />
-                  </Table.Td>
-                  <Table.Td>{rule.reception_name}</Table.Td>
-                  <Table.Td>
+                  </td>
+                  <td className={styles.td}>{rule.reception_name}</td>
+                  <td className={styles.td}>
                     {rule.display_name ? (
-                      <Badge variant="light" color="blue">{rule.display_name}</Badge>
+                      <span className={styles.badge + ' ' + styles.badge_plum}>{rule.display_name}</span>
                     ) : (
-                      <Text size="sm" c="dimmed">—</Text>
+                      <span style={{ color: 'var(--slate-muted)' }}>&mdash;</span>
                     )}
-                  </Table.Td>
-                  <Table.Td>
+                  </td>
+                  <td className={styles.td}>
                     <Group gap="xs">
-                      <ActionIcon
-                        variant="subtle"
-                        color="blue"
+                      <button
+                        className={styles.iconButton}
                         onClick={() => {
                           setEditingColor(rule);
                           openColorModal();
                         }}
                       >
                         <IconEdit size={16} />
-                      </ActionIcon>
-                      <ActionIcon
-                        variant="subtle"
-                        color="red"
+                      </button>
+                      <button
+                        className={`${styles.iconButton} ${styles.iconButton_danger}`}
                         onClick={() => rule.id && deleteColorRule(rule.id)}
                       >
                         <IconTrash size={16} />
-                      </ActionIcon>
+                      </button>
                     </Group>
-                  </Table.Td>
-                </Table.Tr>
+                  </td>
+                </tr>
               ))}
-            </Table.Tbody>
-          </Table>
+            </tbody>
+          </table>
         ) : (
-          <Text c="dimmed" ta="center" py="xl">
-            Aucune règle de couleur définie.
-          </Text>
+          <div className={styles.cardBody}>
+            <p className={styles.emptyStateText}>
+              Aucune règle de couleur définie.
+            </p>
+          </div>
         )}
-      </Paper>
+      </div>
 
       <Modal
         opened={colorModalOpened}
         onClose={closeColorModal}
-        title={editingColor?.id ? 'Modifier la couleur' : 'Ajouter une couleur'}
+        title={<span className={styles.modalTitle}>{editingColor?.id ? 'Modifier la couleur' : 'Ajouter une couleur'}</span>}
+        styles={{
+          content: { backgroundColor: 'var(--cream-soft)' },
+          header: { backgroundColor: 'var(--cream-soft)' },
+        }}
       >
         {editingColor && (
           <Stack>
@@ -223,6 +238,9 @@ export default function CouleursPage() {
               value={editingColor.reception_name}
               onChange={(e) => setEditingColor({ ...editingColor, reception_name: e.target.value })}
               required
+              styles={{
+                input: { backgroundColor: 'var(--cream)', borderColor: 'var(--divider)' },
+              }}
             />
             <TextInput
               label="Nom sur Ivy"
@@ -230,26 +248,40 @@ export default function CouleursPage() {
               placeholder="ex: French Navy, Burgundy"
               value={editingColor.display_name || ''}
               onChange={(e) => setEditingColor({ ...editingColor, display_name: e.target.value || null })}
+              styles={{
+                input: { backgroundColor: 'var(--cream)', borderColor: 'var(--divider)' },
+              }}
             />
             <div>
-              <Text size="sm" fw={500} mb={4}>Couleur associée</Text>
-              <Text size="xs" c="dimmed" mb="xs">Code hexadécimal pour l'affichage visuel</Text>
+              <label style={{ fontSize: 14, fontWeight: 500, color: 'var(--slate)', display: 'block', marginBottom: 4 }}>
+                Couleur associée
+              </label>
+              <p style={{ fontSize: 12, color: 'var(--slate-muted)', marginBottom: 8 }}>
+                Code hexadécimal pour l&apos;affichage visuel
+              </p>
               <Group align="flex-start">
                 <TextInput
                   placeholder="#FF0000"
                   value={editingColor.hex_value}
                   onChange={(e) => setEditingColor({ ...editingColor, hex_value: e.target.value })}
                   style={{ flex: 1 }}
+                  styles={{
+                    input: { backgroundColor: 'var(--cream)', borderColor: 'var(--divider)' },
+                  }}
                 />
                 <Popover position="bottom" withArrow shadow="md">
                   <Popover.Target>
-                    <ActionIcon 
-                      variant="light" 
-                      size={36}
-                      style={{ backgroundColor: editingColor.hex_value, border: '2px solid #ddd' }}
+                    <button
+                      className={styles.iconButton}
+                      style={{
+                        backgroundColor: editingColor.hex_value,
+                        border: '2px solid var(--divider-strong)',
+                        width: 36,
+                        height: 36,
+                      }}
                     >
                       <span />
-                    </ActionIcon>
+                    </button>
                   </Popover.Target>
                   <Popover.Dropdown>
                     <ColorPicker
@@ -268,16 +300,16 @@ export default function CouleursPage() {
                 </Popover>
               </Group>
             </div>
-            <Group justify="flex-end" mt="md">
-              <Button variant="subtle" onClick={closeColorModal}>Annuler</Button>
-              <Button 
+            <div className={styles.modalActions}>
+              <button className={styles.ghostButton} onClick={closeColorModal}>Annuler</button>
+              <button
+                className={styles.primaryButton}
                 onClick={() => saveColorRule(editingColor)}
-                loading={saving}
-                disabled={!editingColor.reception_name.trim()}
+                disabled={saving || !editingColor.reception_name.trim()}
               >
                 Sauvegarder
-              </Button>
-            </Group>
+              </button>
+            </div>
           </Stack>
         )}
       </Modal>
