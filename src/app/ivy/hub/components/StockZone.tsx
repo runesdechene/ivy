@@ -116,7 +116,7 @@ export function StockZone({
 
         <Button
           className={styles.confirmButton}
-          color="slate"
+          color="moss"
           disabled={movements.length === 0}
           loading={processing}
           onClick={onConfirm}
