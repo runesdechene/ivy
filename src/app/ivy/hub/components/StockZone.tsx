@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Button, Switch, Text } from '@mantine/core';
+import { ActionIcon, Button, Text } from '@mantine/core';
 import { IconPackage, IconTrash, IconArrowBackUp, IconRotate } from '@tabler/icons-react';
 import { StockMovement } from '../types';
 import styles from '../caisse.module.scss';
@@ -36,18 +36,7 @@ export function StockZone({
           <IconPackage size={20} />
           <span>Sorties</span>
           {(totalOut + totalReturn) > 0 && (
-            <span style={{
-              background: 'var(--mantine-color-orange-6)',
-              color: 'white',
-              borderRadius: '50%',
-              width: 24,
-              height: 24,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '0.8rem',
-              fontWeight: 600,
-            }}>
+            <span className={styles.countBadge}>
               {totalOut + totalReturn}
             </span>
           )}
@@ -55,7 +44,7 @@ export function StockZone({
         {movements.length > 0 && (
           <ActionIcon
             variant="subtle"
-            color="red"
+            color="gray"
             onClick={onClear}
             title="Réinitialiser"
           >
@@ -109,18 +98,17 @@ export function StockZone({
       {/* Footer */}
       <div className={styles.cartFooter}>
         {/* Return Mode Toggle */}
-        <div className={styles.discountToggle}>
-          <div className={styles.discountName}>
+        <button
+          type="button"
+          className={`${styles.returnModeToggle} ${isReturnMode ? styles.active : ''}`}
+          onClick={() => onToggleReturnMode(!isReturnMode)}
+        >
+          <div className={styles.returnModeLabel}>
             <IconRotate size={16} />
             <span>Mode retour</span>
           </div>
-          <Switch
-            checked={isReturnMode}
-            onChange={(e) => onToggleReturnMode(e.currentTarget.checked)}
-            color="blue"
-            size="sm"
-          />
-        </div>
+          <Text size="xs" fw={600}>{isReturnMode ? 'Actif' : 'Inactif'}</Text>
+        </button>
 
         {movements.length > 0 && (
           <div className={styles.cartTotals}>
@@ -139,12 +127,12 @@ export function StockZone({
 
         <Button
           className={styles.confirmButton}
-          color="orange"
+          color="dark"
           disabled={movements.length === 0}
           loading={processing}
           onClick={onConfirm}
         >
-          Mettre à jour le stock
+          Valider les mouvements
         </Button>
       </div>
     </div>

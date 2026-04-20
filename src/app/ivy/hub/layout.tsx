@@ -20,7 +20,7 @@ function CaisseLayoutContent({
         <Tooltip label="Retour à Ivy">
           <ActionIcon 
             variant="light" 
-            color="gray" 
+            color="dark"
             size="lg"
             onClick={() => router.push('/ivy/commandes')}
           >

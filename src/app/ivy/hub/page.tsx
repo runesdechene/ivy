@@ -105,7 +105,7 @@ export default function CaissePage() {
       notifications.show({
         title: 'Stock mis à jour',
         message: `${total} mouvement${total > 1 ? 's' : ''} enregistré${total > 1 ? 's' : ''}`,
-        color: 'green',
+        color: 'teal',
       });
 
       tracker.clearMovements();
@@ -115,7 +115,7 @@ export default function CaissePage() {
       notifications.show({
         title: 'Erreur',
         message: 'Une erreur est survenue lors de la mise à jour du stock',
-        color: 'red',
+        color: 'orange',
       });
     } finally {
       setProcessing(false);
@@ -135,7 +135,7 @@ export default function CaissePage() {
                 checked={!hiddenColumns.has(key)}
                 onChange={() => toggleColumn(key)}
                 size="xs"
-                color="orange"
+                color="gray"
               />
             ))}
           </Group>

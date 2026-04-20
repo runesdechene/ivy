@@ -1,1 +1,1 @@
-export const APP_VERSION = '0.4.11 - Ivy (Atelier boréal — stand zones)';
+export const APP_VERSION = '0.4.12 - Ivy (Atelier boréal — HUB de stand)';
