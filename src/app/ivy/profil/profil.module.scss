@@ -1,4 +1,5 @@
 @use '@/style/_tokens.scss' as *;
+@use '@/style/_typography.scss' as *;
 
 .page {
   padding: $space-xl $space-base;
@@ -11,21 +12,16 @@
 }
 
 .eyebrow {
-  font-family: $font-inter;
-  font-size: 11px;
-  text-transform: uppercase;
+  @include type-eyebrow;
   letter-spacing: 0.12em;
-  color: $slate-muted;
   font-weight: 500;
   margin-bottom: $space-xs;
 }
 
 .title {
-  font-family: $font-fraunces;
-  font-style: normal;
+  @include type-display;
   font-size: 32px;
   font-weight: 600;
-  color: $slate;
   line-height: 1.2;
 }
 

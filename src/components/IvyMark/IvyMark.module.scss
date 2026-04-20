@@ -1,11 +1,11 @@
 @use '@/style/_tokens.scss' as *;
+@use '@/style/_typography.scss' as *;
 
 .mark {
   display: inline-flex;
   align-items: baseline;
   gap: 8px;
-  font-family: $font-fraunces;
-  font-style: italic;
+  @include type-brand-italic;
   letter-spacing: -0.01em;
   line-height: 1;
   color: $slate;

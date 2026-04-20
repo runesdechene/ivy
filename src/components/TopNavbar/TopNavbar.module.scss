@@ -1,4 +1,5 @@
 @use '@/style/_tokens.scss' as *;
+@use '@/style/_typography.scss' as *;
 
 .topNavbar {
   height: 68px;
@@ -68,8 +69,7 @@
 }
 
 .version {
-  font-family: $font-fraunces;
-  font-style: italic;
+  @include type-brand-italic;
   font-size: 11px;
   color: $slate-muted;
   letter-spacing: 0.02em;

@@ -1,4 +1,5 @@
 @use '@/style/_tokens.scss' as *;
+@use '@/style/_typography.scss' as *;
 
 .page {
   padding: $space-xl;
@@ -11,37 +12,24 @@
 }
 
 .eyebrow {
-  font-family: $font-inter;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  color: $slate-muted;
-  font-weight: 600;
+  @include type-eyebrow;
   margin-bottom: 10px;
 }
 
 .title {
-  font-family: $font-fraunces;
+  @include type-display;
   font-size: 40px;
-  font-weight: 500;
-  color: $slate;
-  letter-spacing: -0.02em;
   line-height: 1;
   margin: 0 0 8px;
 
   em {
-    font-style: normal;
-    font-weight: 600;
-    color: $moss;
+    @include type-display-accent;
   }
 }
 
 .sub {
-  font-family: $font-inter;
-  font-style: normal;
+  @include type-sub;
   font-size: 16px;
-  color: $slate-soft;
-  font-weight: 400;
 }
 
 .loadingWrap {
@@ -221,8 +209,7 @@
 }
 
 .emptyTitle {
-  font-family: $font-fraunces;
-  font-style: normal;
+  @include type-order-num;
   font-size: 18px;
   color: $slate-soft;
 }
@@ -239,10 +226,8 @@
   display: flex;
   align-items: center;
   gap: $space-sm;
-  font-family: $font-fraunces;
+  @include type-order-num;
   font-size: 18px;
-  font-weight: 500;
-  color: $slate;
 
   em {
     font-style: normal;

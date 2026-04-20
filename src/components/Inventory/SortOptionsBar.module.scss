@@ -1,4 +1,5 @@
 @use '@/style/_tokens.scss' as *;
+@use '@/style/_typography.scss' as *;
 
 .container {
   display: flex;
@@ -12,12 +13,8 @@
 }
 
 .label {
-  font-family: $font-inter;
-  font-size: 11px;
-  text-transform: uppercase;
+  @include type-eyebrow;
   letter-spacing: 0.14em;
-  color: $slate-muted;
-  font-weight: 600;
   white-space: nowrap;
 }
 

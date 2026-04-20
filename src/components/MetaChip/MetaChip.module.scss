@@ -1,4 +1,5 @@
 @use '@/style/_tokens.scss' as *;
+@use '@/style/_typography.scss' as *;
 
 .chip {
   font-size: 10.5px;
@@ -15,8 +16,7 @@
 }
 
 .key {
-  font-family: $font-fraunces;
-  font-style: italic;
+  @include type-brand-italic;
   font-weight: 500;
   opacity: 0.85;
 }

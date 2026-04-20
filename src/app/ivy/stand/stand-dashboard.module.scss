@@ -1,4 +1,5 @@
 @use '@/style/_tokens.scss' as *;
+@use '@/style/_typography.scss' as *;
 
 .container {
   position: relative;
@@ -23,37 +24,24 @@
 }
 
 .eyebrow {
-  font-family: $font-inter;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  color: $slate-muted;
-  font-weight: 600;
+  @include type-eyebrow;
   margin-bottom: 10px;
 }
 
 .title {
-  font-family: $font-fraunces;
+  @include type-display;
   font-size: 40px;
-  font-weight: 500;
-  color: $slate;
-  letter-spacing: -0.02em;
   line-height: 1;
   margin: 0 0 8px;
 
   em {
-    font-style: normal;
-    font-weight: 600;
-    color: $moss;
+    @include type-display-accent;
   }
 }
 
 .sub {
-  font-family: $font-inter;
-  font-style: normal;
+  @include type-sub;
   font-size: 16px;
-  color: $slate-soft;
-  font-weight: 400;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -108,22 +96,14 @@
 }
 
 .metricLabel {
-  font-family: $font-inter;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  color: $slate-muted;
-  font-weight: 600;
+  @include type-eyebrow;
   margin-bottom: 8px;
 }
 
 .metricValue {
-  font-family: $font-fraunces;
-  font-style: normal;
-  font-weight: 600;
+  @include type-amount;
   font-size: 30px;
   color: $moss;
-  letter-spacing: -0.01em;
   line-height: 1.05;
 }
 

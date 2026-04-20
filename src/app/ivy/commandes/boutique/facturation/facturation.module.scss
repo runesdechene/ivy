@@ -1,4 +1,5 @@
 @use '@/style/_tokens.scss' as *;
+@use '@/style/_typography.scss' as *;
 
 // ---------------------------------------------------------------------------
 // Page shell
@@ -24,37 +25,24 @@
 }
 
 .eyebrow {
-  font-family: $font-inter;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  color: $slate-muted;
-  font-weight: 600;
+  @include type-eyebrow;
   margin-bottom: 10px;
 }
 
 .title {
-  font-family: $font-fraunces;
+  @include type-display;
   font-size: 40px;
-  font-weight: 500;
-  color: $slate;
-  letter-spacing: -0.02em;
   line-height: 1;
   margin: 0 0 8px;
 
   em {
-    font-style: normal;
-    font-weight: 600;
-    color: $moss;
+    @include type-display-accent;
   }
 }
 
 .sub {
-  font-family: $font-inter;
-  font-style: normal;
+  @include type-sub;
   font-size: 16px;
-  color: $slate-soft;
-  font-weight: 400;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -99,9 +87,8 @@
 .emptyState {
   padding: 56px 24px;
   text-align: center;
+  @include type-variant;
   color: $slate-muted;
-  font-family: $font-inter;
-  font-style: normal;
   font-size: 15px;
   background: $cream-soft;
   border: 1px dashed $divider-strong;
@@ -138,18 +125,13 @@
 }
 
 .monthTitle {
-  font-family: $font-fraunces;
+  @include type-order-num;
   font-size: 22px;
-  font-weight: 500;
-  color: $slate;
-  letter-spacing: -0.01em;
   margin: 0;
   text-transform: capitalize;
 
   em {
-    font-style: normal;
-    color: $moss;
-    font-weight: 600;
+    @include type-display-accent;
   }
 }
 
@@ -175,12 +157,9 @@
   background: $moss-bg;
   border: 1px solid rgba(107, 122, 85, 0.25);
   border-radius: $radius-pill;
-  font-family: $font-fraunces;
-  font-weight: 600;
+  @include type-amount;
   font-size: 16px;
   color: $moss;
-  letter-spacing: -0.01em;
-  font-style: normal;
 
   em {
     font-style: normal;
@@ -334,12 +313,8 @@
 }
 
 .tdOrderNum {
-  font-family: $font-fraunces;
-  font-style: normal;
+  @include type-order-num;
   font-size: 18px;
-  font-weight: 500;
-  color: $slate;
-  letter-spacing: -0.01em;
   white-space: nowrap;
 }
 
@@ -371,15 +346,13 @@
   }
 
   .itemSku {
-    font-family: $font-jetbrains, ui-monospace, monospace;
+    @include type-mono;
     font-size: 12px;
     color: $slate-soft;
   }
 
   .itemVariant {
-    font-family: $font-inter;
-    font-style: normal;
-    color: $slate-muted;
+    @include type-variant;
     font-size: 12.5px;
     margin-left: 6px;
   }
@@ -394,9 +367,7 @@
 }
 
 .itemAmount {
-  font-family: $font-fraunces;
-  font-style: normal;
-  font-weight: 600;
+  @include type-amount;
   font-size: 13.5px;
   color: $slate;
   min-width: 70px;
@@ -413,9 +384,7 @@
 }
 
 .amount {
-  font-family: $font-fraunces;
-  font-style: normal;
-  font-weight: 600;
+  @include type-amount;
   color: $slate;
   white-space: nowrap;
 }
@@ -425,11 +394,10 @@
 }
 
 .amountTotal {
-  font-family: $font-fraunces;
+  @include type-amount;
   font-weight: 500;
   color: $moss;
   font-size: 15px;
-  letter-spacing: -0.01em;
   white-space: nowrap;
 }
 
@@ -480,9 +448,7 @@
   background: $cream;
   border: 1px solid $divider;
   border-radius: $radius-md;
-  font-family: $font-fraunces;
-  font-style: normal;
-  font-weight: 600;
+  @include type-amount;
   font-size: 13px;
   color: $slate;
   text-align: right;
@@ -503,28 +469,20 @@
 }
 
 .totalLabel {
-  font-family: $font-fraunces;
-  font-weight: 600;
+  @include type-amount;
   font-size: 18px;
   color: $slate;
-  letter-spacing: -0.01em;
-  font-style: normal;
 
   em {
-    font-style: normal;
-    color: $moss;
-    font-weight: 600;
+    @include type-display-accent;
   }
 }
 
 .totalAmount {
-  font-family: $font-fraunces;
-  font-weight: 600;
+  @include type-amount;
   font-size: 22px;
   color: $moss;
-  letter-spacing: -0.01em;
   white-space: nowrap;
-  font-style: normal;
 
   em {
     font-style: normal;

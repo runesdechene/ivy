@@ -1,4 +1,5 @@
 @use '@/style/_tokens.scss' as *;
+@use '@/style/_typography.scss' as *;
 
 .container {
   min-height: 100vh;
@@ -26,12 +27,8 @@
 
 .subtitle {
   text-align: center;
-  font-family: $font-inter;
-  font-style: normal;
-  font-size: 15px;
-  color: $slate-soft;
+  @include type-sub;
   margin-bottom: $space-xl;
-  font-weight: 400;
 }
 
 .input {

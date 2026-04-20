@@ -1,4 +1,5 @@
 @use '@/style/_tokens.scss' as *;
+@use '@/style/_typography.scss' as *;
 
 .caisseLayout {
   display: flex;
@@ -304,9 +305,7 @@
 .quantityValue {
   min-width: 32px;
   text-align: center;
-  font-family: $font-inter;
-  font-style: normal;
-  font-weight: 600;
+  @include type-qty;
   font-size: 1.2rem;
 
   &.negative {
@@ -446,8 +445,7 @@
 }
 
 .movementQuantity {
-  font-family: $font-inter;
-  font-style: normal;
+  @include type-qty;
   font-weight: 700;
   font-size: 24px;
 }

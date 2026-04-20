@@ -1,4 +1,5 @@
 @use '@/style/_tokens.scss' as *;
+@use '@/style/_typography.scss' as *;
 
 .fullscreen {
   min-height: calc(100vh - 68px);
@@ -146,7 +147,5 @@
   font-size: 11px;
   padding: 1px 7px;
   border-radius: $radius-pill;
-  font-weight: 600;
-  font-family: $font-inter;
-  font-weight: 600;
+  @include type-badge-count;
 }

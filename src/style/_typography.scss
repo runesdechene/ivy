@@ -1,0 +1,119 @@
+// Atelier boréal — Centralized typography mixins.
+// Import with: @use '@/style/_typography.scss' as *;
+//
+// To toggle italic globally, change font-style values below.
+// Current: roman everywhere except @mixin type-brand-italic (IvyMark, version, MetaChip key).
+
+@use '@/style/tokens' as *;
+
+// Page titles (H1, display)
+@mixin type-display {
+  font-family: $font-fraunces;
+  font-weight: 500;
+  font-style: normal;
+  letter-spacing: -0.02em;
+  color: $slate;
+}
+
+// Accent word inside a title ("boutique", "interne", "de bord")
+@mixin type-display-accent {
+  font-family: $font-fraunces;
+  font-weight: 600;
+  font-style: normal;
+  color: $moss;
+}
+
+// Sub-title below H1
+@mixin type-sub {
+  font-family: $font-inter;
+  font-weight: 400;
+  font-style: normal;
+  font-size: 15px;
+  color: $slate-soft;
+}
+
+// Eyebrow ("Atelier · Runes de Chêne")
+@mixin type-eyebrow {
+  font-family: $font-inter;
+  font-size: 11px;
+  font-weight: 600;
+  font-style: normal;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: $slate-muted;
+}
+
+// Order numbers (#1742)
+@mixin type-order-num {
+  font-family: $font-fraunces;
+  font-weight: 500;
+  font-style: normal;
+  letter-spacing: -0.01em;
+  color: $slate;
+}
+
+// Quantities (×2)
+@mixin type-qty {
+  font-family: $font-inter;
+  font-weight: 600;
+  font-style: normal;
+  color: $slate;
+}
+
+// Variant descriptors (Mocha · M)
+@mixin type-variant {
+  font-family: $font-inter;
+  font-weight: 400;
+  font-style: normal;
+  color: $slate-muted;
+}
+
+// Timestamps (il y a 3 min)
+@mixin type-timestamp {
+  font-family: $font-inter;
+  font-weight: 400;
+  font-style: normal;
+}
+
+// Monetary values / cost totals (25,00 €)
+@mixin type-amount {
+  font-family: $font-fraunces;
+  font-weight: 600;
+  font-style: normal;
+  letter-spacing: -0.01em;
+}
+
+// Progress labels (67%)
+@mixin type-progress {
+  font-family: $font-inter;
+  font-weight: 500;
+  font-style: normal;
+}
+
+// Nav badges (12)
+@mixin type-badge-count {
+  font-family: $font-inter;
+  font-weight: 600;
+  font-style: normal;
+}
+
+// Filter chip count
+@mixin type-chip-count {
+  font-family: $font-inter;
+  font-weight: 400;
+  font-style: normal;
+}
+
+// Brand italic — ONLY for IvyMark wordmark, version text, MetaChip key
+@mixin type-brand-italic {
+  font-family: $font-fraunces;
+  font-style: italic;
+}
+
+// Mono codes (SKU, IDs)
+@mixin type-mono {
+  font-family: $font-jetbrains;
+  font-weight: 400;
+  font-style: normal;
+  letter-spacing: 0.04em;
+}

@@ -1,4 +1,5 @@
 @use '@/style/_tokens.scss' as *;
+@use '@/style/_typography.scss' as *;
 
 .card {
   cursor: pointer;
@@ -53,13 +54,9 @@
 }
 
 .title {
-  font-family: $font-fraunces;
-  font-style: normal;
-  font-weight: 500;
+  @include type-order-num;
   font-size: 14px;
-  color: $slate;
   line-height: 1.25;
-  letter-spacing: -0.01em;
 
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -77,12 +74,9 @@
 }
 
 .cost {
-  font-family: $font-fraunces;
-  font-style: normal;
+  @include type-amount;
   font-size: 13px;
-  font-weight: 600;
   color: $slate;
-  letter-spacing: -0.01em;
 
   &.warn {
     color: $clay;

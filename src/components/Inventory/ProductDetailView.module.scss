@@ -1,4 +1,5 @@
 @use '@/style/_tokens.scss' as *;
+@use '@/style/_typography.scss' as *;
 
 // ===========================================
 // VUE DÉTAIL PRODUIT — Atelier boréal
@@ -64,21 +65,16 @@
 }
 
 .productTitle {
-  font-family: $font-fraunces;
-  font-style: normal;
-  font-weight: 500;
+  @include type-order-num;
   font-size: 18px;
-  color: $slate;
-  letter-spacing: -0.01em;
   margin: 0;
   line-height: 1.2;
 }
 
 .productHandle {
-  font-family: $font-jetbrains;
+  @include type-mono;
   font-size: 11px;
   color: $slate-muted;
-  letter-spacing: 0.04em;
   margin-left: 4px;
 }
 
@@ -130,10 +126,7 @@
 }
 
 .stockBadge {
-  font-family: $font-fraunces;
-  font-style: normal;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  @include type-amount;
   width: fit-content;
 }
 
@@ -151,10 +144,7 @@
 }
 
 .sizeBadge {
-  font-family: $font-fraunces;
-  font-style: normal;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  @include type-amount;
 }
 
 // Cards: product info + variants section
@@ -167,12 +157,8 @@
 }
 
 .variantsTitle {
-  font-family: $font-fraunces;
-  font-style: normal;
-  font-weight: 500;
+  @include type-order-num;
   font-size: 15px;
-  color: $slate;
-  letter-spacing: -0.01em;
 }
 
 .variantsTable {
@@ -204,7 +190,7 @@
 }
 
 .variantSku {
-  font-family: $font-jetbrains;
+  @include type-mono;
   color: $slate-muted;
   font-size: 12px;
   letter-spacing: 0.02em;
@@ -267,10 +253,8 @@
   display: flex;
   align-items: center;
   gap: $space-sm;
-  font-family: $font-fraunces;
+  @include type-order-num;
   font-size: 17px;
-  font-weight: 500;
-  color: $slate;
 
   em {
     font-style: normal;

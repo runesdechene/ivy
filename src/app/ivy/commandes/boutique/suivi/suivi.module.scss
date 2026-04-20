@@ -1,4 +1,5 @@
 @use '@/style/_tokens.scss' as *;
+@use '@/style/_typography.scss' as *;
 
 // ---------------------------------------------------------------------------
 // Page shell
@@ -24,37 +25,24 @@
 }
 
 .eyebrow {
-  font-family: $font-inter;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  color: $slate-muted;
-  font-weight: 600;
+  @include type-eyebrow;
   margin-bottom: 10px;
 }
 
 .title {
-  font-family: $font-fraunces;
+  @include type-display;
   font-size: 40px;
-  font-weight: 500;
-  color: $slate;
-  letter-spacing: -0.02em;
   line-height: 1;
   margin: 0 0 8px;
 
   em {
-    font-style: normal;
-    font-weight: 600;
-    color: $moss;
+    @include type-display-accent;
   }
 }
 
 .sub {
-  font-family: $font-inter;
-  font-style: normal;
+  @include type-sub;
   font-size: 16px;
-  color: $slate-soft;
-  font-weight: 400;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -74,12 +62,9 @@
   background: $moss-bg;
   border: 1px solid rgba(107, 122, 85, 0.25);
   border-radius: $radius-pill;
-  font-family: $font-fraunces;
-  font-weight: 600;
+  @include type-amount;
   font-size: 16px;
   color: $moss;
-  letter-spacing: -0.01em;
-  font-style: normal;
 
   em {
     font-style: normal;
@@ -96,9 +81,8 @@
 .emptyState {
   padding: 56px 24px;
   text-align: center;
+  @include type-variant;
   color: $slate-muted;
-  font-family: $font-inter;
-  font-style: normal;
   font-size: 15px;
   background: $cream-soft;
   border: 1px dashed $divider-strong;
@@ -136,11 +120,8 @@
 }
 
 .skuLabel {
-  font-family: $font-fraunces;
+  @include type-order-num;
   font-size: 22px;
-  font-weight: 500;
-  color: $slate;
-  letter-spacing: -0.01em;
   margin: 0;
 }
 
@@ -261,9 +242,7 @@
 }
 
 .variantQty {
-  font-family: $font-inter;
-  font-style: normal;
-  font-weight: 600;
+  @include type-qty;
   font-size: 18px;
   color: $slate;
   letter-spacing: -0.01em;
@@ -278,7 +257,7 @@
 }
 
 .variantSku {
-  font-family: $font-jetbrains, ui-monospace, monospace;
+  @include type-mono;
   font-size: 12px;
   color: $slate-soft;
   letter-spacing: 0.02em;
@@ -310,12 +289,8 @@
 
 .orderNumber {
   cursor: pointer;
-  font-family: $font-fraunces;
-  font-style: normal;
-  font-weight: 500;
+  @include type-order-num;
   font-size: 15px;
-  color: $slate;
-  letter-spacing: -0.01em;
   transition: color 0.15s ease;
 
   &:hover {

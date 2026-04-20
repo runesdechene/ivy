@@ -1,4 +1,5 @@
 @use '@/style/_tokens.scss' as *;
+@use '@/style/_typography.scss' as *;
 
 .pageContainer {
   padding: 0;
@@ -9,9 +10,7 @@
 }
 
 .orderNumber {
-  font-family: $font-fraunces;
-  font-style: normal;
-  color: $slate;
+  @include type-order-num;
 }
 
 .subtitle {
@@ -33,8 +32,7 @@
 .skuTitle {
   display: flex;
   align-items: center;
-  font-family: $font-jetbrains;
-  letter-spacing: 0.04em;
+  @include type-mono;
   color: $slate;
 }
 
@@ -54,10 +52,8 @@
 }
 
 .quantity {
-  font-family: $font-inter;
-  font-style: normal;
+  @include type-qty;
   font-size: 18px;
-  font-weight: 600;
   color: $ink;
 }
 

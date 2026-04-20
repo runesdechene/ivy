@@ -1,4 +1,5 @@
 @use '@/style/_tokens.scss' as *;
+@use '@/style/_typography.scss' as *;
 
 .cost {
   text-align: right;
@@ -21,9 +22,7 @@
 }
 
 .qty {
-  font-family: $font-inter;
-  font-weight: 600;
-  color: $slate;
+  @include type-qty;
 }
 
 .unit {
@@ -31,12 +30,9 @@
 }
 
 .total {
-  font-family: $font-fraunces;
-  font-weight: 600;
-  font-style: normal;
+  @include type-amount;
   font-size: 15px;
   color: $moss;
-  letter-spacing: -0.01em;
 }
 
 .label {

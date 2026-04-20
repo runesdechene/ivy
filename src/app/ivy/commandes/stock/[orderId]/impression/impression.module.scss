@@ -1,4 +1,5 @@
 @use '@/style/_tokens.scss' as *;
+@use '@/style/_typography.scss' as *;
 
 .container {
   padding: 1.5rem;
@@ -11,9 +12,7 @@
 }
 
 .orderNumber {
-  font-family: $font-fraunces;
-  font-style: normal;
-  color: $slate;
+  @include type-order-num;
 }
 
 .subtitle {

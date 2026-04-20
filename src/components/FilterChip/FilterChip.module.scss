@@ -1,4 +1,5 @@
 @use '@/style/_tokens.scss' as *;
+@use '@/style/_typography.scss' as *;
 
 .chip {
   padding: 6px 12px;
@@ -26,7 +27,6 @@
 }
 
 .count {
+  @include type-chip-count;
   opacity: 0.6;
-  font-family: $font-inter;
-  font-style: normal;
 }

@@ -1,35 +1,25 @@
 @use '@/style/_tokens.scss' as *;
+@use '@/style/_typography.scss' as *;
 
 .container {
   max-width: 900px;
 }
 
 .eyebrow {
-  font-family: $font-inter;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  color: $slate-muted;
-  font-weight: 600;
+  @include type-eyebrow;
   margin-bottom: 10px;
 }
 
 .title {
-  font-family: $font-fraunces;
+  @include type-display;
   font-size: 40px;
-  font-weight: 500;
-  color: $slate;
-  letter-spacing: -0.02em;
   line-height: 1;
   margin-bottom: 8px;
 }
 
 .sub {
-  font-family: $font-inter;
-  font-style: normal;
+  @include type-sub;
   font-size: 16px;
-  color: $slate-soft;
-  font-weight: 400;
   margin-bottom: 32px;
 }
 
@@ -75,17 +65,12 @@
 }
 
 .cardTitle {
-  font-family: $font-fraunces;
+  @include type-order-num;
   font-size: 20px;
-  font-weight: 500;
-  color: $slate;
-  letter-spacing: -0.01em;
   margin-bottom: 8px;
 
   em {
-    font-style: normal;
-    font-weight: 600;
-    color: $moss;
+    @include type-display-accent;
   }
 }
 
