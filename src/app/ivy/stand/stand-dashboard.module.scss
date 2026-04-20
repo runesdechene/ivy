@@ -42,15 +42,15 @@
   margin: 0 0 8px;
 
   em {
-    font-style: italic;
-    font-weight: 400;
+    font-style: normal;
+    font-weight: 600;
     color: $moss;
   }
 }
 
 .sub {
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   font-size: 16px;
   color: $slate-soft;
   font-weight: 400;
@@ -119,8 +119,8 @@
 
 .metricValue {
   font-family: $font-fraunces;
-  font-style: italic;
-  font-weight: 500;
+  font-style: normal;
+  font-weight: 600;
   font-size: 30px;
   color: $moss;
   letter-spacing: -0.01em;
@@ -184,8 +184,8 @@
   align-items: center;
   justify-content: center;
   min-height: 400px;
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   font-size: 15px;
   color: $slate-muted;
 }

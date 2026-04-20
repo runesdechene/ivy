@@ -21,7 +21,7 @@ export default function AnalyticsPage() {
       <div className={styles.placeholderCard}>
         <IconChartHistogram size={42} color="var(--slate-muted)" />
         <div className={styles.placeholderTitle}>
-          Bientôt <em style={{ fontStyle: 'italic', color: 'var(--moss)' }}>disponible</em>
+          Bientôt <em style={{ fontStyle: 'normal', fontWeight: 600, color: 'var(--moss)' }}>disponible</em>
         </div>
         <div className={styles.placeholderHint}>
           Cet espace accueillera des analyses approfondies : rotation du stock,

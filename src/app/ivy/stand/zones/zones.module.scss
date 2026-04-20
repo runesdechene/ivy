@@ -45,15 +45,15 @@
   margin: 0 0 8px;
 
   em {
-    font-style: italic;
-    font-weight: 400;
+    font-style: normal;
+    font-weight: 600;
     color: $moss;
   }
 }
 
 .sub {
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   font-size: 16px;
   color: $slate-soft;
   font-weight: 400;
@@ -173,7 +173,7 @@
 
 .zoneName {
   font-family: $font-fraunces;
-  font-style: italic;
+  font-style: normal;
   font-weight: 500;
   font-size: 19px;
   color: $slate;
@@ -207,8 +207,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   font-size: 14px;
   color: $slate-muted;
 
@@ -244,7 +244,7 @@
 
 .emptyStateTitle {
   font-family: $font-fraunces;
-  font-style: italic;
+  font-style: normal;
   font-size: 19px;
   color: $slate;
   letter-spacing: -0.01em;
@@ -296,7 +296,7 @@
 
 .detailTitle {
   font-family: $font-fraunces;
-  font-style: italic;
+  font-style: normal;
   font-size: 28px;
   font-weight: 500;
   color: $slate;
@@ -306,8 +306,8 @@
 }
 
 .detailRange {
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   font-size: 14px;
   color: $slate-muted;
   display: flex;
@@ -360,8 +360,8 @@
 
 .metricValue {
   font-family: $font-fraunces;
-  font-style: italic;
-  font-weight: 500;
+  font-style: normal;
+  font-weight: 600;
   font-size: 30px;
   letter-spacing: -0.01em;
   line-height: 1.05;
@@ -425,16 +425,16 @@
   margin: 0;
 
   em {
-    font-style: italic;
-    font-weight: 400;
+    font-style: normal;
+    font-weight: 600;
     color: $moss;
   }
 }
 
 .panelEmpty {
   padding: 24px 18px;
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   font-size: 14px;
   color: $slate-muted;
   text-align: center;
@@ -502,9 +502,9 @@
 }
 
 .cellQty {
-  font-family: $font-fraunces;
-  font-style: italic;
-  font-weight: 500;
+  font-family: $font-inter;
+  font-style: normal;
+  font-weight: 600;
   font-size: 17px;
   color: $moss;
   letter-spacing: -0.01em;
@@ -515,8 +515,8 @@
 }
 
 .cellQtyMuted {
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   color: $slate-muted;
 }
 
@@ -525,8 +525,8 @@
 }
 
 .cellDate {
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   font-size: 14px;
   color: $slate;
 }
@@ -547,8 +547,8 @@
   align-items: center;
   justify-content: center;
   min-height: 200px;
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   font-size: 15px;
   color: $slate-muted;
 }
@@ -559,7 +559,7 @@
 
 .modalTitle {
   font-family: $font-fraunces;
-  font-style: italic;
+  font-style: normal;
   font-size: 18px;
   font-weight: 500;
   color: $slate;

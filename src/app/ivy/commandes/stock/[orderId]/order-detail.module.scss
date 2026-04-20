@@ -34,15 +34,15 @@
   margin: 0 0 8px;
 
   em {
-    font-style: italic;
-    font-weight: 400;
+    font-style: normal;
+    font-weight: 600;
     color: $moss;
   }
 }
 
 .sub {
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   font-size: 16px;
   color: $slate-soft;
   font-weight: 400;
@@ -54,7 +54,6 @@
 
 .subSep {
   color: $slate-muted;
-  font-style: normal;
 }
 
 .backBtn {
@@ -196,9 +195,9 @@
   margin: 0;
 
   em {
-    font-style: italic;
+    font-style: normal;
     color: $moss;
-    font-weight: 400;
+    font-weight: 600;
   }
 }
 
@@ -245,7 +244,7 @@
 
 .groupTitle {
   font-family: $font-fraunces;
-  font-style: italic;
+  font-style: normal;
   font-size: 20px;
   font-weight: 500;
   color: $slate;
@@ -309,8 +308,8 @@
 }
 
 .tdVariant {
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   color: $slate-soft;
   font-size: 13px;
 }
@@ -348,8 +347,8 @@
 
 .metaCellEmpty {
   color: $slate-muted;
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   font-size: 12px;
 }
 
@@ -393,8 +392,8 @@
   padding: 56px 24px;
   text-align: center;
   color: $slate-muted;
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   font-size: 15px;
   background: $cream-soft;
   border: 1px dashed $divider-strong;
@@ -422,9 +421,9 @@
   margin: 0 0 $space-base;
 
   em {
-    font-style: italic;
+    font-style: normal;
     color: $moss;
-    font-weight: 400;
+    font-weight: 600;
   }
 }
 
@@ -583,8 +582,8 @@
   padding: 40px 20px;
   text-align: center;
   color: $slate-muted;
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   font-size: 14px;
 }
 

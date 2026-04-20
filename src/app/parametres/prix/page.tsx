@@ -990,7 +990,7 @@ export default function PriceRulesPage() {
                           </Group>
 
                           {rule.last_applied_at && (
-                            <p style={{ fontSize: 12, color: 'var(--slate-muted)', textAlign: 'right', fontFamily: 'var(--font-fraunces)', fontStyle: 'italic' }}>
+                            <p style={{ fontSize: 12, color: 'var(--slate-muted)', textAlign: 'right', fontFamily: 'var(--font-inter)', fontStyle: 'normal' }}>
                               Dernière application : {new Date(rule.last_applied_at).toLocaleString('fr-FR')}
                             </p>
                           )}
@@ -1050,7 +1050,7 @@ export default function PriceRulesPage() {
             min={0}
             step={0.5}
             styles={{
-              input: { backgroundColor: 'var(--cream)', borderColor: 'var(--divider)', fontFamily: 'var(--font-fraunces)', fontStyle: 'italic' },
+              input: { backgroundColor: 'var(--cream)', borderColor: 'var(--divider)', fontFamily: 'var(--font-fraunces)', fontStyle: 'normal' },
             }}
           />
 
@@ -1181,7 +1181,7 @@ export default function PriceRulesPage() {
                       fixedDecimalScale
                       step={0.5}
                       styles={{
-                        input: { backgroundColor: 'var(--cream)', borderColor: 'var(--divider)', fontFamily: 'var(--font-fraunces)', fontStyle: 'italic' },
+                        input: { backgroundColor: 'var(--cream)', borderColor: 'var(--divider)', fontFamily: 'var(--font-fraunces)', fontStyle: 'normal' },
                       }}
                     />
                   </Group>
@@ -1291,7 +1291,7 @@ export default function PriceRulesPage() {
                     fixedDecimalScale
                     step={0.5}
                     styles={{
-                      input: { backgroundColor: 'var(--cream)', borderColor: 'var(--divider)', fontFamily: 'var(--font-fraunces)', fontStyle: 'italic' },
+                      input: { backgroundColor: 'var(--cream)', borderColor: 'var(--divider)', fontFamily: 'var(--font-fraunces)', fontStyle: 'normal' },
                     }}
                   />
                 </Group>

@@ -42,15 +42,15 @@
   margin: 0 0 8px;
 
   em {
-    font-style: italic;
-    font-weight: 400;
+    font-style: normal;
+    font-weight: 600;
     color: $moss;
   }
 }
 
 .sub {
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   font-size: 16px;
   color: $slate-soft;
   font-weight: 400;
@@ -154,9 +154,9 @@
 }
 
 .skuCount {
-  font-family: $font-fraunces;
-  font-style: italic;
-  font-weight: 500;
+  font-family: $font-inter;
+  font-style: normal;
+  font-weight: 600;
   opacity: 0.65;
   font-size: 11px;
   margin-left: 4px;
@@ -185,7 +185,7 @@
 
 .syncPromptTitle {
   font-family: $font-fraunces;
-  font-style: italic;
+  font-style: normal;
   font-size: 22px;
   color: $slate;
   letter-spacing: -0.01em;
@@ -205,8 +205,8 @@
   align-items: center;
   justify-content: center;
   height: 200px;
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   font-size: 15px;
   color: $slate-muted;
 }
@@ -240,8 +240,8 @@
   color: $slate;
 
   em {
-    font-style: italic;
-    font-weight: 400;
+    font-style: normal;
+    font-weight: 600;
     color: $clay;
   }
 }

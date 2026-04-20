@@ -304,8 +304,8 @@
 .quantityValue {
   min-width: 32px;
   text-align: center;
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   font-weight: 600;
   font-size: 1.2rem;
 
@@ -446,8 +446,8 @@
 }
 
 .movementQuantity {
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   font-weight: 700;
   font-size: 24px;
 }

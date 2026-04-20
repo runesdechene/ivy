@@ -285,11 +285,11 @@ export default function FeuilleImpressionPage() {
             <Group justify="space-between" mb="xs">
               <Text fw={600} c="var(--slate)">Progression d&apos;impression</Text>
               <Text size="sm" c="var(--slate-muted)">
-                <span style={{ fontFamily: 'var(--font-fraunces)', fontStyle: 'italic', fontSize: 16 }}>
+                <span style={{ fontFamily: 'var(--font-inter)', fontStyle: 'normal', fontWeight: 600, fontSize: 16 }}>
                   {totals.printed}
                 </span>
                 {' / '}
-                <span style={{ fontFamily: 'var(--font-fraunces)', fontStyle: 'italic', fontSize: 16 }}>
+                <span style={{ fontFamily: 'var(--font-inter)', fontStyle: 'normal', fontWeight: 600, fontSize: 16 }}>
                   {totals.total}
                 </span>
                 {' imprimé(s) ('}
@@ -342,10 +342,10 @@ export default function FeuilleImpressionPage() {
                               color="var(--moss)"
                             />
                             <span style={{
-                              fontFamily: 'var(--font-fraunces)',
-                              fontStyle: 'italic',
+                              fontFamily: 'var(--font-inter)',
+                              fontStyle: 'normal',
                               fontSize: 22,
-                              fontWeight: 500,
+                              fontWeight: 600,
                               color: allPrinted ? 'var(--moss)' : 'var(--clay)',
                             }}>
                               x{group.quantity}
@@ -480,7 +480,7 @@ export default function FeuilleImpressionPage() {
         opened={!!zoomedImage}
         onClose={() => setZoomedImage(null)}
         title={
-          <Text fw={600} c="var(--slate)" style={{ fontFamily: 'var(--font-fraunces)', fontStyle: 'italic' }}>
+          <Text fw={600} c="var(--slate)" style={{ fontFamily: 'var(--font-fraunces)', fontStyle: 'normal' }}>
             {zoomedImage?.title || ''}
           </Text>
         }

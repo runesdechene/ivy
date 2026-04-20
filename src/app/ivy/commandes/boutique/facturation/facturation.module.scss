@@ -43,15 +43,15 @@
   margin: 0 0 8px;
 
   em {
-    font-style: italic;
-    font-weight: 400;
+    font-style: normal;
+    font-weight: 600;
     color: $moss;
   }
 }
 
 .sub {
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   font-size: 16px;
   color: $slate-soft;
   font-weight: 400;
@@ -100,8 +100,8 @@
   padding: 56px 24px;
   text-align: center;
   color: $slate-muted;
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   font-size: 15px;
   background: $cream-soft;
   border: 1px dashed $divider-strong;
@@ -147,15 +147,15 @@
   text-transform: capitalize;
 
   em {
-    font-style: italic;
+    font-style: normal;
     color: $moss;
-    font-weight: 400;
+    font-weight: 600;
   }
 }
 
 .monthSub {
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   font-size: 13px;
   color: $slate-soft;
 }
@@ -176,13 +176,14 @@
   border: 1px solid rgba(107, 122, 85, 0.25);
   border-radius: $radius-pill;
   font-family: $font-fraunces;
-  font-weight: 500;
+  font-weight: 600;
   font-size: 16px;
   color: $moss;
   letter-spacing: -0.01em;
+  font-style: normal;
 
   em {
-    font-style: italic;
+    font-style: normal;
     font-size: 12px;
     color: $slate-muted;
     font-weight: 400;
@@ -325,8 +326,8 @@
 }
 
 .tdDate {
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   color: $slate-soft;
   font-size: 13px;
   white-space: nowrap;
@@ -334,7 +335,7 @@
 
 .tdOrderNum {
   font-family: $font-fraunces;
-  font-style: italic;
+  font-style: normal;
   font-size: 18px;
   font-weight: 500;
   color: $slate;
@@ -362,10 +363,10 @@
   min-width: 0;
 
   .itemQty {
-    font-family: $font-fraunces;
-    font-style: italic;
+    font-family: $font-inter;
+    font-style: normal;
     color: $slate;
-    font-weight: 500;
+    font-weight: 600;
     margin-right: 4px;
   }
 
@@ -376,16 +377,16 @@
   }
 
   .itemVariant {
-    font-family: $font-fraunces;
-    font-style: italic;
+    font-family: $font-inter;
+    font-style: normal;
     color: $slate-muted;
     font-size: 12.5px;
     margin-left: 6px;
   }
 
   .itemUnit {
-    font-family: $font-fraunces;
-    font-style: italic;
+    font-family: $font-inter;
+    font-style: normal;
     color: $slate-muted;
     font-size: 12px;
     margin-left: 6px;
@@ -394,8 +395,8 @@
 
 .itemAmount {
   font-family: $font-fraunces;
-  font-style: italic;
-  font-weight: 500;
+  font-style: normal;
+  font-weight: 600;
   font-size: 13.5px;
   color: $slate;
   min-width: 70px;
@@ -413,8 +414,8 @@
 
 .amount {
   font-family: $font-fraunces;
-  font-style: italic;
-  font-weight: 500;
+  font-style: normal;
+  font-weight: 600;
   color: $slate;
   white-space: nowrap;
 }
@@ -480,8 +481,8 @@
   border: 1px solid $divider;
   border-radius: $radius-md;
   font-family: $font-fraunces;
-  font-style: italic;
-  font-weight: 500;
+  font-style: normal;
+  font-weight: 600;
   font-size: 13px;
   color: $slate;
   text-align: right;
@@ -503,28 +504,30 @@
 
 .totalLabel {
   font-family: $font-fraunces;
-  font-weight: 500;
+  font-weight: 600;
   font-size: 18px;
   color: $slate;
   letter-spacing: -0.01em;
+  font-style: normal;
 
   em {
-    font-style: italic;
+    font-style: normal;
     color: $moss;
-    font-weight: 400;
+    font-weight: 600;
   }
 }
 
 .totalAmount {
   font-family: $font-fraunces;
-  font-weight: 500;
+  font-weight: 600;
   font-size: 22px;
   color: $moss;
   letter-spacing: -0.01em;
   white-space: nowrap;
+  font-style: normal;
 
   em {
-    font-style: italic;
+    font-style: normal;
     font-size: 13px;
     color: $slate-muted;
     font-weight: 400;

@@ -21,9 +21,8 @@
 }
 
 .qty {
-  font-family: $font-fraunces;
-  font-style: italic;
-  font-weight: 500;
+  font-family: $font-inter;
+  font-weight: 600;
   color: $slate;
 }
 
@@ -33,7 +32,8 @@
 
 .total {
   font-family: $font-fraunces;
-  font-weight: 500;
+  font-weight: 600;
+  font-style: normal;
   font-size: 15px;
   color: $moss;
   letter-spacing: -0.01em;

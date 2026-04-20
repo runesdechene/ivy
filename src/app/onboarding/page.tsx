@@ -155,10 +155,10 @@ function OnboardingContent() {
               <IconCheck size={48} color="var(--moss)" />
               <p style={{
                 fontFamily: 'var(--font-fraunces)',
-                fontStyle: 'italic',
+                fontStyle: 'normal',
                 fontSize: 22,
                 color: 'var(--slate)',
-                fontWeight: 400,
+                fontWeight: 600,
               }}>
                 Tout est prêt !
               </p>

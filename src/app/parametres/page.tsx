@@ -227,7 +227,7 @@ export default function CommandesSettingsPage() {
                   backgroundColor: 'var(--cream-soft)',
                   borderColor: 'var(--divider)',
                   fontFamily: 'var(--font-fraunces)',
-                  fontStyle: 'italic',
+                  fontStyle: 'normal',
                 },
               }}
             />

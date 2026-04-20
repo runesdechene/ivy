@@ -30,15 +30,15 @@
   margin: 0 0 8px;
 
   em {
-    font-style: italic;
-    font-weight: 400;
+    font-style: normal;
+    font-weight: 600;
     color: $moss;
   }
 }
 
 .sub {
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   font-size: 16px;
   color: $slate-soft;
   font-weight: 400;
@@ -147,7 +147,7 @@
   font-family: $font-inter;
   font-size: 12px;
   color: $slate-muted;
-  font-style: italic;
+  font-style: normal;
 }
 
 .actions {
@@ -222,7 +222,7 @@
 
 .emptyTitle {
   font-family: $font-fraunces;
-  font-style: italic;
+  font-style: normal;
   font-size: 18px;
   color: $slate-soft;
 }
@@ -245,8 +245,8 @@
   color: $slate;
 
   em {
-    font-style: italic;
-    font-weight: 400;
+    font-style: normal;
+    font-weight: 600;
     color: $rust;
   }
 }
@@ -273,7 +273,7 @@
   font-family: $font-inter;
   font-size: 12px;
   color: $slate-muted;
-  font-style: italic;
+  font-style: normal;
   padding: $space-sm $space-md;
   background: $cream-warm;
   border: 1px dashed $divider-strong;

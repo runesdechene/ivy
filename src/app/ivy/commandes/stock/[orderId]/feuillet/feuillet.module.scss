@@ -10,7 +10,7 @@
 
 .orderNumber {
   font-family: $font-fraunces;
-  font-style: italic;
+  font-style: normal;
   color: $slate;
 }
 
@@ -54,10 +54,10 @@
 }
 
 .quantity {
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   font-size: 18px;
-  font-weight: 500;
+  font-weight: 600;
   color: $ink;
 }
 

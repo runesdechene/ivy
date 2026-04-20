@@ -45,7 +45,7 @@
 
 .headerTitle {
   font-family: $font-fraunces;
-  font-style: italic;
+  font-style: normal;
   font-weight: 500;
   font-size: 17px;
   color: $slate;
@@ -89,8 +89,8 @@
   justify-content: center;
   background: $cream-warm;
   color: $slate-muted;
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   font-size: 14px;
 }
 
@@ -103,7 +103,7 @@
 
 .productTitle {
   font-family: $font-fraunces;
-  font-style: italic;
+  font-style: normal;
   font-size: 24px;
   font-weight: 500;
   color: $slate;
@@ -160,7 +160,7 @@
 
 .variantsTitle {
   font-family: $font-fraunces;
-  font-style: italic;
+  font-style: normal;
   font-size: 14px;
   font-weight: 500;
   color: $slate;

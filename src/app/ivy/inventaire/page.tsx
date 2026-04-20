@@ -356,7 +356,7 @@ export default function InventaireDashboardPage() {
                     <span style={{ fontFamily: 'var(--font-inter)', fontSize: 12, color: 'var(--slate-soft)' }}>
                       {data.stock.toLocaleString('fr-FR')}
                     </span>
-                    <span style={{ fontFamily: 'var(--font-fraunces)', fontStyle: 'italic', fontSize: 12, color: 'var(--moss)' }}>
+                    <span style={{ fontFamily: 'var(--font-fraunces)', fontStyle: 'normal', fontWeight: 600, fontSize: 12, color: 'var(--moss)' }}>
                       {data.value.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €
                     </span>
                   </div>
@@ -394,7 +394,7 @@ export default function InventaireDashboardPage() {
                     <span style={{ fontFamily: 'var(--font-inter)', fontSize: 12, color: 'var(--slate-soft)' }}>
                       {product.stock.toLocaleString('fr-FR')}
                     </span>
-                    <span style={{ fontFamily: 'var(--font-fraunces)', fontStyle: 'italic', fontSize: 12, color: 'var(--moss)' }}>
+                    <span style={{ fontFamily: 'var(--font-fraunces)', fontStyle: 'normal', fontWeight: 600, fontSize: 12, color: 'var(--moss)' }}>
                       {product.value.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €
                     </span>
                   </div>

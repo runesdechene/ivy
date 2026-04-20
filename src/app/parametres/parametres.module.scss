@@ -37,15 +37,15 @@
   margin: 0 0 8px;
 
   em {
-    font-style: italic;
-    font-weight: 400;
+    font-style: normal;
+    font-weight: 600;
     color: $moss;
   }
 }
 
 .sub {
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   font-size: 16px;
   color: $slate-soft;
   font-weight: 400;
@@ -331,8 +331,8 @@
 }
 
 .emptyStateText {
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   font-size: 15px;
   color: $slate-muted;
 }
@@ -351,7 +351,7 @@
 
 .modalTitle {
   font-family: $font-fraunces;
-  font-style: italic;
+  font-style: normal;
   font-size: 18px;
   font-weight: 500;
   color: $slate;
@@ -451,15 +451,15 @@
 
 .amountPositive {
   font-family: $font-fraunces;
-  font-style: italic;
-  font-weight: 500;
+  font-style: normal;
+  font-weight: 600;
   color: $moss;
 }
 
 .amountNegative {
   font-family: $font-fraunces;
-  font-style: italic;
-  font-weight: 500;
+  font-style: normal;
+  font-weight: 600;
   color: $rust;
 }
 
@@ -489,7 +489,7 @@
 
 .descCardName {
   font-family: $font-fraunces;
-  font-style: italic;
+  font-style: normal;
   font-size: 18px;
   font-weight: 500;
   color: $slate;

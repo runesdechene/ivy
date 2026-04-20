@@ -1,8 +1,8 @@
 @use '@/style/_tokens.scss' as *;
 
 .timestamp {
-  font-family: $font-fraunces;
-  font-style: italic;
+  font-family: $font-inter;
+  font-style: normal;
   font-size: 12px;
   color: rgba(244, 240, 232, 0.7); // inverse (for use on dark bg)
   letter-spacing: 0.01em;

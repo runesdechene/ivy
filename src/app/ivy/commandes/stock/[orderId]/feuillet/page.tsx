@@ -265,11 +265,11 @@ export default function FeuilletCommandePage() {
         <Group justify="space-between" mb="xs">
           <Text fw={600} c="var(--slate)">Progression</Text>
           <Text size="sm" c="var(--slate-muted)">
-            <span style={{ fontFamily: 'var(--font-fraunces)', fontStyle: 'italic', fontSize: 16 }}>
+            <span style={{ fontFamily: 'var(--font-inter)', fontStyle: 'normal', fontWeight: 600, fontSize: 16 }}>
               {totals.validated}
             </span>
             {' / '}
-            <span style={{ fontFamily: 'var(--font-fraunces)', fontStyle: 'italic', fontSize: 16 }}>
+            <span style={{ fontFamily: 'var(--font-inter)', fontStyle: 'normal', fontWeight: 600, fontSize: 16 }}>
               {totals.total}
             </span>
             {' validé(s) ('}
