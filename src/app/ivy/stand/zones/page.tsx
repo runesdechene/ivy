@@ -1,37 +1,23 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import {
-  Title,
-  Text,
-  Card,
-  Group,
-  Stack,
-  SimpleGrid,
-  Loader,
-  Center,
-  Button,
-  Modal,
-  TextInput,
-  Table,
-  Badge,
-  ActionIcon,
-  Paper,
-} from '@mantine/core';
+import { Loader, Modal, TextInput, Stack } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { notifications } from '@mantine/notifications';
 import {
   IconPlus,
   IconTrash,
   IconChartBar,
-  IconPackage,
   IconArrowLeft,
   IconCalendar,
   IconArrowDown,
   IconArrowUp,
+  IconMapPin,
 } from '@tabler/icons-react';
 import { useShop } from '@/context/ShopContext';
 import { useLocation } from '@/context/LocationContext';
+import { StatusBadge } from '@/components/StatusBadge';
+import styles from './zones.module.scss';
 
 interface StudyZone {
   id: string;
@@ -71,6 +57,19 @@ export default function StudyZonesPage() {
 
   const formatDate = (dateStr: string) =>
     new Date(dateStr).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+
+  const isZoneActive = (zone: StudyZone) => {
+    const now = new Date();
+    const from = new Date(zone.date_from);
+    const to = new Date(zone.date_to);
+    return now >= from && now <= to;
+  };
+
+  const isZonePast = (zone: StudyZone) => {
+    const now = new Date();
+    const to = new Date(zone.date_to);
+    return now > to;
+  };
 
   const fetchZones = useCallback(async () => {
     if (!currentShop) return;
@@ -186,265 +185,351 @@ export default function StudyZonesPage() {
     }
   };
 
+  const shopName = currentShop?.name || 'Runes de Chêne';
+
   if (loading) {
     return (
-      <Center h={400}>
-        <Loader size="lg" />
-      </Center>
+      <div className={styles.container}>
+        <div className={styles.loadingWrap}>
+          <Loader color="moss" />
+        </div>
+      </div>
     );
   }
 
+  // ---------------------------------------------------------------------------
   // Detail view
+  // ---------------------------------------------------------------------------
   if (selectedZone) {
+    const renderQtyRow = (label: string, qty: number, key: string | number) => (
+      <tr key={key} className={styles.tr}>
+        <td className={styles.td}>
+          <span className={styles.cellName}>{label}</span>
+        </td>
+        <td className={`${styles.td} ${styles.tdRight}`}>
+          <span className={styles.cellQty}>{qty}</span>
+        </td>
+      </tr>
+    );
+
     return (
-      <Stack gap="lg">
-        <Group>
-          <ActionIcon variant="light" onClick={() => { setSelectedZone(null); setZoneStats(null); }}>
+      <div className={styles.container}>
+        <div className={styles.detailHead}>
+          <button
+            type="button"
+            className={styles.backButton}
+            onClick={() => { setSelectedZone(null); setZoneStats(null); }}
+            aria-label="Retour"
+          >
             <IconArrowLeft size={18} />
-          </ActionIcon>
-          <div>
-            <Title order={2}>{selectedZone.name}</Title>
-            <Text size="sm" c="dimmed">
-              {formatDate(selectedZone.date_from)} — {formatDate(selectedZone.date_to)}
-              {currentLocation && <Badge ml="xs" variant="light" size="sm">{currentLocation.name}</Badge>}
-            </Text>
+          </button>
+          <div className={styles.detailHeadInfo}>
+            <h1 className={styles.detailTitle}>{selectedZone.name}</h1>
+            <div className={styles.detailRange}>
+              <span>
+                {formatDate(selectedZone.date_from)} — {formatDate(selectedZone.date_to)}
+              </span>
+              {isZoneActive(selectedZone) && (
+                <StatusBadge variant="moss">Active</StatusBadge>
+              )}
+              {isZonePast(selectedZone) && (
+                <StatusBadge variant="slate">Passée</StatusBadge>
+              )}
+              {currentLocation && (
+                <span className={styles.locationChip}>
+                  <IconMapPin size={11} />
+                  {currentLocation.name}
+                </span>
+              )}
+            </div>
           </div>
-        </Group>
+        </div>
 
         {loadingStats ? (
-          <Center h={300}><Loader size="lg" /></Center>
+          <div className={styles.loadingWrap}>
+            <Loader color="moss" />
+          </div>
         ) : zoneStats ? (
           <>
             {/* Summary cards */}
-            <SimpleGrid cols={{ base: 1, sm: 2 }}>
-              <Card withBorder padding="lg">
-                <Group justify="space-between" align="flex-start">
-                  <div>
-                    <Text size="sm" c="dimmed" tt="uppercase" fw={600}>Articles sortis</Text>
-                    <Text size="xl" fw={700} mt="xs">{zoneStats.summary.totalItemsOut}</Text>
+            <div className={styles.summaryGrid}>
+              <div className={styles.metricCard}>
+                <div className={styles.metricBody}>
+                  <div className={styles.metricLabel}>Articles sortis</div>
+                  <div className={`${styles.metricValue} ${styles.metricValue_moss}`}>
+                    {zoneStats.summary.totalItemsOut.toLocaleString('fr-FR')}
                   </div>
-                  <IconArrowDown size={28} color="var(--mantine-color-orange-5)" />
-                </Group>
-              </Card>
+                </div>
+                <div className={`${styles.metricIcon} ${styles.metricIcon_clay}`}>
+                  <IconArrowDown size={20} />
+                </div>
+              </div>
 
-              <Card withBorder padding="lg">
-                <Group justify="space-between" align="flex-start">
-                  <div>
-                    <Text size="sm" c="dimmed" tt="uppercase" fw={600}>Retours</Text>
-                    <Text size="xl" fw={700} mt="xs">{zoneStats.summary.totalItemsReturn}</Text>
+              <div className={styles.metricCard}>
+                <div className={styles.metricBody}>
+                  <div className={styles.metricLabel}>Retours</div>
+                  <div className={`${styles.metricValue} ${styles.metricValue_plum}`}>
+                    {zoneStats.summary.totalItemsReturn.toLocaleString('fr-FR')}
                   </div>
-                  <IconArrowUp size={28} color="var(--mantine-color-blue-5)" />
-                </Group>
-              </Card>
-            </SimpleGrid>
+                </div>
+                <div className={`${styles.metricIcon} ${styles.metricIcon_plum}`}>
+                  <IconArrowUp size={20} />
+                </div>
+              </div>
+            </div>
 
-            <SimpleGrid cols={{ base: 1, md: 2 }}>
-              {/* Top products */}
-              <Card withBorder padding="lg">
-                <Text fw={600} mb="md">Produits les plus sortis</Text>
+            {/* Top products / Top variants */}
+            <div className={styles.panelsGrid}>
+              <div className={styles.panel}>
+                <div className={styles.panelHead}>
+                  <h2 className={styles.panelTitle}>
+                    Produits <em>les plus sortis</em>
+                  </h2>
+                </div>
                 {zoneStats.topProducts.length === 0 ? (
-                  <Text c="dimmed" size="sm">Aucune donnée</Text>
+                  <div className={styles.panelEmpty}>Aucune donnée</div>
                 ) : (
-                  <Table>
-                    <Table.Thead>
-                      <Table.Tr>
-                        <Table.Th>Produit</Table.Th>
-                        <Table.Th style={{ textAlign: 'right' }}>Quantité</Table.Th>
-                      </Table.Tr>
-                    </Table.Thead>
-                    <Table.Tbody>
-                      {zoneStats.topProducts.map((p, i) => (
-                        <Table.Tr key={i}>
-                          <Table.Td><Text size="sm">{p.name}</Text></Table.Td>
-                          <Table.Td style={{ textAlign: 'right' }}>
-                            <Badge variant="light" size="sm">{p.quantity}</Badge>
-                          </Table.Td>
-                        </Table.Tr>
-                      ))}
-                    </Table.Tbody>
-                  </Table>
+                  <div className={styles.tableWrap}>
+                    <table className={styles.table}>
+                      <thead>
+                        <tr>
+                          <th className={styles.th}>Produit</th>
+                          <th className={`${styles.th} ${styles.thRight}`}>Quantité</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {zoneStats.topProducts.map((p, i) => renderQtyRow(p.name, p.quantity, i))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
-              </Card>
+              </div>
 
-              {/* Top variants */}
-              <Card withBorder padding="lg">
-                <Text fw={600} mb="md">Variantes les plus sorties</Text>
+              <div className={styles.panel}>
+                <div className={styles.panelHead}>
+                  <h2 className={styles.panelTitle}>
+                    Variantes <em>les plus sorties</em>
+                  </h2>
+                </div>
                 {zoneStats.topVariants.length === 0 ? (
-                  <Text c="dimmed" size="sm">Aucune donnée</Text>
+                  <div className={styles.panelEmpty}>Aucune donnée</div>
                 ) : (
-                  <Table>
-                    <Table.Thead>
-                      <Table.Tr>
-                        <Table.Th>Variante</Table.Th>
-                        <Table.Th style={{ textAlign: 'right' }}>Quantité</Table.Th>
-                      </Table.Tr>
-                    </Table.Thead>
-                    <Table.Tbody>
-                      {zoneStats.topVariants.map((v, i) => (
-                        <Table.Tr key={i}>
-                          <Table.Td><Text size="sm">{v.name}</Text></Table.Td>
-                          <Table.Td style={{ textAlign: 'right' }}>
-                            <Badge variant="light" size="sm">{v.quantity}</Badge>
-                          </Table.Td>
-                        </Table.Tr>
-                      ))}
-                    </Table.Tbody>
-                  </Table>
+                  <div className={styles.tableWrap}>
+                    <table className={styles.table}>
+                      <thead>
+                        <tr>
+                          <th className={styles.th}>Variante</th>
+                          <th className={`${styles.th} ${styles.thRight}`}>Quantité</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {zoneStats.topVariants.map((v, i) => renderQtyRow(v.name, v.quantity, i))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
-              </Card>
-            </SimpleGrid>
+              </div>
+            </div>
 
-            {/* Options by category (Couleur, Taille, etc.) + Top names */}
-            <SimpleGrid cols={{ base: 1, md: zoneStats.topOptionsByCategory.length + (zoneStats.topNames.length > 0 ? 1 : 0) > 3 ? 2 : zoneStats.topOptionsByCategory.length + (zoneStats.topNames.length > 0 ? 1 : 0) }}>
-              {zoneStats.topOptionsByCategory.map((cat, i) => (
-                <Card key={i} withBorder padding="lg">
-                  <Text fw={600} mb="md">{cat.category}</Text>
-                  <Table>
-                    <Table.Thead>
-                      <Table.Tr>
-                        <Table.Th>{cat.category}</Table.Th>
-                        <Table.Th style={{ textAlign: 'right' }}>Quantité</Table.Th>
-                      </Table.Tr>
-                    </Table.Thead>
-                    <Table.Tbody>
-                      {cat.options.map((o, j) => (
-                        <Table.Tr key={j}>
-                          <Table.Td><Text size="sm">{o.name}</Text></Table.Td>
-                          <Table.Td style={{ textAlign: 'right' }}>
-                            <Badge variant="light" size="sm">{o.quantity}</Badge>
-                          </Table.Td>
-                        </Table.Tr>
-                      ))}
-                    </Table.Tbody>
-                  </Table>
-                </Card>
-              ))}
+            {/* Options by category + Top names */}
+            {(zoneStats.topOptionsByCategory.length > 0 || zoneStats.topNames.length > 0) && (
+              <div className={styles.panelsGrid}>
+                {zoneStats.topOptionsByCategory.map((cat, i) => (
+                  <div key={i} className={styles.panel}>
+                    <div className={styles.panelHead}>
+                      <h2 className={styles.panelTitle}>
+                        {cat.category}
+                      </h2>
+                    </div>
+                    <div className={styles.tableWrap}>
+                      <table className={styles.table}>
+                        <thead>
+                          <tr>
+                            <th className={styles.th}>{cat.category}</th>
+                            <th className={`${styles.th} ${styles.thRight}`}>Quantité</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {cat.options.map((o, j) => renderQtyRow(o.name, o.quantity, j))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
 
-              {/* Top names (grouped by prefix) */}
-              {zoneStats.topNames.length > 0 && (
-                <Card withBorder padding="lg">
-                  <Text fw={600} mb="md">Fragments les plus sortis</Text>
-                  <Table>
-                    <Table.Thead>
-                      <Table.Tr>
-                        <Table.Th>Nom</Table.Th>
-                        <Table.Th style={{ textAlign: 'right' }}>Quantité</Table.Th>
-                      </Table.Tr>
-                    </Table.Thead>
-                    <Table.Tbody>
-                      {zoneStats.topNames.map((n, i) => (
-                        <Table.Tr key={i}>
-                          <Table.Td><Text size="sm">{n.fullName}</Text></Table.Td>
-                          <Table.Td style={{ textAlign: 'right' }}>
-                            <Badge variant="light" size="sm">{n.quantity}</Badge>
-                          </Table.Td>
-                        </Table.Tr>
-                      ))}
-                    </Table.Tbody>
-                  </Table>
-                </Card>
-              )}
-            </SimpleGrid>
+                {zoneStats.topNames.length > 0 && (
+                  <div className={styles.panel}>
+                    <div className={styles.panelHead}>
+                      <h2 className={styles.panelTitle}>
+                        Fragments <em>les plus sortis</em>
+                      </h2>
+                    </div>
+                    <div className={styles.tableWrap}>
+                      <table className={styles.table}>
+                        <thead>
+                          <tr>
+                            <th className={styles.th}>Nom</th>
+                            <th className={`${styles.th} ${styles.thRight}`}>Quantité</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {zoneStats.topNames.map((n, i) => renderQtyRow(n.fullName, n.quantity, i))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Movements by day */}
             {zoneStats.movementsByDay.length > 0 && (
-              <Card withBorder padding="lg">
-                <Text fw={600} mb="md">Mouvements par jour</Text>
-                <Table>
-                  <Table.Thead>
-                    <Table.Tr>
-                      <Table.Th>Date</Table.Th>
-                      <Table.Th style={{ textAlign: 'right' }}>Sorties</Table.Th>
-                      <Table.Th style={{ textAlign: 'right' }}>Retours</Table.Th>
-                    </Table.Tr>
-                  </Table.Thead>
-                  <Table.Tbody>
-                    {zoneStats.movementsByDay.map((day, i) => (
-                      <Table.Tr key={i}>
-                        <Table.Td>{formatDate(day.date)}</Table.Td>
-                        <Table.Td style={{ textAlign: 'right' }}>{day.itemsOut}</Table.Td>
-                        <Table.Td style={{ textAlign: 'right' }}>
-                          {day.itemsReturn > 0 ? `+${day.itemsReturn}` : '—'}
-                        </Table.Td>
-                      </Table.Tr>
-                    ))}
-                  </Table.Tbody>
-                </Table>
-              </Card>
+              <div className={styles.panel}>
+                <div className={styles.panelHead}>
+                  <h2 className={styles.panelTitle}>
+                    Mouvements <em>par jour</em>
+                  </h2>
+                </div>
+                <div className={styles.tableWrap}>
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th className={styles.th}>Date</th>
+                        <th className={`${styles.th} ${styles.thRight}`}>Sorties</th>
+                        <th className={`${styles.th} ${styles.thRight}`}>Retours</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {zoneStats.movementsByDay.map((day, i) => (
+                        <tr key={i} className={styles.tr}>
+                          <td className={styles.td}>
+                            <span className={styles.cellDate}>{formatDate(day.date)}</span>
+                          </td>
+                          <td className={`${styles.td} ${styles.tdRight}`}>
+                            <span className={`${styles.cellQty} ${day.itemsOut === 0 ? styles.cellQtyMuted : ''}`}>
+                              {day.itemsOut > 0 ? day.itemsOut : '—'}
+                            </span>
+                          </td>
+                          <td className={`${styles.td} ${styles.tdRight}`}>
+                            <span className={`${styles.cellQty} ${styles.cellQtyReturn} ${day.itemsReturn === 0 ? styles.cellQtyMuted : ''}`}>
+                              {day.itemsReturn > 0 ? `+${day.itemsReturn}` : '—'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             )}
           </>
         ) : (
-          <Text c="dimmed">Impossible de charger les statistiques</Text>
+          <div className={styles.errorWrap}>
+            Impossible de charger les statistiques
+          </div>
         )}
-      </Stack>
+      </div>
     );
   }
 
+  // ---------------------------------------------------------------------------
   // List view
+  // ---------------------------------------------------------------------------
   return (
-    <Stack gap="lg">
-      <Group justify="space-between">
-        <div>
-          <Title order={2}>Zones d'étude</Title>
-          <Text c="dimmed" size="sm">
-            Créez des zones d'étude pour analyser les mouvements de stock sur une période
-          </Text>
+    <div className={styles.container}>
+      <div className={styles.pageHead}>
+        <div className={styles.pageHeadLeft}>
+          <div className={styles.eyebrow}>Festivals · {shopName}</div>
+          <h1 className={styles.title}>
+            Zones <em>d&apos;étude</em>
+          </h1>
+          <div className={styles.sub}>
+            <span>
+              {zones.length === 0
+                ? 'Aucune zone définie'
+                : `${zones.length} zone${zones.length > 1 ? 's' : ''} définie${zones.length > 1 ? 's' : ''}`}
+            </span>
+            {currentLocation && (
+              <>
+                <span className={styles.subSep}>·</span>
+                <span className={styles.locationChip}>
+                  <IconMapPin size={11} />
+                  {currentLocation.name}
+                </span>
+              </>
+            )}
+          </div>
         </div>
-        <Button leftSection={<IconPlus size={16} />} onClick={() => setCreateModalOpen(true)}>
-          Créer une zone d'étude
-        </Button>
-      </Group>
+        <button
+          type="button"
+          className={styles.primaryButton}
+          onClick={() => setCreateModalOpen(true)}
+        >
+          <IconPlus size={16} />
+          Créer une zone
+        </button>
+      </div>
 
       {zones.length === 0 ? (
-        <Paper withBorder p="xl" radius="md">
-          <Center>
-            <Stack align="center" gap="sm">
-              <IconChartBar size={48} color="var(--mantine-color-gray-4)" />
-              <Text c="dimmed">Aucune zone d'étude créée</Text>
-              <Text c="dimmed" size="sm">
-                Créez une zone pour analyser vos mouvements de stock sur une période (festival, marché, etc.)
-              </Text>
-            </Stack>
-          </Center>
-        </Paper>
+        <div className={styles.emptyState}>
+          <div className={styles.emptyStateIcon}>
+            <IconChartBar size={42} />
+          </div>
+          <div className={styles.emptyStateTitle}>
+            Aucune zone <em>d&apos;étude</em>
+          </div>
+          <div className={styles.emptyStateHint}>
+            Créez une zone pour analyser vos mouvements de stock sur une
+            période — festival, marché, événement.
+          </div>
+        </div>
       ) : (
-        <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
-          {zones.map(zone => (
-            <Card
-              key={zone.id}
-              withBorder
-              padding="lg"
-              radius="md"
-              style={{ cursor: 'pointer' }}
-              onClick={() => loadStats(zone)}
-            >
-              <Group justify="space-between" mb="xs">
-                <Text fw={600} size="lg">{zone.name}</Text>
-                <ActionIcon
-                  variant="subtle"
-                  color="red"
-                  size="sm"
-                  onClick={(e) => { e.stopPropagation(); handleDelete(zone.id); }}
-                >
-                  <IconTrash size={14} />
-                </ActionIcon>
-              </Group>
-              <Group gap="xs">
-                <IconCalendar size={14} color="var(--mantine-color-dimmed)" />
-                <Text size="sm" c="dimmed">
-                  {formatDate(zone.date_from)} — {formatDate(zone.date_to)}
-                </Text>
-              </Group>
-            </Card>
-          ))}
-        </SimpleGrid>
+        <div className={styles.zonesGrid}>
+          {zones.map(zone => {
+            const active = isZoneActive(zone);
+            const past = isZonePast(zone);
+            return (
+              <div
+                key={zone.id}
+                className={styles.zoneCard}
+                onClick={() => loadStats(zone)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    loadStats(zone);
+                  }
+                }}
+              >
+                <div className={styles.zoneCardHead}>
+                  <h3 className={styles.zoneName}>{zone.name}</h3>
+                  <button
+                    type="button"
+                    className={styles.zoneDeleteBtn}
+                    onClick={(e) => { e.stopPropagation(); handleDelete(zone.id); }}
+                    aria-label="Supprimer la zone"
+                  >
+                    <IconTrash size={14} />
+                  </button>
+                </div>
+                <div className={styles.zoneRange}>
+                  <IconCalendar size={14} />
+                  <span>{formatDate(zone.date_from)} — {formatDate(zone.date_to)}</span>
+                </div>
+                {active && <StatusBadge variant="moss">Active</StatusBadge>}
+                {past && <StatusBadge variant="slate">Passée</StatusBadge>}
+              </div>
+            );
+          })}
+        </div>
       )}
 
       {/* Create modal */}
       <Modal
         opened={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
-        title="Créer une zone d'étude"
+        title={<span className={styles.modalTitle}>Créer une zone d&apos;étude</span>}
         centered
       >
         <Stack gap="md">
@@ -465,12 +550,25 @@ export default function StudyZonesPage() {
             locale="fr"
             required
           />
-          <Group justify="flex-end">
-            <Button variant="subtle" onClick={() => setCreateModalOpen(false)}>Annuler</Button>
-            <Button onClick={handleCreate} loading={creating}>Créer</Button>
-          </Group>
+          <div className={styles.modalActions}>
+            <button
+              type="button"
+              className={styles.ghostButton}
+              onClick={() => setCreateModalOpen(false)}
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              className={styles.primaryButton}
+              onClick={handleCreate}
+              disabled={creating}
+            >
+              {creating ? 'Création…' : 'Créer'}
+            </button>
+          </div>
         </Stack>
       </Modal>
-    </Stack>
+    </div>
   );
 }

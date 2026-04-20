@@ -1,0 +1,574 @@
+@use '@/style/_tokens.scss' as *;
+
+.container {
+  position: relative;
+  min-height: 100%;
+  padding: $space-xl;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+// ---------------------------------------------------------------------------
+// Page head
+// ---------------------------------------------------------------------------
+
+.pageHead {
+  margin-bottom: 28px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: $space-lg;
+  flex-wrap: wrap;
+}
+
+.pageHeadLeft {
+  min-width: 0;
+}
+
+.eyebrow {
+  font-family: $font-inter;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: $slate-muted;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.title {
+  font-family: $font-fraunces;
+  font-size: 40px;
+  font-weight: 500;
+  color: $slate;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin: 0 0 8px;
+
+  em {
+    font-style: italic;
+    font-weight: 400;
+    color: $moss;
+  }
+}
+
+.sub {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 16px;
+  color: $slate-soft;
+  font-weight: 400;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.subSep {
+  color: $slate-muted;
+  font-style: normal;
+}
+
+.locationChip {
+  font-family: $font-inter;
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: $moss;
+  background: $moss-bg;
+  border: 1px solid rgba(107, 122, 85, 0.25);
+  border-radius: $radius-pill;
+  padding: 3px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+// ---------------------------------------------------------------------------
+// Primary actions
+// ---------------------------------------------------------------------------
+
+.primaryButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: $slate;
+  color: $cream;
+  border: 1px solid $slate;
+  font-family: $font-inter;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 9px 16px;
+  border-radius: $radius-md;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+
+  &:hover {
+    background: $ink;
+    border-color: $ink;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.ghostButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  color: $slate-soft;
+  border: 1px solid $divider;
+  font-family: $font-inter;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: $radius-md;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+
+  &:hover {
+    background: $cream-warm;
+    color: $slate;
+    border-color: $divider-strong;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Zones list
+// ---------------------------------------------------------------------------
+
+.zonesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: $space-base;
+}
+
+.zoneCard {
+  background: $cream-soft;
+  border: 1px solid $divider;
+  border-radius: $radius-xl;
+  padding: 18px 20px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  &:hover {
+    border-color: $divider-strong;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(58, 70, 86, 0.05);
+  }
+}
+
+.zoneCardHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: $space-sm;
+}
+
+.zoneName {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 19px;
+  color: $slate;
+  letter-spacing: -0.01em;
+  margin: 0;
+  min-width: 0;
+}
+
+.zoneDeleteBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: $radius-sm;
+  background: transparent;
+  border: 1px solid transparent;
+  color: $slate-muted;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+
+  &:hover {
+    background: rgba(168, 91, 76, 0.1);
+    color: $rust;
+    border-color: rgba(168, 91, 76, 0.2);
+  }
+}
+
+.zoneRange {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 14px;
+  color: $slate-muted;
+
+  svg {
+    color: $slate-muted;
+    flex-shrink: 0;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Empty state
+// ---------------------------------------------------------------------------
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: $space-md;
+  min-height: 360px;
+  padding: $space-xl;
+  background: $cream-soft;
+  border: 1px dashed $divider-strong;
+  border-radius: $radius-xl;
+  text-align: center;
+  max-width: 540px;
+  margin: 40px auto;
+}
+
+.emptyStateIcon {
+  color: $slate-muted;
+}
+
+.emptyStateTitle {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 19px;
+  color: $slate;
+  letter-spacing: -0.01em;
+}
+
+.emptyStateHint {
+  font-family: $font-inter;
+  font-size: 13px;
+  color: $slate-muted;
+  max-width: 420px;
+  line-height: 1.5;
+}
+
+// ---------------------------------------------------------------------------
+// Detail view
+// ---------------------------------------------------------------------------
+
+.detailHead {
+  display: flex;
+  align-items: center;
+  gap: $space-base;
+  margin-bottom: 28px;
+}
+
+.backButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: $radius-md;
+  background: $cream-soft;
+  border: 1px solid $divider;
+  color: $slate-soft;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+
+  &:hover {
+    background: $cream-warm;
+    color: $slate;
+    border-color: $divider-strong;
+  }
+}
+
+.detailHeadInfo {
+  min-width: 0;
+}
+
+.detailTitle {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 28px;
+  font-weight: 500;
+  color: $slate;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  margin: 0 0 4px;
+}
+
+.detailRange {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 14px;
+  color: $slate-muted;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+// ---------------------------------------------------------------------------
+// Summary metric cards
+// ---------------------------------------------------------------------------
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: $space-base;
+  margin-bottom: $space-lg;
+}
+
+.metricCard {
+  background: $cream-soft;
+  border: 1px solid $divider;
+  border-radius: $radius-xl;
+  padding: 18px 20px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: $space-md;
+  transition: border-color 0.15s ease;
+
+  &:hover {
+    border-color: $divider-strong;
+  }
+}
+
+.metricBody {
+  min-width: 0;
+  flex: 1;
+}
+
+.metricLabel {
+  font-family: $font-inter;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: $slate-muted;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.metricValue {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 30px;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+}
+
+.metricValue_moss { color: $moss; }
+.metricValue_plum { color: $plum; }
+
+.metricIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: $radius-lg;
+  flex-shrink: 0;
+}
+
+.metricIcon_clay {
+  background: $clay-bg;
+  color: $clay;
+}
+
+.metricIcon_plum {
+  background: $plum-bg;
+  color: $plum;
+}
+
+// ---------------------------------------------------------------------------
+// Stat panels (host tables)
+// ---------------------------------------------------------------------------
+
+.panelsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: $space-base;
+  margin-bottom: $space-lg;
+}
+
+.panel {
+  background: $cream-soft;
+  border: 1px solid $divider;
+  border-radius: $radius-xl;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.panelHead {
+  background: $cream-warm;
+  padding: 12px 18px;
+  border-bottom: 1px solid $divider;
+}
+
+.panelTitle {
+  font-family: $font-fraunces;
+  font-size: 16px;
+  font-weight: 500;
+  color: $slate;
+  letter-spacing: -0.01em;
+  margin: 0;
+
+  em {
+    font-style: italic;
+    font-weight: 400;
+    color: $moss;
+  }
+}
+
+.panelEmpty {
+  padding: 24px 18px;
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 14px;
+  color: $slate-muted;
+  text-align: center;
+}
+
+// ---------------------------------------------------------------------------
+// Tables
+// ---------------------------------------------------------------------------
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.th {
+  font-family: $font-inter;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: $slate-muted;
+  font-weight: 600;
+  padding: 10px 18px;
+  text-align: left;
+  background: $cream-soft;
+  border-bottom: 1px solid $divider;
+  white-space: nowrap;
+}
+
+.thRight {
+  text-align: right;
+}
+
+.tr {
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: $cream-warm;
+  }
+
+  & + & .td {
+    border-top: 1px dashed $divider;
+  }
+}
+
+.td {
+  padding: 11px 18px;
+  font-family: $font-inter;
+  font-size: 13px;
+  color: $slate;
+  vertical-align: middle;
+}
+
+.tdRight {
+  text-align: right;
+}
+
+.cellName {
+  font-family: $font-inter;
+  font-size: 13px;
+  color: $slate;
+}
+
+.cellQty {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 17px;
+  color: $moss;
+  letter-spacing: -0.01em;
+}
+
+.cellQtyNeutral {
+  color: $slate;
+}
+
+.cellQtyMuted {
+  font-family: $font-fraunces;
+  font-style: italic;
+  color: $slate-muted;
+}
+
+.cellQtyReturn {
+  color: $plum;
+}
+
+.cellDate {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 14px;
+  color: $slate;
+}
+
+// ---------------------------------------------------------------------------
+// Loading + error
+// ---------------------------------------------------------------------------
+
+.loadingWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+
+.errorWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 15px;
+  color: $slate-muted;
+}
+
+// ---------------------------------------------------------------------------
+// Modal — create zone
+// ---------------------------------------------------------------------------
+
+.modalTitle {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 18px;
+  font-weight: 500;
+  color: $slate;
+  letter-spacing: -0.01em;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: $space-sm;
+  margin-top: $space-sm;
+}
