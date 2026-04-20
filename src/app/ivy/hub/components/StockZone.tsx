@@ -109,14 +109,8 @@ export function StockZone({
           <div className={styles.cartTotals}>
             <div className={`${styles.totalRow}`}>
               <span>{isReturnMode ? 'Entrées' : 'Sorties'}</span>
-              <span>{isReturnMode ? totalReturn : totalOut} article{(isReturnMode ? totalReturn : totalOut) > 1 ? 's' : ''}</span>
+              <span>{totalOut + totalReturn} article{(totalOut + totalReturn) > 1 ? 's' : ''}</span>
             </div>
-            {(isReturnMode ? totalOut > 0 : totalReturn > 0) && (
-              <div className={`${styles.totalRow}`}>
-                <span>{isReturnMode ? 'Sorties' : 'Retours'}</span>
-                <span>{isReturnMode ? totalOut : totalReturn} article{(isReturnMode ? totalOut : totalReturn) > 1 ? 's' : ''}</span>
-              </div>
-            )}
           </div>
         )}
 
