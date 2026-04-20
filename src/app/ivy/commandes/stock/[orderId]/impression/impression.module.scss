@@ -1,33 +1,136 @@
+@use '@/style/_tokens.scss' as *;
+
 .container {
   padding: 1.5rem;
   max-width: 1400px;
   margin: 0 auto;
 }
 
+.header {
+  font-family: $font-fraunces;
+}
+
+.orderNumber {
+  font-family: $font-fraunces;
+  font-style: italic;
+  color: $slate;
+}
+
+.subtitle {
+  color: $slate-muted;
+  font-size: 14px;
+}
+
+.progressCard {
+  background: $cream-soft;
+  border: 1px solid $divider;
+  border-radius: $radius-lg;
+  padding: $space-base;
+}
+
 .card {
+  background: $cream-soft;
+  border: 2px solid $divider;
+  border-radius: $radius-lg;
   transition: all 0.2s ease;
-  border: 2px solid transparent;
 
   &:hover {
-    border-color: var(--mantine-color-blue-4);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border-color: $clay;
+    box-shadow: 0 4px 12px rgba(43, 52, 64, 0.08);
+  }
+}
+
+.validatedCard {
+  background: $moss-bg;
+  border: 2px solid rgba(107, 122, 85, 0.35);
+  border-radius: $radius-lg;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: $moss;
+    box-shadow: 0 4px 12px rgba(43, 52, 64, 0.08);
   }
 }
 
 .skuGroupHeader {
-  // Style du header de section SKU (CREATOR, CULTIVATOR, etc.)
-  padding: 15px;
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 10px;
+  padding: $space-md $space-base;
+  background: $sand-soft;
+  border-radius: $radius-md;
+  color: $slate;
 }
 
-.validatedCard {
-  background-color: var(--mantine-color-green-0);
-  border: 2px solid var(--mantine-color-green-4);
-  transition: all 0.2s ease;
+.illustrationPlaceholder {
+  width: 96px;
+  height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $cream-warm;
+  border-radius: $radius-sm;
+  flex-shrink: 0;
+}
 
-  &:hover {
-    border-color: var(--mantine-color-green-6);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+.illustrationImage {
+  cursor: zoom-in;
+  background: $cream-warm;
+  flex-shrink: 0;
+  border-radius: $radius-sm;
+}
+
+.metaSection {
+  padding-top: $space-sm;
+  border-top: 1px dashed $divider-strong;
+}
+
+.completionCard {
+  background: $moss-bg;
+  border: 1px solid rgba(107, 122, 85, 0.2);
+  border-radius: $radius-lg;
+}
+
+.emptyCard {
+  background: $cream-soft;
+  border: 1px solid $divider;
+  border-radius: $radius-lg;
+}
+
+// ── Zoom modal ──────────────────────────────────────────
+.zoomOverlay {
+  // Mantine Modal overlay gets cream-soft tint via inline style
+}
+
+// ── Print styles ──────────────────────────────────────────
+@media print {
+  body {
+    background: white !important;
+  }
+
+  .noPrint {
+    display: none !important;
+  }
+
+  .container {
+    padding: 0;
+    max-width: 100%;
+  }
+
+  .card,
+  .validatedCard,
+  .progressCard,
+  .completionCard,
+  .emptyCard,
+  .skuGroupHeader {
+    background: white !important;
+    box-shadow: none !important;
+  }
+
+  .card,
+  .validatedCard {
+    page-break-inside: avoid;
+  }
+
+  .illustrationImage,
+  .illustrationPlaceholder {
+    background: white !important;
   }
 }

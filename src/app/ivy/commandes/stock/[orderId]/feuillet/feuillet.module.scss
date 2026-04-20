@@ -1,18 +1,105 @@
+@use '@/style/_tokens.scss' as *;
+
 .pageContainer {
   padding: 0;
 }
 
-.tableContainer {
-  overflow: hidden;
+.header {
+  font-family: $font-fraunces;
 }
 
-.tableRow {
-  &:hover {
-    background-color: var(--mantine-color-gray-0);
-  }
+.orderNumber {
+  font-family: $font-fraunces;
+  font-style: italic;
+  color: $slate;
+}
+
+.subtitle {
+  color: $slate-muted;
+  font-size: 14px;
+}
+
+.progressCard {
+  background: $cream-soft;
+  border: 1px solid $divider;
+  border-radius: $radius-lg;
+  padding: $space-base;
+}
+
+.skuSection {
+  margin-bottom: $space-xl;
 }
 
 .skuTitle {
   display: flex;
   align-items: center;
+  font-family: $font-jetbrains;
+  letter-spacing: 0.04em;
+  color: $slate;
+}
+
+.tableContainer {
+  overflow: hidden;
+  background: $cream-soft;
+  border: 1px solid $divider;
+  border-radius: $radius-md;
+}
+
+.tableRow {
+  transition: background 0.15s ease;
+
+  &:hover {
+    background-color: $cream-warm;
+  }
+}
+
+.quantity {
+  font-family: $font-fraunces;
+  font-style: italic;
+  font-size: 18px;
+  font-weight: 500;
+  color: $ink;
+}
+
+.completionCard {
+  background: $moss-bg;
+  border: 1px solid rgba(107, 122, 85, 0.2);
+  border-radius: $radius-lg;
+}
+
+.emptyCard {
+  background: $cream-soft;
+  border: 1px solid $divider;
+  border-radius: $radius-lg;
+}
+
+// ── Print styles ──────────────────────────────────────────
+@media print {
+  body {
+    background: white !important;
+  }
+
+  .noPrint {
+    display: none !important;
+  }
+
+  .pageContainer {
+    padding: 0;
+  }
+
+  .progressCard,
+  .tableContainer,
+  .completionCard,
+  .emptyCard {
+    background: white !important;
+    box-shadow: none !important;
+  }
+
+  .tableRow {
+    page-break-inside: avoid;
+  }
+
+  .skuSection {
+    page-break-inside: avoid;
+  }
 }

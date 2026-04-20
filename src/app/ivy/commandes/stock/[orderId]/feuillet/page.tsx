@@ -3,15 +3,16 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  Title, Text, Paper, Table, Button, Group, Badge,
+  Title, Text, Paper, Table, Button, Group,
   Checkbox, Loader, Center, Stack, Progress, ActionIcon, Tooltip
 } from '@mantine/core';
 import { IconArrowLeft, IconChecklist, IconCheckbox, IconSquare } from '@tabler/icons-react';
-import { notifications } from '@mantine/notifications';
 import { useShop } from '@/context/ShopContext';
 import { getColorHex, isColorOption, loadColorMappingsFromSupabase, areColorMappingsLoaded } from '@/utils/color-transformer';
 import { compareSizes } from '@/utils/size-helpers';
 import { SortOptionsBar } from '@/components/Inventory/SortOptionsBar';
+import { StatusBadge } from '@/components/StatusBadge';
+import { SkuChip } from '@/components/SkuChip';
 import styles from './feuillet.module.scss';
 
 const SIZE_ORDER = ['XXXS', 'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', '3XL', '4XL', '5XL'];
@@ -42,6 +43,13 @@ interface GroupedVariant {
   totalQuantity: number;
   validatedCount: number;
 }
+
+const STATUS_MAP: Record<string, { label: string; variant: 'moss' | 'clay' | 'sand' | 'slate' }> = {
+  completed: { label: 'Terminée', variant: 'moss' },
+  produced: { label: 'Produite', variant: 'sand' },
+  requested: { label: 'Demandée', variant: 'clay' },
+  draft: { label: 'Brouillon', variant: 'slate' },
+};
 
 export default function FeuilletCommandePage() {
   const params = useParams();
@@ -209,7 +217,7 @@ export default function FeuilletCommandePage() {
   if (loading) {
     return (
       <Center h={400}>
-        <Loader size="lg" />
+        <Loader size="lg" color="var(--moss)" />
       </Center>
     );
   }
@@ -217,15 +225,17 @@ export default function FeuilletCommandePage() {
   if (!order) {
     return (
       <Center h={400}>
-        <Text c="dimmed">Commande non trouvée</Text>
+        <Text c="var(--slate-muted)">Commande non trouvée</Text>
       </Center>
     );
   }
 
+  const statusInfo = STATUS_MAP[order.status] || STATUS_MAP.draft;
+
   return (
     <div className={styles.pageContainer}>
       {/* Header */}
-      <Group justify="space-between" mb="lg">
+      <Group justify="space-between" mb="lg" className={styles.noPrint}>
         <Group>
           <Button
             variant="subtle"
@@ -235,43 +245,45 @@ export default function FeuilletCommandePage() {
           >
             Retour
           </Button>
-          <IconChecklist size={28} />
-          <Title order={2}>Feuillet de commande - {order.order_number}</Title>
-          <Badge
-            color={
-              order.status === 'completed' ? 'green' :
-              order.status === 'produced' ? 'teal' :
-              order.status === 'requested' ? 'blue' : 'gray'
-            }
-            size="lg"
-          >
-            {order.status === 'completed' ? 'Terminée' :
-             order.status === 'produced' ? 'Produite' :
-             order.status === 'requested' ? 'Demandée' : 'Brouillon'}
-          </Badge>
         </Group>
       </Group>
 
-      <Text c="dimmed" mb="lg">
+      <Group gap="sm" mb="xs" className={styles.header}>
+        <IconChecklist size={24} style={{ color: 'var(--slate-soft)' }} />
+        <Title order={2} className={styles.orderNumber}>
+          Feuillet de commande — {order.order_number}
+        </Title>
+        <StatusBadge variant={statusInfo.variant}>{statusInfo.label}</StatusBadge>
+      </Group>
+
+      <Text className={styles.subtitle} mb="lg">
         Suivi de production : cochez chaque article au fur et à mesure de la production.
       </Text>
 
       {/* Progression */}
-      <Paper withBorder p="md" radius="md" mb="lg">
+      <div className={styles.progressCard} style={{ marginBottom: 'var(--mantine-spacing-lg)' }}>
         <Group justify="space-between" mb="xs">
-          <Text fw={600}>Progression</Text>
-          <Text size="sm" c="dimmed">
-            {totals.validated} / {totals.total} validé(s) ({Math.round(totals.progress)}%)
+          <Text fw={600} c="var(--slate)">Progression</Text>
+          <Text size="sm" c="var(--slate-muted)">
+            <span style={{ fontFamily: 'var(--font-fraunces)', fontStyle: 'italic', fontSize: 16 }}>
+              {totals.validated}
+            </span>
+            {' / '}
+            <span style={{ fontFamily: 'var(--font-fraunces)', fontStyle: 'italic', fontSize: 16 }}>
+              {totals.total}
+            </span>
+            {' validé(s) ('}
+            {Math.round(totals.progress)}%{')'}
           </Text>
         </Group>
-        <Progress value={totals.progress} size="lg" color="green" />
-      </Paper>
+        <Progress value={totals.progress} size="lg" color="var(--moss)" />
+      </div>
 
       <SortOptionsBar options={sortOrder} onReorder={setSortOrder} />
 
       {variantsBySku.size === 0 ? (
-        <Paper withBorder p="xl" radius="md">
-          <Text c="dimmed" ta="center">
+        <Paper p="xl" className={styles.emptyCard}>
+          <Text c="var(--slate-muted)" ta="center">
             Aucun article dans cette commande.
           </Text>
         </Paper>
@@ -284,32 +296,51 @@ export default function FeuilletCommandePage() {
               const skuValidated = groups.reduce((sum, g) => sum + g.validatedCount, 0);
 
               return (
-                <Stack key={sku} gap="xs">
+                <Stack key={sku} gap="xs" className={styles.skuSection}>
                   <Group gap="sm">
-                    <Title order={4} className={styles.skuTitle}>
-                      {sku}
-                      <Badge ml="sm" variant="light" color={skuValidated === skuTotal ? 'green' : 'gray'}>
+                    <div className={styles.skuTitle}>
+                      <SkuChip>{sku}</SkuChip>
+                      <StatusBadge
+                        variant={skuValidated === skuTotal ? 'moss' : 'slate'}
+                      >
                         {skuValidated}/{skuTotal}
-                      </Badge>
-                    </Title>
+                      </StatusBadge>
+                    </div>
                     <Tooltip label="Tout cocher">
-                      <ActionIcon variant="light" color="green" size="sm" onClick={() => toggleAllForSku(sku, true)}>
+                      <ActionIcon variant="subtle" size="sm" onClick={() => toggleAllForSku(sku, true)}
+                        style={{ color: 'var(--moss)' }}
+                      >
                         <IconCheckbox size={16} />
                       </ActionIcon>
                     </Tooltip>
                     <Tooltip label="Tout décocher">
-                      <ActionIcon variant="light" color="gray" size="sm" onClick={() => toggleAllForSku(sku, false)}>
+                      <ActionIcon variant="subtle" size="sm" onClick={() => toggleAllForSku(sku, false)}
+                        style={{ color: 'var(--slate-muted)' }}
+                      >
                         <IconSquare size={16} />
                       </ActionIcon>
                     </Tooltip>
                   </Group>
 
-                  <Paper withBorder className={styles.tableContainer}>
+                  <div className={styles.tableContainer}>
                     <Table>
                       <Table.Thead>
                         <Table.Tr>
-                          <Table.Th style={{ width: 1, whiteSpace: 'nowrap' }}>Variante</Table.Th>
-                          <Table.Th>Validé</Table.Th>
+                          <Table.Th style={{
+                            width: 1, whiteSpace: 'nowrap',
+                            fontFamily: 'var(--font-inter)', fontSize: 11,
+                            fontWeight: 600, textTransform: 'uppercase',
+                            letterSpacing: '0.18em', color: 'var(--slate-muted)'
+                          }}>
+                            Variante
+                          </Table.Th>
+                          <Table.Th style={{
+                            fontFamily: 'var(--font-inter)', fontSize: 11,
+                            fontWeight: 600, textTransform: 'uppercase',
+                            letterSpacing: '0.18em', color: 'var(--slate-muted)'
+                          }}>
+                            Validé
+                          </Table.Th>
                         </Table.Tr>
                       </Table.Thead>
                       <Table.Tbody>
@@ -331,31 +362,30 @@ export default function FeuilletCommandePage() {
                                         height: 14,
                                         borderRadius: '50%',
                                         background: colorHex,
-                                        border: '1px solid #ddd',
+                                        border: '1px solid var(--divider-strong)',
                                         flexShrink: 0,
                                       }}
                                     />
                                   )}
-                                  <Text size="sm" fw={500}>
+                                  <Text size="sm" fw={500} c="var(--slate)">
                                     {sortOrder[0] === 'Taille'
-                                      ? `${group.size} - ${group.color}`
-                                      : `${group.color} - ${group.size}`}
+                                      ? `${group.size} — ${group.color}`
+                                      : `${group.color} — ${group.size}`}
                                   </Text>
-                                  <Badge variant="filled" color="dark" size="lg" radius="sm" style={{ minWidth: 32, textAlign: 'center' }}>
+                                  <span className={styles.quantity}>
                                     {group.totalQuantity}
-                                  </Badge>
+                                  </span>
                                 </Group>
                               </Table.Td>
                               <Table.Td>
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                  {group.items.map((item, idx) => (
+                                  {group.items.map((item) => (
                                     <Checkbox
                                       key={item.id}
                                       checked={item.is_validated}
                                       onChange={(e) => toggleValidation(item.id, e.currentTarget.checked)}
                                       size="sm"
-                                      color="green"
-                                      /* label={group.items.length > 1 ? `#${idx + 1}` : undefined} */
+                                      color="var(--moss)"
                                     />
                                   ))}
                                 </div>
@@ -365,7 +395,7 @@ export default function FeuilletCommandePage() {
                         })}
                       </Table.Tbody>
                     </Table>
-                  </Paper>
+                  </div>
                 </Stack>
               );
             })}
@@ -373,10 +403,10 @@ export default function FeuilletCommandePage() {
       )}
 
       {totals.validated === totals.total && totals.total > 0 && (
-        <Paper withBorder p="md" radius="md" bg="green.0" mt="lg">
+        <Paper p="md" className={styles.completionCard} mt="lg">
           <Group justify="center">
-            <IconCheckbox size={20} color="green" />
-            <Text fw={600} c="green">Tous les articles sont validés !</Text>
+            <IconCheckbox size={20} style={{ color: 'var(--moss)' }} />
+            <Text fw={600} c="var(--moss)">Tous les articles sont validés !</Text>
           </Group>
         </Paper>
       )}

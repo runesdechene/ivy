@@ -16,10 +16,11 @@ export function generatePrintContent({ order }: PrintContentProps): string {
             margin: 20mm;
           }
           body {
-            font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+            font-family: Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
             padding: 40px;
             max-width: 210mm;
             margin: 0 auto;
+            color: #2b3440;
           }
           .header {
             display: flex;
@@ -30,7 +31,7 @@ export function generatePrintContent({ order }: PrintContentProps): string {
           .item {
             margin-bottom: 20px;
             padding: 10px;
-            border: 1px solid #eee;
+            border: 1px solid rgba(43, 52, 64, 0.10);
             page-break-inside: avoid;
           }
           .variants {
@@ -53,7 +54,7 @@ export function generatePrintContent({ order }: PrintContentProps): string {
             margin-top: 40px;
             text-align: justify;
             font-size: 12px;
-            color: #666;
+            color: #556070;
             line-height: 1.5;
           }
         </style>

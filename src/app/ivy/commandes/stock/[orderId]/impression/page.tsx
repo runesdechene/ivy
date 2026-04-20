@@ -2,11 +2,14 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Title, Text, Paper, Button, Group, Badge, Checkbox, Loader, Center, Progress, SimpleGrid, Stack, Divider, Modal, Image, Tooltip } from '@mantine/core';
+import { Title, Text, Paper, Button, Group, Checkbox, Loader, Center, Progress, SimpleGrid, Stack, Divider, Modal, Image, Tooltip } from '@mantine/core';
 import { IconArrowLeft, IconPrinter, IconCheck, IconPackage, IconPhotoOff } from '@tabler/icons-react';
 import { useShop } from '@/context/ShopContext';
 import { getColorHex, loadColorMappingsFromSupabase } from '@/utils/color-transformer';
 import { SortOptionsBar } from '@/components/Inventory/SortOptionsBar';
+import { StatusBadge } from '@/components/StatusBadge';
+import { SkuChip } from '@/components/SkuChip';
+import { MetaChip } from '@/components/MetaChip';
 import styles from './impression.module.scss';
 
 interface OrderItem {
@@ -41,6 +44,13 @@ function getSizeIndex(size: string | null | undefined): number {
   return index === -1 ? 999 : index;
 }
 
+const STATUS_MAP: Record<string, { label: string; variant: 'moss' | 'clay' | 'sand' | 'slate' }> = {
+  completed: { label: 'Terminée', variant: 'moss' },
+  produced: { label: 'Produite', variant: 'sand' },
+  requested: { label: 'Demandée', variant: 'clay' },
+  draft: { label: 'Brouillon', variant: 'slate' },
+};
+
 export default function FeuilleImpressionPage() {
   const params = useParams();
   const router = useRouter();
@@ -56,12 +66,12 @@ export default function FeuilleImpressionPage() {
   // Charger la commande et ses articles
   const fetchOrder = useCallback(async () => {
     if (!currentShop || !orderId) return;
-    
+
     setLoading(true);
     try {
       // Charger les mappings de couleurs
       await loadColorMappingsFromSupabase(currentShop.id);
-      
+
       const response = await fetch(`/api/suppliers/orders/${orderId}?shopId=${currentShop.id}`);
       if (response.ok) {
         const data = await response.json();
@@ -183,7 +193,7 @@ export default function FeuilleImpressionPage() {
   // Marquer un article comme imprimé ou non
   const togglePrinted = async (itemId: string, printed: boolean) => {
     if (!currentShop || !orderId) return;
-    
+
     try {
       const response = await fetch(`/api/suppliers/orders/${orderId}/items`, {
         method: 'PUT',
@@ -194,10 +204,10 @@ export default function FeuilleImpressionPage() {
           is_printed: printed,
         }),
       });
-      
+
       if (response.ok) {
-        setItems(prev => prev.map(item => 
-          item.id === itemId 
+        setItems(prev => prev.map(item =>
+          item.id === itemId
             ? { ...item, is_printed: printed, printed_at: printed ? new Date().toISOString() : null }
             : item
         ));
@@ -219,7 +229,7 @@ export default function FeuilleImpressionPage() {
   if (loading) {
     return (
       <Center h={400}>
-        <Loader size="lg" />
+        <Loader size="lg" color="var(--moss)" />
       </Center>
     );
   }
@@ -227,15 +237,17 @@ export default function FeuilleImpressionPage() {
   if (!order) {
     return (
       <Center h={400}>
-        <Text c="dimmed">Commande non trouvée</Text>
+        <Text c="var(--slate-muted)">Commande non trouvée</Text>
       </Center>
     );
   }
 
+  const statusInfo = STATUS_MAP[order.status] || STATUS_MAP.draft;
+
   return (
     <div className={styles.container}>
       {/* Header */}
-      <Group justify="space-between" mb="lg">
+      <Group justify="space-between" mb="lg" className={styles.noPrint}>
         <Group>
           <Button
             variant="subtle"
@@ -245,48 +257,50 @@ export default function FeuilleImpressionPage() {
           >
             Retour
           </Button>
-          <IconPrinter size={28} />
-          <Title order={2}>Feuille d'impression - {order.order_number}</Title>
-          <Badge 
-            color={
-              order.status === 'completed' ? 'green' : 
-              order.status === 'produced' ? 'teal' : 
-              order.status === 'requested' ? 'blue' : 'gray'
-            }
-            size="lg"
-          >
-            {order.status === 'completed' ? 'Terminée' : 
-             order.status === 'produced' ? 'Produite' : 
-             order.status === 'requested' ? 'Demandée' : 'Brouillon'}
-          </Badge>
         </Group>
       </Group>
 
-      <Text c="dimmed" mb="lg">
-        Vue détaillée pour l'atelier. Chaque vignette représente une variante à produire avec ses métachamps.
+      <Group gap="sm" mb="xs" className={styles.header}>
+        <IconPrinter size={24} style={{ color: 'var(--slate-soft)' }} />
+        <Title order={2} className={styles.orderNumber}>
+          Feuille d&apos;impression — {order.order_number}
+        </Title>
+        <StatusBadge variant={statusInfo.variant}>{statusInfo.label}</StatusBadge>
+      </Group>
+
+      <Text className={styles.subtitle} mb="lg">
+        Vue détaillée pour l&apos;atelier. Chaque vignette représente une variante à produire avec ses métachamps.
       </Text>
 
       {skuGroups.length === 0 ? (
-        <Paper withBorder p="xl" radius="md">
-          <Text c="dimmed" ta="center">
-            Aucun article validé à imprimer. Validez d'abord les articles sur la page de commande.
+        <Paper p="xl" className={styles.emptyCard}>
+          <Text c="var(--slate-muted)" ta="center">
+            Aucun article validé à imprimer. Validez d&apos;abord les articles sur la page de commande.
           </Text>
         </Paper>
       ) : (
         <>
           {/* Progression d'impression */}
-          <Paper withBorder p="md" radius="md" mb="lg">
+          <div className={styles.progressCard} style={{ marginBottom: 'var(--mantine-spacing-lg)' }}>
             <Group justify="space-between" mb="xs">
-              <Text fw={600}>Progression d'impression</Text>
-              <Text size="sm" c="dimmed">
-                {totals.printed} / {totals.total} imprimé(s) ({Math.round(totals.progress)}%)
+              <Text fw={600} c="var(--slate)">Progression d&apos;impression</Text>
+              <Text size="sm" c="var(--slate-muted)">
+                <span style={{ fontFamily: 'var(--font-fraunces)', fontStyle: 'italic', fontSize: 16 }}>
+                  {totals.printed}
+                </span>
+                {' / '}
+                <span style={{ fontFamily: 'var(--font-fraunces)', fontStyle: 'italic', fontSize: 16 }}>
+                  {totals.total}
+                </span>
+                {' imprimé(s) ('}
+                {Math.round(totals.progress)}%{')'}
               </Text>
             </Group>
-            <Progress value={totals.progress} size="lg" color="teal" />
-          </Paper>
+            <Progress value={totals.progress} size="lg" color="var(--moss)" />
+          </div>
 
           {/* Tri par drag & drop */}
-          <Paper withBorder p="sm" radius="md" mb="md">
+          <Paper p="sm" style={{ background: 'var(--cream-soft)', border: '1px solid var(--divider)', borderRadius: 'var(--mantine-radius-md)', marginBottom: 'var(--mantine-spacing-md)' }}>
             <SortOptionsBar options={sortOrder} onReorder={setSortOrder} />
           </Paper>
 
@@ -294,9 +308,11 @@ export default function FeuilleImpressionPage() {
           {skuGroups.map(({ prefix, groups }) => (
             <div key={prefix}>
               <Group gap="xs" mb="sm" mt="md" className={styles.skuGroupHeader}>
-                <IconPackage size={20} />
-                <Text fw={600} size="lg">{prefix}</Text>
-                <Badge variant="light">{groups.reduce((sum, g) => sum + g.quantity, 0)} article(s)</Badge>
+                <IconPackage size={20} style={{ color: 'var(--slate)' }} />
+                <Text fw={600} size="lg" c="var(--slate)">{prefix}</Text>
+                <StatusBadge variant="sand">
+                  {groups.reduce((sum, g) => sum + g.quantity, 0)} article(s)
+                </StatusBadge>
               </Group>
 
               <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing="md" mb="lg">
@@ -307,7 +323,6 @@ export default function FeuilleImpressionPage() {
                   return (
                     <Paper
                       key={group.key}
-                      withBorder
                       radius="md"
                       p="md"
                       className={allPrinted ? styles.validatedCard : styles.card}
@@ -324,20 +339,22 @@ export default function FeuilleImpressionPage() {
                                 toggleGroupPrinted(group.items, e.currentTarget.checked);
                               }}
                               size="md"
-                              color="teal"
+                              color="var(--moss)"
                             />
-                            <Badge
-                              size="lg"
-                              variant={allPrinted ? 'filled' : 'light'}
-                              color={allPrinted ? 'teal' : 'orange'}
-                            >
+                            <span style={{
+                              fontFamily: 'var(--font-fraunces)',
+                              fontStyle: 'italic',
+                              fontSize: 22,
+                              fontWeight: 500,
+                              color: allPrinted ? 'var(--moss)' : 'var(--clay)',
+                            }}>
                               x{group.quantity}
-                            </Badge>
+                            </span>
                           </Group>
-                          {allPrinted && <IconCheck size={20} color="teal" />}
+                          {allPrinted && <IconCheck size={20} style={{ color: 'var(--moss)' }} />}
                         </Group>
 
-                        <Divider />
+                        <Divider color="var(--divider)" />
 
                         <Group gap="sm" wrap="nowrap" align="flex-start">
                           {group.illustrationUrl ? (
@@ -348,92 +365,81 @@ export default function FeuilleImpressionPage() {
                               h={96}
                               fit="contain"
                               radius="sm"
-                              style={{
-                                cursor: 'zoom-in',
-                                background: '#fafafa',
-                                flexShrink: 0,
-                              }}
+                              className={styles.illustrationImage}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setZoomedImage({ url: group.illustrationUrl!, title: group.product_title });
                               }}
                             />
                           ) : (
-                            <Tooltip label="Illustration manquante — synchroniser dans Paramètres → Illustrations">
-                              <div style={{
-                                width: 96, height: 96, display: 'flex', alignItems: 'center',
-                                justifyContent: 'center', background: '#f4f4f4', borderRadius: 6,
-                                flexShrink: 0,
-                              }}>
-                                <IconPhotoOff size={28} color="#999" />
+                            <Tooltip label="Illustration manquante — synchroniser dans Paramètres > Illustrations">
+                              <div className={styles.illustrationPlaceholder}>
+                                <IconPhotoOff size={28} style={{ color: 'var(--slate-muted)' }} />
                               </div>
                             </Tooltip>
                           )}
 
                           <Stack gap="xs" style={{ flex: 1, minWidth: 0 }}>
-                            <Text fw={600} size="sm" lineClamp={2}>
+                            <Text fw={600} size="sm" lineClamp={2} c="var(--slate)">
                               {group.product_title}
                             </Text>
 
-                            <Badge variant="light" color="gray" size="sm" style={{ alignSelf: 'flex-start' }}>
-                              {group.sku || 'Sans SKU'}
-                            </Badge>
+                            <SkuChip>{group.sku || 'Sans SKU'}</SkuChip>
 
                             <Group gap="xs" wrap="wrap">
                               {allOptions.map((option, idx) => {
-                            const colorHex = getColorHex(option);
-                            if (colorHex && colorHex !== '#808080') {
-                              return (
-                                <Group key={idx} gap={4}>
-                                  <div
-                                    style={{
-                                      width: 16,
-                                      height: 16,
-                                      borderRadius: '50%',
-                                      background: colorHex,
-                                      border: '1px solid #ddd',
-                                    }}
-                                  />
-                                  <Text size="sm">{option}</Text>
-                                </Group>
-                              );
-                            }
-                            if (idx === allOptions.length - 1 && /^(XXXS|XXS|XS|S|M|L|XL|XXL|2XL|3XL|4XL|5XL|\d+)$/i.test(option)) {
-                              return (
-                                <Badge key={idx} variant="filled" color="blue" size="lg">
-                                  {option}
-                                </Badge>
-                              );
-                            }
-                            return (
-                              <Badge key={idx} variant="light" color="gray" size="sm">
-                                {option}
-                              </Badge>
-                            );
-                          })}
+                                const colorHex = getColorHex(option);
+                                if (colorHex && colorHex !== '#808080') {
+                                  return (
+                                    <Group key={idx} gap={4}>
+                                      <div
+                                        style={{
+                                          width: 16,
+                                          height: 16,
+                                          borderRadius: '50%',
+                                          background: colorHex,
+                                          border: '1px solid var(--divider-strong)',
+                                        }}
+                                      />
+                                      <Text size="sm" c="var(--slate)">{option}</Text>
+                                    </Group>
+                                  );
+                                }
+                                if (idx === allOptions.length - 1 && /^(XXXS|XXS|XS|S|M|L|XL|XXL|2XL|3XL|4XL|5XL|\d+)$/i.test(option)) {
+                                  return (
+                                    <StatusBadge key={idx} variant="clay">
+                                      {option}
+                                    </StatusBadge>
+                                  );
+                                }
+                                return (
+                                  <StatusBadge key={idx} variant="slate">
+                                    {option}
+                                  </StatusBadge>
+                                );
+                              })}
                             </Group>
                           </Stack>
                         </Group>
 
                         {Object.keys(group.metafields).length > 0 && (
-                          <>
-                            <Divider label="Métachamps" labelPosition="center" />
-                            <Stack gap={4}>
+                          <div className={styles.metaSection}>
+                            <Text size="xs" fw={600} c="var(--slate-muted)" mb={4}
+                              style={{ fontFamily: 'var(--font-inter)', textTransform: 'uppercase', letterSpacing: '0.12em', fontSize: 10 }}
+                            >
+                              Métachamps
+                            </Text>
+                            <Group gap={6} wrap="wrap">
                               {Object.entries(group.metafields).map(([key, value]) => (
-                                <Group key={key} justify="space-between">
-                                  <Text size="xs" c="dimmed">{key}</Text>
-                                  <Badge variant="light" color="violet" size="sm">
-                                    {value}
-                                  </Badge>
-                                </Group>
+                                <MetaChip key={key} keyName={key} value={value} />
                               ))}
-                            </Stack>
-                          </>
+                            </Group>
+                          </div>
                         )}
 
                         {group.quantity > 1 && (
                           <>
-                            <Divider label="Impression" labelPosition="center" />
+                            <Divider color="var(--divider)" />
                             <Group gap={4} wrap="wrap">
                               {group.items.map((item, idx) => (
                                 <Checkbox
@@ -444,7 +450,7 @@ export default function FeuilleImpressionPage() {
                                     togglePrinted(item.id, e.currentTarget.checked);
                                   }}
                                   size="xs"
-                                  color="teal"
+                                  color="var(--moss)"
                                   label={`#${idx + 1}`}
                                 />
                               ))}
@@ -460,10 +466,10 @@ export default function FeuilleImpressionPage() {
           ))}
 
           {totals.printed === totals.total && totals.total > 0 && (
-            <Paper withBorder p="md" radius="md" bg="teal.0" mt="lg">
+            <Paper p="md" className={styles.completionCard} mt="lg">
               <Group justify="center">
-                <IconCheck size={20} color="teal" />
-                <Text fw={600} c="teal">Tous les articles ont été imprimés !</Text>
+                <IconCheck size={20} style={{ color: 'var(--moss)' }} />
+                <Text fw={600} c="var(--moss)">Tous les articles ont été imprimés !</Text>
               </Group>
             </Paper>
           )}
@@ -473,9 +479,18 @@ export default function FeuilleImpressionPage() {
       <Modal
         opened={!!zoomedImage}
         onClose={() => setZoomedImage(null)}
-        title={zoomedImage?.title || ''}
+        title={
+          <Text fw={600} c="var(--slate)" style={{ fontFamily: 'var(--font-fraunces)', fontStyle: 'italic' }}>
+            {zoomedImage?.title || ''}
+          </Text>
+        }
         size="xl"
         centered
+        styles={{
+          content: { background: 'var(--cream-soft)' },
+          header: { background: 'var(--cream-soft)', borderBottom: '1px solid var(--divider)' },
+          overlay: { background: 'rgba(244, 240, 232, 0.7)' },
+        }}
       >
         {zoomedImage && (
           <Image src={zoomedImage.url} alt={zoomedImage.title} fit="contain" />
