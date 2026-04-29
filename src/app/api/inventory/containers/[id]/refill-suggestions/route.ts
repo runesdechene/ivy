@@ -252,16 +252,27 @@ export async function GET(
   );
   const openOrderIds = Array.from(orderInfoById.keys());
 
+  type PendingLine = {
+    variantId: string | null;
+    productTitle: string | null;
+    variantTitle: string | null;
+    qty: number;
+  };
+  type PendingBucket = {
+    orderId: string;
+    orderNumber: string;
+    status: string;
+    qty: number;
+    lines: PendingLine[];
+  };
+
   const pendingByVariant = new Map<string, number>();
-  const pendingBreakdownMap = new Map<
-    string,
-    { orderId: string; orderNumber: string; status: string; qty: number }
-  >();
+  const pendingBreakdownMap = new Map<string, PendingBucket>();
 
   if (openOrderIds.length > 0 && filteredVariantIds.length > 0) {
     const { data: pendingItems } = await supabase
       .from('supplier_order_items')
-      .select('variant_id, quantity, order_id')
+      .select('variant_id, quantity, order_id, product_title, variant_title')
       .in('order_id', openOrderIds)
       .in('variant_id', filteredVariantIds);
     for (const it of pendingItems ?? []) {
@@ -269,18 +280,25 @@ export async function GET(
       const q = Number(it.quantity) || 0;
       pendingByVariant.set(it.variant_id, (pendingByVariant.get(it.variant_id) || 0) + q);
       const info = orderInfoById.get(it.order_id);
-      if (info) {
-        const existing = pendingBreakdownMap.get(it.order_id);
-        if (existing) {
-          existing.qty += q;
-        } else {
-          pendingBreakdownMap.set(it.order_id, {
-            orderId: it.order_id,
-            orderNumber: info.orderNumber,
-            status: info.status,
-            qty: q,
-          });
-        }
+      if (!info) continue;
+      const line: PendingLine = {
+        variantId: it.variant_id,
+        productTitle: it.product_title,
+        variantTitle: it.variant_title,
+        qty: q,
+      };
+      const existing = pendingBreakdownMap.get(it.order_id);
+      if (existing) {
+        existing.qty += q;
+        existing.lines.push(line);
+      } else {
+        pendingBreakdownMap.set(it.order_id, {
+          orderId: it.order_id,
+          orderNumber: info.orderNumber,
+          status: info.status,
+          qty: q,
+          lines: [line],
+        });
       }
     }
   }

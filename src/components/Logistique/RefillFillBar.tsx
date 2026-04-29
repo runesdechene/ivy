@@ -63,12 +63,30 @@ export function RefillFillBar({ current, pending, added, capacity, pendingBreakd
                 label={
                   pendingBreakdown && pendingBreakdown.length > 0
                     ? pendingBreakdown
-                        .map((b) => `${b.orderNumber} (${b.status}) : ${b.qty}`)
-                        .join('\n')
+                        .map((b) => {
+                          const head = `${b.orderNumber} (${b.status}) — ${b.qty} unités sur ${b.lines.length} ligne${b.lines.length > 1 ? 's' : ''}`;
+                          const lines = b.lines
+                            .map((l) => {
+                              const product = l.productTitle || '?';
+                              const variant = l.variantTitle ? ` ${l.variantTitle}` : '';
+                              return `  • ${product}${variant} × ${l.qty}`;
+                            })
+                            .join('\n');
+                          return `${head}\n${lines}`;
+                        })
+                        .join('\n\n')
                     : 'Aucun détail'
                 }
                 multiline
                 withArrow
+                styles={{
+                  tooltip: {
+                    whiteSpace: 'pre',
+                    fontFamily: 'monospace',
+                    fontSize: 11,
+                    maxWidth: 360,
+                  },
+                }}
               >
                 <span className={styles.pendingPill}>
                   <strong>{pending}</strong>{' '}

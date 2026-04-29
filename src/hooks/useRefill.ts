@@ -23,11 +23,19 @@ export interface RefillProduct {
   variants: RefillVariant[];
 }
 
+export interface PendingOrderLine {
+  variantId: string | null;
+  productTitle: string | null;
+  variantTitle: string | null;
+  qty: number;
+}
+
 export interface PendingOrderBreakdown {
   orderId: string;
   orderNumber: string;
   status: string;
   qty: number;
+  lines: PendingOrderLine[];
 }
 
 export interface RefillSuggestionsResponse {
