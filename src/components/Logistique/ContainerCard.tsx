@@ -189,6 +189,9 @@ export function ContainerCard({ instance, onAssign, sortMode = 'color' }: Props)
                     className={styles.section}
                     style={{ flexGrow: sec.total }}
                   >
+                    {sec.key !== '_' && (
+                      <span className={styles.sectionLabel}>{sec.key}</span>
+                    )}
                     <div className={styles.sectionStripes}>
                       {sec.items.map((v) => (
                         <Tooltip
@@ -207,9 +210,6 @@ export function ContainerCard({ instance, onAssign, sortMode = 'color' }: Props)
                         </Tooltip>
                       ))}
                     </div>
-                    {sec.key !== '_' && (
-                      <span className={styles.sectionLabel}>{sec.key}</span>
-                    )}
                   </div>
                 ))}
               </div>
