@@ -32,16 +32,16 @@ interface Props {
 type Variant = ContainerInstance['variants'][number];
 
 /**
- * Distribue les variantes en N colonnes en gardant les groupes (couleur ou taille)
- * contigus, ET en équilibrant les hauteurs (greedy bin-packing au niveau des groupes).
- * Les groupes les plus gros sont placés en premier, dans la colonne la moins remplie.
- * Les colonnes sont ensuite réordonnées selon leur clé minimale (alpha ou taille) pour
- * garder un ordre de gauche à droite cohérent.
+ * Distribue les variantes en N colonnes en respectant l'ordre primaire :
+ * - mode 'size' : XS → 5XL, top-gauche → bottom-droite
+ * - mode 'color' : ordre alphabétique
+ * On avance à la colonne suivante dès qu'on a atteint ~ totalQty / cols pour
+ * équilibrer approximativement les hauteurs sans casser l'ordre.
  */
 type Section = { key: string; items: Variant[]; total: number };
 type Column = { sections: Section[]; total: number; sortKey: string };
 
-function distributeBalanced(
+function distributeOrdered(
   variants: Variant[],
   cols: number,
   mode: 'color' | 'size',
@@ -54,6 +54,8 @@ function distributeBalanced(
   if (variants.length === 0) return buckets;
 
   const groupKey = (v: Variant) => (mode === 'color' ? v.color || '_' : v.size || '_');
+  const compareKeys = (a: string, b: string) =>
+    mode === 'size' ? compareSizes(a, b) : a.localeCompare(b);
 
   const groups = new Map<string, Variant[]>();
   for (const v of variants) {
@@ -62,46 +64,38 @@ function distributeBalanced(
     groups.get(k)!.push(v);
   }
 
-  // Tri secondaire dans chaque groupe
+  // Tri secondaire dans chaque groupe (couleur dans une section taille, ou inverse)
   for (const items of groups.values()) {
     if (mode === 'color') items.sort((a, b) => compareSizes(a.size, b.size));
     else items.sort((a, b) => (a.color || '').localeCompare(b.color || ''));
   }
 
-  // Greedy bin-packing : groupes triés par qty desc, chaque groupe va dans la
-  // colonne la moins remplie → hauteurs équilibrées sans couper les groupes.
-  const groupEntries = Array.from(groups.entries()).sort((a, b) => {
-    const totalA = a[1].reduce((s, v) => s + v.qty, 0);
-    const totalB = b[1].reduce((s, v) => s + v.qty, 0);
-    return totalB - totalA;
-  });
+  // Sections triées par clé primaire — XS → 5XL ou alpha
+  const sortedGroupEntries = Array.from(groups.entries()).sort((a, b) =>
+    compareKeys(a[0], b[0]),
+  );
 
-  for (const [key, items] of groupEntries) {
-    let target = buckets[0];
-    for (const b of buckets) {
-      if (b.total < target.total) target = b;
-    }
+  const totalQty = sortedGroupEntries.reduce(
+    (s, [, items]) => s + items.reduce((ss, v) => ss + v.qty, 0),
+    0,
+  );
+  const targetPerCol = totalQty > 0 ? totalQty / cols : 0;
+
+  let colIdx = 0;
+  let colTotal = 0;
+  for (const [key, items] of sortedGroupEntries) {
     const sectionTotal = items.reduce((s, v) => s + v.qty, 0);
-    target.sections.push({ key, items, total: sectionTotal });
-    target.total += sectionTotal;
+    if (colIdx < cols - 1 && colTotal > 0 && colTotal >= targetPerCol) {
+      colIdx += 1;
+      colTotal = 0;
+    }
+    buckets[colIdx].sections.push({ key, items, total: sectionTotal });
+    buckets[colIdx].total += sectionTotal;
+    colTotal += sectionTotal;
   }
 
-  const compareKeys = (a: string, b: string) =>
-    mode === 'size' ? compareSizes(a, b) : a.localeCompare(b);
-
-  // Trier les sections de chaque colonne selon l'ordre naturel
-  for (const b of buckets) {
-    b.sections.sort((a, c) => compareKeys(a.key, c.key));
+  buckets.forEach((b) => {
     b.sortKey = b.sections[0]?.key ?? '';
-  }
-
-  // Réordonner les colonnes par leur clé minimale (gauche à droite cohérent),
-  // colonnes vides à droite
-  buckets.sort((a, b) => {
-    if (a.total === 0 && b.total === 0) return 0;
-    if (a.total === 0) return 1;
-    if (b.total === 0) return -1;
-    return compareKeys(a.sortKey, b.sortKey);
   });
 
   return buckets;
@@ -116,7 +110,7 @@ export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color'
   const colCapacity = type.max_capacity / cols;
 
   const columnsData = useMemo(
-    () => distributeBalanced(variants, cols, sortMode),
+    () => distributeOrdered(variants, cols, sortMode),
     [variants, cols, sortMode],
   );
 

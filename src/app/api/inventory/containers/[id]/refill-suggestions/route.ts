@@ -209,9 +209,14 @@ export async function GET(
     qtyByVariant.set(l.variant_id, Math.max(0, l.quantity || 0));
   }
 
+  // Variantes non-Shopify (archived ou produit local) ne reçoivent pas de
+  // suggestion : on ne peut commander chez le fournisseur que ce qui existe
+  // sur Shopify. On zéro le soldInWindow pour le math, mais leur currentInBox
+  // compte normalement pour le budget (elles prennent de la place dans la
+  // caisse) et le total affiché dans le footer.
   const inputs: VariantInput[] = filteredVariants.map((v: any) => ({
     variantId: v.id,
-    soldInWindow: soldByVariant.get(v.id) || 0,
+    soldInWindow: v.shopify_active === true ? (soldByVariant.get(v.id) || 0) : 0,
     currentInBox: qtyByVariant.get(v.id) || 0,
   }));
   const suggestions = computeRefillSuggestions(inputs, type.max_capacity);
@@ -234,7 +239,9 @@ export async function GET(
       size,
       currentInBox: sug?.currentInBox ?? 0,
       currentAtLocation: sug?.currentInBox ?? 0,
-      soldInWindow: sug?.soldInWindow ?? 0,
+      // Affiche les VRAIES sorties (pas la version zéro pour le math). Permet
+      // au badge "5 / 30j" d'être informatif même sur les variantes non-Shopify.
+      soldInWindow: soldByVariant.get(v.id) || 0,
       soldLifetime: lifetimeSoldByVariant.get(v.id) || 0,
       suggestedQty: sug?.suggestedQty ?? 0,
     };
