@@ -227,11 +227,12 @@ export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color'
                         const isLastVariantInSection = vIdx === sec.items.length - 1;
 
                         if (isFilterMode) {
-                          // En mode filtre la caisse mélange souvent plusieurs
-                          // produits sous une même teinte. On rend une cellule
-                          // unique par variante avec un label "Produit" (ou
-                          // "Produit · Taille" si la taille n'est pas filtrée),
-                          // séparée des suivantes par un trait visible.
+                          // En mode filtre, 1 cellule par variante :
+                          // - hauteur proportionnelle à qty (flexGrow)
+                          // - sub-divisions par unité (stripes internes) pour
+                          //   conserver l'effet "pile" comme en mode produit
+                          // - label "Produit" centré en absolute par-dessus
+                          // - bordure noire entre variantes consécutives
                           const sizePart =
                             !instance.filter_size && v.size ? ` · ${v.size}` : '';
                           const label = `${v.product_title || ''}${sizePart}`.trim();
@@ -244,6 +245,9 @@ export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color'
                                 )}
                                 style={{ flexGrow: v.qty, background: bg }}
                               >
+                                {Array.from({ length: v.qty }).map((_, i) => (
+                                  <div key={i} className={styles.variantStripe} />
+                                ))}
                                 {label && (
                                   <span className={styles.variantLabel}>{label}</span>
                                 )}
