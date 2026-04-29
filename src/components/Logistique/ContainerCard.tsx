@@ -72,25 +72,49 @@ function distributeFlat(
   const totalQty = sorted.reduce((s, v) => s + v.qty, 0);
   const targetPerCol = totalQty > 0 ? totalQty / cols : 0;
 
+  // Distribution avec split possible : si une variante est trop grosse pour
+  // tenir dans la col courante, on la coupe et on continue dans la suivante.
+  // Garantit que toutes les cols se remplissent (tant qu'il y a assez de qty)
+  // — nécessaire pour des caisses avec moins de variants que de colonnes.
+  // La même variante apparaît alors dans plusieurs cellules, même couleur,
+  // même label, hauteurs proportionnelles à leur portion respective.
   let colIdx = 0;
   let colTotal = 0;
+
   for (const v of sorted) {
-    // On avance vers la colonne suivante si l'ajout pousserait le centre du
-    // variant au-delà de la cible. L'ancien check "colTotal >= target" se
-    // déclenchait après coup, faisant déborder chaque col et laissant la
-    // dernière vide. Le check "midpoint > target" décide AVANT l'ajout
-    // laquelle des deux colonnes laisse le total le plus proche de la cible.
-    if (
-      colIdx < cols - 1 &&
-      colTotal > 0 &&
-      colTotal + v.qty / 2 > targetPerCol
-    ) {
-      colIdx += 1;
-      colTotal = 0;
+    let remaining = v.qty;
+    while (remaining > 0) {
+      const isLastCol = colIdx === cols - 1;
+      const colCapacity = Math.max(0, targetPerCol - colTotal);
+
+      // Si la col courante n'a presque plus de place et qu'il reste des cols
+      // non-dernières disponibles, on avance (évite de coller un mini-bout).
+      if (!isLastCol && colCapacity < 0.5) {
+        colIdx += 1;
+        colTotal = 0;
+        continue;
+      }
+
+      // La dernière col absorbe tout le reliquat ; les autres prennent au plus
+      // round(capacity) unités, sans descendre sous 1 pour éviter les blocages.
+      const take = isLastCol
+        ? remaining
+        : Math.min(remaining, Math.max(1, Math.round(colCapacity)));
+
+      buckets[colIdx].sections.push({
+        key: `${v.id}-c${colIdx}`,
+        items: [{ ...v, qty: take }],
+        total: take,
+      });
+      buckets[colIdx].total += take;
+      colTotal += take;
+      remaining -= take;
+
+      if (!isLastCol && colTotal >= targetPerCol) {
+        colIdx += 1;
+        colTotal = 0;
+      }
     }
-    buckets[colIdx].sections.push({ key: v.id, items: [v], total: v.qty });
-    buckets[colIdx].total += v.qty;
-    colTotal += v.qty;
   }
 
   return buckets;
