@@ -37,17 +37,18 @@ type Variant = ContainerInstance['variants'][number];
  * Les colonnes sont ensuite réordonnées selon leur clé minimale (alpha ou taille) pour
  * garder un ordre de gauche à droite cohérent.
  */
+type Section = { key: string; items: Variant[]; total: number };
+type Column = { sections: Section[]; total: number; sortKey: string };
+
 function distributeBalanced(
   variants: Variant[],
   cols: number,
   mode: 'color' | 'size',
-): { items: Variant[]; total: number; label: string; sortKey: string }[] {
-  const buckets = Array.from({ length: cols }, () => ({
-    items: [] as Variant[],
+): Column[] {
+  const buckets: Column[] = Array.from({ length: cols }, () => ({
+    sections: [],
     total: 0,
-    label: '',
     sortKey: '',
-    keys: [] as string[],
   }));
   if (variants.length === 0) return buckets;
 
@@ -79,30 +80,22 @@ function distributeBalanced(
     for (const b of buckets) {
       if (b.total < target.total) target = b;
     }
-    for (const v of items) {
-      target.items.push(v);
-      target.total += v.qty;
-    }
-    target.keys.push(key);
+    const sectionTotal = items.reduce((s, v) => s + v.qty, 0);
+    target.sections.push({ key, items, total: sectionTotal });
+    target.total += sectionTotal;
   }
 
-  // Pour chaque colonne, trier ses groupes selon l'ordre naturel et reconstruire
-  // les items dans cet ordre (pour que les stripes apparaissent dans le bon sens).
   const compareKeys = (a: string, b: string) =>
     mode === 'size' ? compareSizes(a, b) : a.localeCompare(b);
 
+  // Trier les sections de chaque colonne selon l'ordre naturel
   for (const b of buckets) {
-    b.keys.sort(compareKeys);
-    const newItems: Variant[] = [];
-    for (const k of b.keys) {
-      newItems.push(...(groups.get(k) || []));
-    }
-    b.items = newItems;
-    b.label = b.keys.filter((k) => k !== '_').join(' · ');
-    b.sortKey = b.keys[0] || '';
+    b.sections.sort((a, c) => compareKeys(a.key, c.key));
+    b.sortKey = b.sections[0]?.key ?? '';
   }
 
-  // Réordonner les colonnes par leur clé minimale (gauche à droite cohérent)
+  // Réordonner les colonnes par leur clé minimale (gauche à droite cohérent),
+  // colonnes vides à droite
   buckets.sort((a, b) => {
     if (a.total === 0 && b.total === 0) return 0;
     if (a.total === 0) return 1;
@@ -189,25 +182,35 @@ export function ContainerCard({ instance, onAssign, sortMode = 'color' }: Props)
           const colPct = colCapacity > 0 ? Math.min(100, (bucket.total / colCapacity) * 100) : 0;
           return (
             <div key={idx} className={styles.column}>
-              {bucket.label && colPct < 95 && (
-                <span className={styles.columnLabel}>{bucket.label}</span>
-              )}
               <div className={styles.columnFill} style={{ height: `${colPct}%` }}>
-                {bucket.items.map((v) => (
-                  <Tooltip
-                    key={v.id}
-                    label={`${v.color || ''} ${v.size || ''} — ${v.qty}`.trim()}
-                    withArrow
+                {bucket.sections.map((sec) => (
+                  <div
+                    key={sec.key}
+                    className={styles.section}
+                    style={{ flexGrow: sec.total }}
                   >
-                    <div
-                      className={styles.block}
-                      style={{
-                        flexGrow: v.qty,
-                        background: colorToCss(v.color_hex),
-                        minHeight: 3,
-                      }}
-                    />
-                  </Tooltip>
+                    <div className={styles.sectionStripes}>
+                      {sec.items.map((v) => (
+                        <Tooltip
+                          key={v.id}
+                          label={`${v.color || ''} ${v.size || ''} — ${v.qty}`.trim()}
+                          withArrow
+                        >
+                          <div
+                            className={styles.block}
+                            style={{
+                              flexGrow: v.qty,
+                              background: colorToCss(v.color_hex),
+                              minHeight: 3,
+                            }}
+                          />
+                        </Tooltip>
+                      ))}
+                    </div>
+                    {sec.key !== '_' && (
+                      <span className={styles.sectionLabel}>{sec.key}</span>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>
