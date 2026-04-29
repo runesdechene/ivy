@@ -140,6 +140,21 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
   );
   const submitDisabled = totalAdded === 0 || submit.isPending;
 
+  // Total currentInBox cumulé par couleur ou par taille selon le tri actif,
+  // calculé sur toutes les variantes de toutes les products de la caisse.
+  // Affiché dans le séparateur de groupe avec le pourcentage de capacité.
+  const groupTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
+    if (!data) return totals;
+    for (const p of data.products) {
+      for (const v of p.variants) {
+        const key = variantSort === 'color' ? v.color || '—' : v.size || '—';
+        totals[key] = (totals[key] || 0) + v.currentInBox;
+      }
+    }
+    return totals;
+  }, [data, variantSort]);
+
   const windowShortLabel = useMemo(() => {
     if (windowParam === '7d') return '7j';
     if (windowParam === '30d') return '30j';
@@ -364,6 +379,17 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
                                 <td colSpan={4}>
                                   <span className={styles.groupLabel}>
                                     {groupKey}
+                                    {(() => {
+                                      const groupQty = groupTotals[groupKey] || 0;
+                                      const cap = data?.capacity.max || 0;
+                                      const pct = cap > 0 ? Math.round((groupQty / cap) * 100) : 0;
+                                      return (
+                                        <span className={styles.groupCount}>
+                                          {' · '}{groupQty}
+                                          {cap > 0 && ` (${pct}%)`}
+                                        </span>
+                                      );
+                                    })()}
                                   </span>
                                 </td>
                               </tr>
