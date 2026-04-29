@@ -33,6 +33,39 @@
   }
 }
 
+.groupSeparator {
+  td {
+    position: relative;
+    padding: 12px 0 4px !important;
+    text-align: center;
+    border-bottom: none !important;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 60%;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: rgba(0, 0, 0, 0.12);
+      z-index: 0;
+    }
+  }
+}
+
+.groupLabel {
+  display: inline-block;
+  position: relative;
+  z-index: 1;
+  background: var(--mantine-color-body, white);
+  padding: 0 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(0, 0, 0, 0.55);
+}
+
 .windowSelector {
   display: flex;
   gap: 8px;

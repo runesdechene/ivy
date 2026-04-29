@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
 import {
   Modal,
@@ -344,12 +344,32 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
                       </tr>
                     </thead>
                     <tbody>
-                      {orderedVariants.map((v) => {
+                      {orderedVariants.map((v, idx) => {
                         const qty = adjustedQty.get(v.variantId) ?? 0;
                         const muted = qty === 0;
+                        const groupKey =
+                          variantSort === 'color'
+                            ? v.color || '—'
+                            : v.size || '—';
+                        const prevGroupKey =
+                          idx > 0
+                            ? variantSort === 'color'
+                              ? orderedVariants[idx - 1].color || '—'
+                              : orderedVariants[idx - 1].size || '—'
+                            : null;
+                        const showGroupHeader = groupKey !== prevGroupKey;
                         return (
+                          <Fragment key={v.variantId}>
+                            {showGroupHeader && (
+                              <tr className={styles.groupSeparator}>
+                                <td colSpan={4}>
+                                  <span className={styles.groupLabel}>
+                                    {groupKey}
+                                  </span>
+                                </td>
+                              </tr>
+                            )}
                           <tr
-                            key={v.variantId}
                             className={clsx(muted && styles.mutedRow)}
                           >
                             <td>
@@ -404,6 +424,7 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
                               </div>
                             </td>
                           </tr>
+                          </Fragment>
                         );
                       })}
                     </tbody>
