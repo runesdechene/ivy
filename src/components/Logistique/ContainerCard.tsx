@@ -10,48 +10,8 @@ import styles from './ContainerCard.module.scss';
 
 const UNIT = 140;
 
-const COLOR_FALLBACKS: Record<string, string> = {
-  // Mocha / Chocolat
-  Mocha: '#6f4a36',
-  Chocolat: '#6f4a36',
-  // Black / Noir
-  Black: '#2a2a2a',
-  Noir: '#2a2a2a',
-  // White / Blanc
-  White: '#f4f1ea',
-  Blanc: '#f4f1ea',
-  // Cream / Crème
-  Cream: '#efe6d4',
-  'Crème': '#efe6d4',
-  Creme: '#efe6d4',
-  // Sand / Sable
-  Sand: '#d8c8a8',
-  Sable: '#d8c8a8',
-  // French Navy / Bleu Marine
-  'French Navy': '#1f2c4d',
-  'Bleu Marine': '#1f2c4d',
-  Navy: '#1f2c4d',
-  // Rust / Rouille
-  Rust: '#a85a3a',
-  Rouille: '#a85a3a',
-  // Moss / Mousse
-  Moss: '#7a8a4a',
-  Mousse: '#7a8a4a',
-  // Stone / Pierre
-  Stone: '#a59f95',
-  Pierre: '#a59f95',
-  // Burgundy / Bordeaux
-  Burgundy: '#5e2630',
-  Bordeaux: '#5e2630',
-  // Khaki
-  Khaki: '#7c7a4f',
-  Kaki: '#7c7a4f',
-};
-
-function colorToCss(color: string | null | undefined): string {
-  if (!color) return '#cdcdcd';
-  if (COLOR_FALLBACKS[color]) return COLOR_FALLBACKS[color];
-  if (/^#[0-9a-f]{3,8}$/i.test(color)) return color;
+function colorToCss(hex: string | null | undefined): string {
+  if (hex && /^#[0-9a-f]{3,8}$/i.test(hex)) return hex;
   return '#cdcdcd';
 }
 
@@ -72,11 +32,15 @@ export function ContainerCard({ instance, onAssign }: Props) {
 
   const blocks = useMemo(() => {
     if (variants.length === 0 || fill.units === 0) return [];
-    return variants.map((v) => ({
+    // Trier par couleur (groupé) pour des stripes plus lisibles
+    const sorted = [...variants].sort((a, b) =>
+      (a.color || '').localeCompare(b.color || ''),
+    );
+    return sorted.map((v) => ({
       key: v.id,
       title: v.title,
       qty: v.qty,
-      color: colorToCss(v.color),
+      color: colorToCss(v.color_hex),
       flex: v.qty,
     }));
   }, [variants, fill.units]);
@@ -121,7 +85,7 @@ export function ContainerCard({ instance, onAssign }: Props) {
                 style={{
                   flexGrow: b.flex,
                   background: b.color,
-                  minWidth: 6,
+                  minHeight: 4,
                 }}
               />
             </Tooltip>

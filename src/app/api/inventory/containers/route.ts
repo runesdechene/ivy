@@ -5,6 +5,7 @@ type VariantInfo = {
   id: string;
   title: string;
   color: string | null;
+  color_hex: string | null;
   qty: number;
 };
 
@@ -50,6 +51,23 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = createServerClient();
+
+  // Précharger les color_rules de la boutique pour résoudre les hex
+  const { data: colorRules } = await supabase
+    .from('color_rules')
+    .select('reception_name, hex_value')
+    .eq('shop_id', shopId);
+
+  const colorHexMap = new Map<string, string>();
+  for (const r of colorRules ?? []) {
+    if (r.reception_name) {
+      colorHexMap.set(String(r.reception_name).toLowerCase().trim(), r.hex_value || '');
+    }
+  }
+  const resolveHex = (color: string | null): string | null => {
+    if (!color) return null;
+    return colorHexMap.get(color.toLowerCase().trim()) || null;
+  };
 
   const { data: instances, error: iErr } = await supabase
     .from('container_instances')
@@ -105,10 +123,12 @@ export async function GET(req: NextRequest) {
           );
           const qty = Math.max(0, lvl?.quantity ?? 0);
           if (qty <= 0) continue;
+          const color = extractColor(v, p);
           variants.push({
             id: v.id,
             title: v.title,
-            color: extractColor(v, p),
+            color,
+            color_hex: resolveHex(color),
             qty,
           });
           units += qty;

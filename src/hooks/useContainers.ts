@@ -14,7 +14,7 @@ export type ContainerInstance = {
   };
   products: { id: string; title: string; illustration_url: string | null }[];
   fill: { units: number; pct: number; weight_g: number | null };
-  variants: { id: string; title: string; color: string | null; qty: number }[];
+  variants: { id: string; title: string; color: string | null; color_hex: string | null; qty: number }[];
 };
 
 export function useContainers(shopId: string | undefined, locationId: string | undefined) {
