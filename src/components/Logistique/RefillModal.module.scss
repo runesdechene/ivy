@@ -1,0 +1,171 @@
+@use '@/style/tokens';
+
+.modalBody {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.header {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.windowSelector {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.empty {
+  text-align: center;
+  padding: 24px;
+  color: rgba(0, 0, 0, 0.55);
+}
+
+.error {
+  color: #b53030;
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+.warn {
+  color: #b58030;
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.product {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(0, 0, 0, 0.07);
+
+  &:first-child {
+    border-top: none;
+    padding-top: 0;
+  }
+}
+
+.productTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th, td {
+    padding: 6px 8px;
+    text-align: left;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+  }
+
+  th {
+    color: rgba(0, 0, 0, 0.55);
+    font-weight: 500;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  td:nth-child(2),
+  td:nth-child(3),
+  th:nth-child(2),
+  th:nth-child(3) {
+    text-align: right;
+    width: 80px;
+  }
+
+  td:nth-child(4),
+  th:nth-child(4) {
+    width: 140px;
+  }
+}
+
+.variantCell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
+}
+
+.sku {
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 11px;
+  margin-left: 8px;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.qtyInput {
+  width: 60px;
+
+  input {
+    text-align: center;
+  }
+}
+
+.footer {
+  position: sticky;
+  bottom: 0;
+  background: white;
+  padding-top: 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.07);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.success {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  text-align: center;
+}
+
+.successActions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.pick {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 0;
+}
+
+.pickActions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
