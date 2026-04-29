@@ -61,7 +61,7 @@ export default function LogistiquePage() {
   const { currentLocation } = useLocation();
   const locationId = currentLocation?.id;
 
-  const { data: instances = [], isLoading } = useContainers(currentShop?.id, locationId);
+  const { data, isLoading } = useContainers(currentShop?.id, locationId);
   const { data: types = [] } = useContainerTypes(currentShop?.id);
   const reorder = useReorderContainers();
 
@@ -71,10 +71,12 @@ export default function LogistiquePage() {
   const [sortMode, setSortMode] = useState<'color' | 'size'>('color');
   const [orderedInstances, setOrderedInstances] = useState<ContainerInstance[]>([]);
 
-  // Sync local order with server data
+  // Sync local order with server data. We depend on `data` (stable from TanStack)
+  // rather than a destructured default `[]` which would create a new ref every
+  // render and trigger an infinite loop while loading.
   useEffect(() => {
-    setOrderedInstances(instances);
-  }, [instances]);
+    if (data) setOrderedInstances(data);
+  }, [data]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
