@@ -71,8 +71,8 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
   const [submitSuccess, setSubmitSuccess] = useState<{
     orderId: string;
     orderNumber: string;
-    linesAdded: number;
-    linesIncremented: number;
+    unitsAdded: number;
+    variantsAdded: number;
   } | null>(null);
 
   const { data, isLoading, isError } = useRefillSuggestions(
@@ -175,8 +175,8 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
       setSubmitSuccess({
         orderId: res.orderId,
         orderNumber: res.orderNumber,
-        linesAdded: res.linesAdded,
-        linesIncremented: res.linesIncremented,
+        unitsAdded: res.unitsAdded,
+        variantsAdded: res.variantsAdded,
       });
       if (res.errors?.length) {
         setSubmitError(
@@ -219,10 +219,9 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
       {submitSuccess && (
         <div className={styles.success}>
           <p>
-            ✅ <strong>{submitSuccess.linesAdded + submitSuccess.linesIncremented}</strong>{' '}
-            ligne(s) traitée(s) sur <strong>{submitSuccess.orderNumber}</strong>
-            {submitSuccess.linesIncremented > 0 &&
-              ` (${submitSuccess.linesIncremented} incrémentée(s))`}
+            ✅ <strong>{submitSuccess.unitsAdded}</strong> unité(s) sur{' '}
+            <strong>{submitSuccess.variantsAdded}</strong> variante(s) ajoutée(s) à{' '}
+            <strong>{submitSuccess.orderNumber}</strong>
           </p>
           {submitError && <p className={styles.warn}>{submitError}</p>}
           <div className={styles.successActions}>

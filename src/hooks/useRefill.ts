@@ -88,8 +88,8 @@ export interface RefillSubmitInput {
 export interface RefillSubmitResponse {
   orderId: string;
   orderNumber: string;
-  linesAdded: number;
-  linesIncremented: number;
+  unitsAdded: number;
+  variantsAdded: number;
   errors?: Array<{ variantId: string; reason: string }>;
 }
 
