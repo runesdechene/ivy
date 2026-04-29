@@ -10,16 +10,9 @@ $unit: 140px;
   border-radius: 12px;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
   padding: 12px;
-  cursor: pointer;
-  transition: box-shadow 0.15s ease, transform 0.15s ease;
   display: flex;
   flex-direction: column;
   gap: 10px;
-
-  &:hover {
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
-    transform: translateY(-1px);
-  }
 }
 
 .thumbs {
@@ -198,9 +191,9 @@ $unit: 140px;
 
 .menu {
   position: absolute;
-  bottom: 4px;
-  right: 4px;
-  z-index: 3;
+  top: 6px;
+  right: 6px;
+  z-index: 4;
 }
 
 .footer {

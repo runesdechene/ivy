@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import clsx from 'clsx';
 import { ActionIcon, Menu, Tooltip } from '@mantine/core';
-import { IconDots, IconPencil, IconTrash } from '@tabler/icons-react';
+import { IconDots, IconPencil, IconPackage, IconTrash } from '@tabler/icons-react';
 import type { ContainerInstance } from '@/hooks/useContainers';
 import { useDeleteContainer, useRenameContainer } from '@/hooks/useContainers';
 import { compareSizes } from '@/utils/size-helpers';
@@ -123,11 +123,6 @@ export function ContainerCard({ instance, onAssign, sortMode = 'color' }: Props)
   const h = UNIT * type.ratio_h;
   const weather = weatherEmoji(fill.pct);
 
-  const handleCardClick = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('[data-noprop="true"]')) return;
-    onAssign();
-  };
-
   const displayName = instance.name?.trim() || type.name;
 
   const handleDelete = async () => {
@@ -142,13 +137,33 @@ export function ContainerCard({ instance, onAssign, sortMode = 'color' }: Props)
   };
 
   return (
-    <div
-      className={styles.card}
-      style={{ width: w + 24 }}
-      onClick={handleCardClick}
-      role="button"
-      tabIndex={0}
-    >
+    <div className={styles.card} style={{ width: w + 24 }}>
+      <div className={styles.menu}>
+        <Menu position="bottom-end" withArrow>
+          <Menu.Target>
+            <ActionIcon variant="subtle" size="md" color="gray" aria-label="Options">
+              <IconDots size={16} />
+            </ActionIcon>
+          </Menu.Target>
+          <Menu.Dropdown>
+            <Menu.Item leftSection={<IconPackage size={14} />} onClick={onAssign}>
+              Affecter des produits
+            </Menu.Item>
+            <Menu.Item leftSection={<IconPencil size={14} />} onClick={handleRename}>
+              Renommer
+            </Menu.Item>
+            <Menu.Divider />
+            <Menu.Item
+              leftSection={<IconTrash size={14} />}
+              color="red"
+              onClick={handleDelete}
+            >
+              Retirer la caisse
+            </Menu.Item>
+          </Menu.Dropdown>
+        </Menu>
+      </div>
+
       <div className={styles.thumbs}>
         {products.length === 0 ? (
           <span className={styles.thumbPlaceholder}>—</span>
@@ -227,33 +242,6 @@ export function ContainerCard({ instance, onAssign, sortMode = 'color' }: Props)
           );
         })}
 
-        <div data-noprop="true" className={styles.menu}>
-          <Menu position="bottom-end" withArrow>
-            <Menu.Target>
-              <ActionIcon
-                variant="subtle"
-                size="sm"
-                color="gray"
-                onClick={(e) => e.stopPropagation()}
-                aria-label="Options"
-              >
-                <IconDots size={14} />
-              </ActionIcon>
-            </Menu.Target>
-            <Menu.Dropdown>
-              <Menu.Item leftSection={<IconPencil size={14} />} onClick={handleRename}>
-                Renommer
-              </Menu.Item>
-              <Menu.Item
-                leftSection={<IconTrash size={14} />}
-                color="red"
-                onClick={handleDelete}
-              >
-                Retirer la caisse
-              </Menu.Item>
-            </Menu.Dropdown>
-          </Menu>
-        </div>
       </div>
 
       <div className={styles.footer}>
