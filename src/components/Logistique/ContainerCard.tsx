@@ -165,18 +165,20 @@ export function ContainerCard({ instance, onAssign, sortMode = 'color' }: Props)
         )}
       </div>
 
-      <div
-        className={styles.box}
-        style={{ width: w, height: h, gridTemplateColumns: `repeat(${cols}, 1fr)` }}
-      >
+      <div className={styles.stats} style={{ width: w }}>
         <Tooltip label={weather.label} withArrow>
           <span className={styles.weatherBadge}>{weather.emoji}</span>
         </Tooltip>
-
         <span className={styles.statBadge}>
           {fill.pct}%
           {fill.weight_g != null && ` · ${(fill.weight_g / 1000).toFixed(1)} kg`}
         </span>
+      </div>
+
+      <div
+        className={styles.box}
+        style={{ width: w, height: h, gridTemplateColumns: `repeat(${cols}, 1fr)` }}
+      >
 
         {columnsData.map((bucket, idx) => {
           const colPct = colCapacity > 0 ? Math.min(100, (bucket.total / colCapacity) * 100) : 0;
@@ -190,7 +192,10 @@ export function ContainerCard({ instance, onAssign, sortMode = 'color' }: Props)
                     style={{ flexGrow: sec.total }}
                   >
                     {sec.key !== '_' && (
-                      <span className={styles.sectionLabel}>{sec.key}</span>
+                      <span className={styles.sectionLabel}>
+                        <span className={styles.sectionCount}>{sec.items.length}</span>{' '}
+                        {sec.key}
+                      </span>
                     )}
                     <div className={styles.sectionStripes}>
                       {sec.items.map((v) => (
