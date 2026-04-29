@@ -1,0 +1,106 @@
+@use '@/style/_tokens.scss' as *;
+@use '@/style/_typography.scss' as *;
+
+$unit: 140px;
+
+.card {
+  position: relative;
+  background: var(--cream-soft);
+  border: 1px solid var(--divider);
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  padding: 12px;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  &:hover {
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+    transform: translateY(-1px);
+  }
+}
+
+.box {
+  position: relative;
+  background: var(--cream);
+  border: 1px solid var(--divider);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+}
+
+.block {
+  flex-shrink: 0;
+  height: 100%;
+  border-right: 1px solid rgba(0, 0, 0, 0.06);
+  transition: filter 0.15s ease;
+
+  &:last-child {
+    border-right: none;
+  }
+
+  &:hover {
+    filter: brightness(1.1);
+  }
+}
+
+.weatherBadge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  font-size: 18px;
+  z-index: 2;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+}
+
+.statBadge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(255, 252, 246, 0.92);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  z-index: 2;
+  border: 1px solid var(--divider);
+}
+
+.menu {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  z-index: 3;
+}
+
+.footer {
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.title {
+  @include type-eyebrow;
+}
+
+.products {
+  opacity: 0.85;
+  font-size: 12px;
+}
+
+.empty {
+  opacity: 0.55;
+  font-style: italic;
+}

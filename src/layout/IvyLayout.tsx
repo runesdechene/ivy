@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import clsx from 'clsx';
 import { notifications } from '@mantine/notifications';
-import { IconHome, IconPackage, IconTruck, IconChartBar, IconShoppingCart, IconFileInvoice, IconArchive, IconRefresh, IconChecklist, IconChartPie } from '@tabler/icons-react';
+import { IconHome, IconPackage, IconTruck, IconChartBar, IconShoppingCart, IconFileInvoice, IconArchive, IconRefresh, IconChecklist, IconChartPie, IconBox } from '@tabler/icons-react';
 import { LocationProvider } from '@/context/LocationContext';
 import { LocationSelector } from '@/components/LocationSelector';
 import { useShop } from '@/context/ShopContext';
@@ -120,6 +120,7 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
       items: [
         { href: '/ivy/inventaire', label: 'Tableau de bord', icon: IconHome, exact: true },
         { href: '/ivy/inventaire/produits', label: 'Produits', icon: IconPackage },
+        { href: '/ivy/inventaire/logistique', label: 'Logistique', icon: IconBox },
         { href: '/ivy/inventaire/statistiques', label: 'Statistiques', icon: IconChartBar },
         { href: '/ivy/inventaire/archives', label: 'Archives', icon: IconArchive },
       ],
