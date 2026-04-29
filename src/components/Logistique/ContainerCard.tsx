@@ -9,7 +9,7 @@ import { useDeleteContainer } from '@/hooks/useContainers';
 import { compareSizes } from '@/utils/size-helpers';
 import styles from './ContainerCard.module.scss';
 
-const UNIT = 200;
+const UNIT = 260;
 
 function colorToCss(hex: string | null | undefined): string {
   if (hex && /^#[0-9a-f]{3,8}$/i.test(hex)) return hex;

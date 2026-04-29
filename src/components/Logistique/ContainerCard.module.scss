@@ -116,17 +116,19 @@ $unit: 140px;
 
 .sectionLabel {
   flex: 0 0 auto;
-  height: 14px;
-  line-height: 14px;
+  height: 18px;
+  line-height: 16px;
   background: var(--cream-soft);
   color: $slate;
-  border-bottom: 1px solid var(--divider);
-  font-size: 9px;
+  border-top: 1px solid var(--divider-strong);
+  border-bottom: 2px solid var(--divider-strong);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   text-align: center;
-  padding: 0 4px;
+  padding: 0 6px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -141,9 +143,9 @@ $unit: 140px;
   color: $slate;
   border-radius: 8px;
   padding: 0 6px;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
-  min-width: 16px;
+  min-width: 18px;
   text-align: center;
 }
 
