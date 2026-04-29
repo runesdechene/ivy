@@ -1,17 +1,60 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { IconPlus } from '@tabler/icons-react';
 import { Loader, SegmentedControl } from '@mantine/core';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  rectSortingStrategy,
+  arrayMove,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useShop } from '@/context/ShopContext';
 import { useLocation } from '@/context/LocationContext';
-import { useContainers } from '@/hooks/useContainers';
+import {
+  useContainers,
+  useReorderContainers,
+  type ContainerInstance,
+} from '@/hooks/useContainers';
 import { useContainerTypes } from '@/hooks/useContainerTypes';
 import { ContainerCard } from '@/components/Logistique/ContainerCard';
 import { AddContainerModal } from '@/components/Logistique/AddContainerModal';
 import { AssignProductsModal } from '@/components/Logistique/AssignProductsModal';
 import { RefillModal } from '@/components/Logistique/RefillModal';
 import styles from './logistique.module.scss';
+
+function SortableCardWrapper({
+  id,
+  children,
+}: {
+  id: string;
+  children: React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    cursor: isDragging ? 'grabbing' : 'grab',
+    touchAction: 'none',
+  };
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      {children}
+    </div>
+  );
+}
 
 export default function LogistiquePage() {
   const { currentShop } = useShop();
@@ -20,19 +63,50 @@ export default function LogistiquePage() {
 
   const { data: instances = [], isLoading } = useContainers(currentShop?.id, locationId);
   const { data: types = [] } = useContainerTypes(currentShop?.id);
+  const reorder = useReorderContainers();
 
   const [adding, setAdding] = useState(false);
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const [refillingId, setRefillingId] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<'color' | 'size'>('color');
+  const [orderedInstances, setOrderedInstances] = useState<ContainerInstance[]>([]);
+
+  // Sync local order with server data
+  useEffect(() => {
+    setOrderedInstances(instances);
+  }, [instances]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor),
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    if (!currentShop?.id || !locationId) return;
+
+    const oldIndex = orderedInstances.findIndex((i) => i.id === active.id);
+    const newIndex = orderedInstances.findIndex((i) => i.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+
+    const next = arrayMove(orderedInstances, oldIndex, newIndex);
+    setOrderedInstances(next);
+
+    reorder.mutate({
+      orderedIds: next.map((i) => i.id),
+      shopId: currentShop.id,
+      locationId,
+    });
+  };
 
   const counters = useMemo(() => {
     const map = new Map<string, number>();
-    for (const inst of instances) {
+    for (const inst of orderedInstances) {
       map.set(inst.type.name, (map.get(inst.type.name) ?? 0) + 1);
     }
     return Array.from(map.entries()).map(([name, count]) => ({ name, count }));
-  }, [instances]);
+  }, [orderedInstances]);
 
   const shopName = currentShop?.name || 'Runes de Chêne';
 
@@ -85,22 +159,27 @@ export default function LogistiquePage() {
         <div className={styles.empty}>
           <Loader size="sm" />
         </div>
-      ) : instances.length === 0 ? (
+      ) : orderedInstances.length === 0 ? (
         <div className={styles.empty}>
           Aucun conteneur dans <strong>{currentLocation?.name}</strong>. Ajoute-en un pour commencer.
         </div>
       ) : (
-        <div className={styles.grid}>
-          {instances.map((inst) => (
-            <ContainerCard
-              key={inst.id}
-              instance={inst}
-              sortMode={sortMode}
-              onAssign={() => setAssigningId(inst.id)}
-              onRefill={() => setRefillingId(inst.id)}
-            />
-          ))}
-        </div>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={orderedInstances.map((i) => i.id)} strategy={rectSortingStrategy}>
+            <div className={styles.grid}>
+              {orderedInstances.map((inst) => (
+                <SortableCardWrapper key={inst.id} id={inst.id}>
+                  <ContainerCard
+                    instance={inst}
+                    sortMode={sortMode}
+                    onAssign={() => setAssigningId(inst.id)}
+                    onRefill={() => setRefillingId(inst.id)}
+                  />
+                </SortableCardWrapper>
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
 
       {adding && currentShop && locationId && (
@@ -114,7 +193,7 @@ export default function LogistiquePage() {
       )}
 
       {assigningId && currentShop && (() => {
-        const target = instances.find((i) => i.id === assigningId);
+        const target = orderedInstances.find((i) => i.id === assigningId);
         if (!target) return null;
         return (
           <AssignProductsModal

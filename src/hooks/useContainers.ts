@@ -75,6 +75,30 @@ export function useRenameContainer() {
   });
 }
 
+export function useReorderContainers() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      orderedIds,
+      shopId,
+      locationId,
+    }: {
+      orderedIds: string[];
+      shopId: string;
+      locationId: string;
+    }) => {
+      const r = await fetch('/api/inventory/containers/reorder', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderedIds, shopId, locationId }),
+      });
+      if (!r.ok) throw new Error((await r.json()).error || 'reorder failed');
+    },
+    onSuccess: (_data, vars) =>
+      qc.invalidateQueries({ queryKey: ['containers', vars.shopId, vars.locationId] }),
+  });
+}
+
 export function useSetContainerProducts() {
   const qc = useQueryClient();
   return useMutation({
