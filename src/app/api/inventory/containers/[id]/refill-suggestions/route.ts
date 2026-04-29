@@ -224,6 +224,12 @@ export async function GET(
 
   const variantByProduct = new Map<string, any[]>();
   for (const v of filteredVariants) {
+    // On masque les variantes non-Shopify dans la table — on ne peut pas les
+    // commander chez le fournisseur. Elles restent comptées dans totalCurrent
+    // et dans le budget (calculés au-dessus via inputs) pour que la jauge
+    // "X / capacity" matche la card et que les suggestions ne dépassent
+    // pas la place réelle dans la caisse.
+    if (v.shopify_active !== true) continue;
     const p: any = productById.get(v.product_id);
     if (!p) continue;
     const color = extractByOptionName(v, p, COLOR_OPTION_NAMES);
