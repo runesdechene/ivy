@@ -24,6 +24,7 @@ export default function InventoryPage() {
   const [selectedProduct, setSelectedProduct] = useState<ProductData | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [productTypeFilter, setProductTypeFilter] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<'alpha' | 'recent'>('alpha');
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [syncModalOpened, { open: openSyncModal, close: closeSyncModal }] = useDisclosure(false);
   const scrollPositionRef = useRef<number>(0);
@@ -153,10 +154,19 @@ export default function InventoryPage() {
       result = result.filter(product => product.productType === productTypeFilter);
     }
 
-    result.sort((a, b) => a.title.localeCompare(b.title, 'fr'));
+    if (sortMode === 'recent') {
+      result.sort((a, b) => {
+        const ta = a.createdAt ? Date.parse(a.createdAt) : 0;
+        const tb = b.createdAt ? Date.parse(b.createdAt) : 0;
+        if (tb !== ta) return tb - ta;
+        return a.title.localeCompare(b.title, 'fr');
+      });
+    } else {
+      result.sort((a, b) => a.title.localeCompare(b.title, 'fr'));
+    }
 
     return result;
-  }, [products, searchQuery, productTypeFilter]);
+  }, [products, searchQuery, productTypeFilter, sortMode]);
 
   // Total variantes affichées (pour le sub head)
   const totalVariants = useMemo(() => {
@@ -374,6 +384,24 @@ export default function InventoryPage() {
             ))}
           </div>
         )}
+
+        <div className={styles.skuFilters}>
+          <span className={styles.skuLabel}>Tri</span>
+          <button
+            type="button"
+            className={`${styles.skuButton} ${sortMode === 'alpha' ? styles.active : ''}`}
+            onClick={() => setSortMode('alpha')}
+          >
+            Alphabétique
+          </button>
+          <button
+            type="button"
+            className={`${styles.skuButton} ${sortMode === 'recent' ? styles.active : ''}`}
+            onClick={() => setSortMode('recent')}
+          >
+            Récent
+          </button>
+        </div>
       </div>
 
       <SimpleGrid cols={{ base: 2, sm: 3, md: 4, lg: 5 }} spacing="md">

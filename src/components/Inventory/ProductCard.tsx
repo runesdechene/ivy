@@ -13,6 +13,7 @@ export interface ProductData {
   image: string | null;
   imageAlt: string;
   productType?: string | null;
+  createdAt?: string;
   totalQuantity: number;
   sizeBreakdown: Record<string, number>;
   costRange?: { min: number; max: number };

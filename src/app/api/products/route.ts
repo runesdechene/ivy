@@ -111,6 +111,7 @@ export async function GET(request: Request) {
           status,
           product_type,
           synced_at,
+          created_at,
           variants:product_variants(
             id,
             shopify_id,
@@ -307,6 +308,7 @@ export async function GET(request: Request) {
         costRange,
         variants,
         syncedAt: product.synced_at,
+        createdAt: product.created_at,
       };
     });
 
