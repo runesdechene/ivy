@@ -388,7 +388,7 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
                                 {v.sku && <span className={styles.sku}>{v.sku}</span>}
                               </div>
                             </td>
-                            <td>{v.currentInBox}</td>
+                            <td><strong>{v.currentInBox}</strong></td>
                             <td>{v.soldInWindow}</td>
                             <td>
                               <div className={styles.stepper}>
