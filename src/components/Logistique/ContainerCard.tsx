@@ -193,7 +193,7 @@ export function ContainerCard({ instance, onAssign, sortMode = 'color' }: Props)
                   >
                     {sec.key !== '_' && (
                       <span className={styles.sectionLabel}>
-                        <span className={styles.sectionCount}>{sec.items.length}</span>{' '}
+                        <span className={styles.sectionCount}>{sec.total}</span>{' '}
                         {sec.key}
                       </span>
                     )}
