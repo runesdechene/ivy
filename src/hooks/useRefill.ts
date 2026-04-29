@@ -37,10 +37,9 @@ export function useRefillSuggestions(
   windowParam: RefillWindow,
   zoneId?: string | null,
   enabled: boolean = true,
-  includeAll: boolean = false,
 ) {
   return useQuery<RefillSuggestionsResponse>({
-    queryKey: ['refill-suggestions', containerId, windowParam, zoneId, includeAll],
+    queryKey: ['refill-suggestions', containerId, windowParam, zoneId],
     enabled: !!containerId && enabled && (windowParam !== 'zone' || !!zoneId),
     queryFn: async () => {
       const url = new URL(
@@ -49,7 +48,6 @@ export function useRefillSuggestions(
       );
       url.searchParams.set('window', windowParam);
       if (windowParam === 'zone' && zoneId) url.searchParams.set('zoneId', zoneId);
-      if (includeAll) url.searchParams.set('includeAll', '1');
       const r = await fetch(url.pathname + url.search);
       if (!r.ok) throw new Error('fetch suggestions failed');
       return r.json();

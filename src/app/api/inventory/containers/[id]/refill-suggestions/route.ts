@@ -41,7 +41,6 @@ export async function GET(
   const url = new URL(request.url);
   const windowParam = url.searchParams.get('window') || '30d';
   const zoneId = url.searchParams.get('zoneId');
-  const includeAll = url.searchParams.get('includeAll') === '1';
 
   if (!['7d', '30d', 'all', 'zone'].includes(windowParam)) {
     return NextResponse.json({ error: 'Invalid window' }, { status: 400 });
@@ -175,26 +174,11 @@ export async function GET(
     lifetimeSoldByVariant.set(m.variant_id, prev + Math.abs(m.quantity));
   }
 
-  const totalLifetime = Array.from(lifetimeSoldByVariant.values()).reduce((s, n) => s + n, 0);
-
-  // Filter: si le shop a un historique de ventes, on garde uniquement les variants
-  // qui ont déjà bougé au moins une fois (cache 5XL, 4XL etc. jamais vendus).
-  // Si aucun historique global (cold-start) OU si includeAll est demandé, on garde
-  // tout pour permettre la saisie manuelle.
-  const filteredVariants = (totalLifetime > 0 && !includeAll)
-    ? variants.filter((v: any) => (lifetimeSoldByVariant.get(v.id) || 0) > 0)
-    : variants;
+  // On affiche toutes les variantes vivantes des produits affectés. Le filtre se
+  // fait visuellement côté UI (opacity réduite sur les lignes sans qty).
+  // soldLifetime reste exposé pour permettre des décisions futures.
+  const filteredVariants = variants;
   const filteredVariantIds = filteredVariants.map((v: any) => v.id);
-
-  if (filteredVariantIds.length === 0) {
-    return NextResponse.json({
-      containerId,
-      containerName,
-      capacity: { max: type.max_capacity, current: 0, pct: 0 },
-      window: { type: windowType, label: windowLabel },
-      products: [],
-    });
-  }
 
   // Window-scoped sales (only for filtered variants)
   let mvtQuery = supabase
