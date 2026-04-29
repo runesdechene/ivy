@@ -89,7 +89,7 @@ $unit: 140px;
   right: 0;
   bottom: 0;
   display: flex;
-  flex-direction: column-reverse;
+  flex-direction: column;
   align-items: stretch;
 }
 
@@ -145,7 +145,7 @@ $unit: 140px;
 .sectionStripes {
   flex: 1 1 auto;
   display: flex;
-  flex-direction: column-reverse;
+  flex-direction: column;
   align-items: stretch;
   min-height: 0;
 }
