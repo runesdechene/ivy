@@ -41,6 +41,7 @@ export async function GET(
   const url = new URL(request.url);
   const windowParam = url.searchParams.get('window') || '30d';
   const zoneId = url.searchParams.get('zoneId');
+  const includeAll = url.searchParams.get('includeAll') === '1';
 
   if (!['7d', '30d', 'all', 'zone'].includes(windowParam)) {
     return NextResponse.json({ error: 'Invalid window' }, { status: 400 });
@@ -178,9 +179,9 @@ export async function GET(
 
   // Filter: si le shop a un historique de ventes, on garde uniquement les variants
   // qui ont déjà bougé au moins une fois (cache 5XL, 4XL etc. jamais vendus).
-  // Si aucun historique global (cold-start), on garde tout pour permettre la saisie
-  // manuelle.
-  const filteredVariants = totalLifetime > 0
+  // Si aucun historique global (cold-start) OU si includeAll est demandé, on garde
+  // tout pour permettre la saisie manuelle.
+  const filteredVariants = (totalLifetime > 0 && !includeAll)
     ? variants.filter((v: any) => (lifetimeSoldByVariant.get(v.id) || 0) > 0)
     : variants;
   const filteredVariantIds = filteredVariants.map((v: any) => v.id);
@@ -250,6 +251,7 @@ export async function GET(
       currentInBox: sug?.currentInBox ?? 0,
       currentAtLocation: sug?.currentInBox ?? 0,
       soldInWindow: sug?.soldInWindow ?? 0,
+      soldLifetime: lifetimeSoldByVariant.get(v.id) || 0,
       suggestedQty: sug?.suggestedQty ?? 0,
     };
     if (!variantByProduct.has(v.product_id)) variantByProduct.set(v.product_id, []);

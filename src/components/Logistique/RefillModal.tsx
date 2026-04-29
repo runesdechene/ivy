@@ -9,6 +9,8 @@ import {
   Button,
   ActionIcon,
   Tooltip,
+  Switch,
+  Badge,
 } from '@mantine/core';
 import { IconMinus, IconPlus, IconExternalLink } from '@tabler/icons-react';
 import { useRefillSuggestions, useSubmitRefill, RefillWindow } from '@/hooks/useRefill';
@@ -37,6 +39,7 @@ interface StudyZone {
 export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
   const [windowParam, setWindowParam] = useState<RefillWindow>('30d');
   const [zoneId, setZoneId] = useState<string | null>(null);
+  const [includeAll, setIncludeAll] = useState(false);
   const [zones, setZones] = useState<StudyZone[]>([]);
   const [drafts, setDrafts] = useState<DraftOrder[]>([]);
   const [adjustedQty, setAdjustedQty] = useState<Map<string, number>>(new Map());
@@ -55,6 +58,7 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
     windowParam,
     zoneId,
     opened,
+    includeAll,
   );
 
   const submit = useSubmitRefill();
@@ -244,6 +248,12 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
       {!submitSuccess && confirmStep === null && (
         <>
           <div className={styles.header}>
+            <Switch
+              size="xs"
+              checked={includeAll}
+              onChange={(e) => setIncludeAll(e.currentTarget.checked)}
+              label="Tout afficher"
+            />
             <div className={styles.windowSelector}>
               <Select
                 size="sm"
@@ -310,6 +320,11 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
                                   />
                                 )}
                                 <span>{v.title}</span>
+                                {v.soldLifetime === 0 && (
+                                  <Badge size="xs" color="gray" variant="light">
+                                    Jamais vendu
+                                  </Badge>
+                                )}
                                 {v.sku && <span className={styles.sku}>{v.sku}</span>}
                               </div>
                             </td>
