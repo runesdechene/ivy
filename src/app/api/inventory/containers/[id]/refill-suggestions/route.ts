@@ -159,10 +159,47 @@ export async function GET(
     windowType = 'days';
   }
 
-  let mvtQuery = supabase
+  // Lifetime sales (no date filter) — used to filter "dead variants" (5XL never sold etc.)
+  let lifetimeQuery = supabase
     .from('stock_movements')
     .select('variant_id, quantity')
     .in('variant_id', variantIds)
+    .lt('quantity', 0);
+  if (locationUuid) lifetimeQuery = lifetimeQuery.eq('location_id', locationUuid);
+  const { data: lifetimeMovements } = await lifetimeQuery;
+
+  const lifetimeSoldByVariant = new Map<string, number>();
+  for (const m of lifetimeMovements ?? []) {
+    const prev = lifetimeSoldByVariant.get(m.variant_id) || 0;
+    lifetimeSoldByVariant.set(m.variant_id, prev + Math.abs(m.quantity));
+  }
+
+  const totalLifetime = Array.from(lifetimeSoldByVariant.values()).reduce((s, n) => s + n, 0);
+
+  // Filter: si le shop a un historique de ventes, on garde uniquement les variants
+  // qui ont déjà bougé au moins une fois (cache 5XL, 4XL etc. jamais vendus).
+  // Si aucun historique global (cold-start), on garde tout pour permettre la saisie
+  // manuelle.
+  const filteredVariants = totalLifetime > 0
+    ? variants.filter((v: any) => (lifetimeSoldByVariant.get(v.id) || 0) > 0)
+    : variants;
+  const filteredVariantIds = filteredVariants.map((v: any) => v.id);
+
+  if (filteredVariantIds.length === 0) {
+    return NextResponse.json({
+      containerId,
+      containerName,
+      capacity: { max: type.max_capacity, current: 0, pct: 0 },
+      window: { type: windowType, label: windowLabel },
+      products: [],
+    });
+  }
+
+  // Window-scoped sales (only for filtered variants)
+  let mvtQuery = supabase
+    .from('stock_movements')
+    .select('variant_id, quantity')
+    .in('variant_id', filteredVariantIds)
     .lt('quantity', 0);
   if (locationUuid) mvtQuery = mvtQuery.eq('location_id', locationUuid);
   if (dateRange) {
@@ -179,7 +216,7 @@ export async function GET(
   const { data: levels } = await supabase
     .from('inventory_levels')
     .select('variant_id, quantity')
-    .in('variant_id', variantIds)
+    .in('variant_id', filteredVariantIds)
     .eq('location_id', container.location_id);
 
   const qtyByVariant = new Map<string, number>();
@@ -187,7 +224,7 @@ export async function GET(
     qtyByVariant.set(l.variant_id, Math.max(0, l.quantity || 0));
   }
 
-  const inputs: VariantInput[] = variants.map((v: any) => ({
+  const inputs: VariantInput[] = filteredVariants.map((v: any) => ({
     variantId: v.id,
     soldInWindow: soldByVariant.get(v.id) || 0,
     currentInBox: qtyByVariant.get(v.id) || 0,
@@ -196,7 +233,7 @@ export async function GET(
   const suggestionByVariant = new Map(suggestions.map((s) => [s.variantId, s]));
 
   const variantByProduct = new Map<string, any[]>();
-  for (const v of variants) {
+  for (const v of filteredVariants) {
     const p: any = productById.get(v.product_id);
     if (!p) continue;
     const color = extractByOptionName(v, p, COLOR_OPTION_NAMES);
