@@ -10,6 +10,7 @@ export type ContainerType = {
   empty_weight_g: number | null;
   ratio_w: number;
   ratio_h: number;
+  columns: number;
   created_at: string;
 };
 

@@ -12,6 +12,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (body.empty_weight_g !== undefined) updates.empty_weight_g = body.empty_weight_g;
   if (body.ratio_w !== undefined) updates.ratio_w = body.ratio_w;
   if (body.ratio_h !== undefined) updates.ratio_h = body.ratio_h;
+  if (body.columns !== undefined) updates.columns = body.columns;
 
   const { data, error } = await supabase
     .from('container_types')

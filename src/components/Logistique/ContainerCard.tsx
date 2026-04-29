@@ -59,6 +59,8 @@ export function ContainerCard({ instance, onAssign }: Props) {
     await deleteMut.mutateAsync(instance.id);
   };
 
+  const cols = Math.max(1, type.columns ?? 1);
+
   return (
     <div
       className={styles.card}
@@ -67,6 +69,31 @@ export function ContainerCard({ instance, onAssign }: Props) {
       role="button"
       tabIndex={0}
     >
+      <div className={styles.thumbs}>
+        {products.length === 0 ? (
+          <span className={styles.thumbPlaceholder}>—</span>
+        ) : (
+          products.map((p) => {
+            const src = p.image_url || p.illustration_url;
+            return (
+              <Tooltip key={p.id} label={p.title} withArrow>
+                {src ? (
+                  <span
+                    className={styles.thumb}
+                    style={{ backgroundImage: `url("${src}")` }}
+                    aria-label={p.title}
+                  />
+                ) : (
+                  <span className={styles.thumbPlaceholder} aria-label={p.title}>
+                    {p.title.slice(0, 1)}
+                  </span>
+                )}
+              </Tooltip>
+            );
+          })
+        )}
+      </div>
+
       <div className={styles.box} style={{ width: w, height: h }}>
         <Tooltip label={weather.label} withArrow>
           <span className={styles.weatherBadge}>{weather.emoji}</span>
@@ -91,6 +118,17 @@ export function ContainerCard({ instance, onAssign }: Props) {
             </Tooltip>
           ))}
         </div>
+
+        {cols > 1 && (
+          <div
+            className={styles.compartments}
+            style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
+          >
+            {Array.from({ length: cols }).map((_, i) => (
+              <div key={i} className={styles.divider} />
+            ))}
+          </div>
+        )}
 
         <div data-noprop="true" className={styles.menu}>
           <Menu position="bottom-end" withArrow>

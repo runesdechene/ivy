@@ -22,12 +22,57 @@ $unit: 140px;
   }
 }
 
+.thumbs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  align-items: center;
+  min-height: 44px;
+}
+
+.thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  border: 1px solid var(--divider);
+  background: var(--cream) center / cover no-repeat;
+  flex-shrink: 0;
+}
+
+.thumbPlaceholder {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  border: 1px dashed var(--divider);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: $slate-muted;
+  flex-shrink: 0;
+}
+
 .box {
   position: relative;
   background: var(--cream);
   border: 1px solid var(--divider);
   border-radius: 6px;
   overflow: hidden;
+}
+
+.compartments {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.divider {
+  border-right: 1px solid rgba(0, 0, 0, 0.1);
+  &:last-child {
+    border-right: none;
+  }
 }
 
 .fill {

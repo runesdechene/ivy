@@ -33,11 +33,12 @@ export function AddContainerModal({ opened, onClose, shopId, locationId, existin
     empty_weight_g: null as number | null,
     ratio_w: 1,
     ratio_h: 1,
+    columns: 1,
   });
 
   const reset = () => {
     setSelectedTypeId(null);
-    setForm({ name: '', max_capacity: 70, empty_weight_g: null, ratio_w: 1, ratio_h: 1 });
+    setForm({ name: '', max_capacity: 70, empty_weight_g: null, ratio_w: 1, ratio_h: 1, columns: 1 });
     setTab('existing');
   };
 
@@ -171,7 +172,7 @@ export function AddContainerModal({ opened, onClose, shopId, locationId, existin
             />
             <Group grow>
               <NumberInput
-                label="Ratio largeur"
+                label="Ratio W"
                 value={form.ratio_w}
                 onChange={(v) => setForm({ ...form, ratio_w: typeof v === 'number' ? v : 1 })}
                 min={1}
@@ -179,9 +180,17 @@ export function AddContainerModal({ opened, onClose, shopId, locationId, existin
                 styles={inputStyles}
               />
               <NumberInput
-                label="Ratio hauteur"
+                label="Ratio H"
                 value={form.ratio_h}
                 onChange={(v) => setForm({ ...form, ratio_h: typeof v === 'number' ? v : 1 })}
+                min={1}
+                max={5}
+                styles={inputStyles}
+              />
+              <NumberInput
+                label="Compartiments"
+                value={form.columns}
+                onChange={(v) => setForm({ ...form, columns: typeof v === 'number' ? v : 1 })}
                 min={1}
                 max={5}
                 styles={inputStyles}

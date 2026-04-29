@@ -21,9 +21,10 @@ type FormState = {
   empty_weight_g: number | null;
   ratio_w: number;
   ratio_h: number;
+  columns: number;
 };
 
-const EMPTY: FormState = { name: '', max_capacity: 70, empty_weight_g: null, ratio_w: 1, ratio_h: 1 };
+const EMPTY: FormState = { name: '', max_capacity: 70, empty_weight_g: null, ratio_w: 1, ratio_h: 1, columns: 1 };
 
 export default function ConteneursPage() {
   const { currentShop } = useShop();
@@ -52,6 +53,7 @@ export default function ConteneursPage() {
       empty_weight_g: t.empty_weight_g,
       ratio_w: t.ratio_w,
       ratio_h: t.ratio_h,
+      columns: t.columns ?? 1,
     });
     openModal();
   };
@@ -118,6 +120,7 @@ export default function ConteneursPage() {
                 <th className={styles.th} style={{ width: 120 }}>Capacité</th>
                 <th className={styles.th} style={{ width: 140 }}>Poids vide</th>
                 <th className={styles.th} style={{ width: 100 }}>Ratio</th>
+                <th className={styles.th} style={{ width: 100 }}>Colonnes</th>
                 <th className={styles.th} style={{ width: 100 }}>Actions</th>
               </tr>
             </thead>
@@ -141,6 +144,7 @@ export default function ConteneursPage() {
                   <td className={styles.td}>{t.max_capacity} unités</td>
                   <td className={styles.td}>{t.empty_weight_g != null ? `${t.empty_weight_g} g` : '—'}</td>
                   <td className={styles.td}>{t.ratio_w}×{t.ratio_h}</td>
+                  <td className={styles.td}>{t.columns ?? 1}</td>
                   <td className={styles.td}>
                     <Group gap="xs">
                       <button className={styles.iconButton} onClick={() => openForEdit(t)}>
@@ -217,6 +221,15 @@ export default function ConteneursPage() {
               label="Ratio hauteur"
               value={form.ratio_h}
               onChange={(v) => setForm({ ...form, ratio_h: typeof v === 'number' ? v : 1 })}
+              min={1}
+              max={5}
+              styles={{ input: { backgroundColor: 'var(--cream)', borderColor: 'var(--divider)' } }}
+            />
+            <NumberInput
+              label="Compartiments"
+              description="Divisions visuelles (1-3)"
+              value={form.columns}
+              onChange={(v) => setForm({ ...form, columns: typeof v === 'number' ? v : 1 })}
               min={1}
               max={5}
               styles={{ input: { backgroundColor: 'var(--cream)', borderColor: 'var(--divider)' } }}

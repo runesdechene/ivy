@@ -18,8 +18,9 @@ type InstanceResp = {
     empty_weight_g: number | null;
     ratio_w: number;
     ratio_h: number;
+    columns: number;
   };
-  products: { id: string; title: string; illustration_url: string | null }[];
+  products: { id: string; title: string; image_url: string | null; illustration_url: string | null }[];
   fill: { units: number; pct: number; weight_g: number | null };
   variants: VariantInfo[];
 };
@@ -73,9 +74,9 @@ export async function GET(req: NextRequest) {
     .from('container_instances')
     .select(`
       id,
-      type:container_types(id, name, max_capacity, empty_weight_g, ratio_w, ratio_h),
+      type:container_types(id, name, max_capacity, empty_weight_g, ratio_w, ratio_h, columns),
       affectations:container_instance_products(
-        product:products(id, title, illustration_url, option1_name, option2_name, option3_name)
+        product:products(id, title, image_url, illustration_url, option1_name, option2_name, option3_name)
       )
     `)
     .eq('shop_id', shopId)
@@ -149,10 +150,12 @@ export async function GET(req: NextRequest) {
         empty_weight_g: type.empty_weight_g,
         ratio_w: type.ratio_w,
         ratio_h: type.ratio_h,
+        columns: type.columns ?? 1,
       },
       products: products.map((p: any) => ({
         id: p.id,
         title: p.title,
+        image_url: p.image_url ?? null,
         illustration_url: p.illustration_url ?? null,
       })),
       fill: { units, pct, weight_g: null },
