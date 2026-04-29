@@ -173,6 +173,12 @@ export default function InventoryPage() {
     return filteredProducts.reduce((sum, p) => sum + p.variants.length, 0);
   }, [filteredProducts]);
 
+  // La boutique attend-elle des métachamps ? Vrai dès qu'au moins une variante de tout le catalogue en a un.
+  // Sert à signaler aussi les produits sans aucun métachamp (sinon l'alerte ne s'afficherait que sur les "partiels").
+  const expectMetafields = useMemo(() => {
+    return products.some(p => p.variants.some(v => (v.metafields?.length || 0) > 0));
+  }, [products]);
+
   // Sélectionner un produit (sauvegarde la position de scroll)
   const handleSelectProduct = useCallback((product: ProductData) => {
     const contentElement = containerRef.current?.closest('[class*="content"]');
@@ -410,6 +416,7 @@ export default function InventoryPage() {
             key={product.id}
             product={product}
             onClick={() => handleSelectProduct(product)}
+            expectMetafields={expectMetafields}
           />
         ))}
       </SimpleGrid>

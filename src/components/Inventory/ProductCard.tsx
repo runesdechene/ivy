@@ -35,23 +35,31 @@ export interface ProductData {
 interface ProductCardProps {
   product: ProductData;
   onClick: () => void;
+  /** Si la boutique attend des métachamps (vrai dès qu'un autre produit en a), on signale aussi les produits avec 0 métachamp partout. */
+  expectMetafields?: boolean;
 }
 
-export function ProductCard({ product, onClick }: ProductCardProps) {
+export function ProductCard({ product, onClick, expectMetafields = false }: ProductCardProps) {
   // Statut produit : local/draft = plus actif sur Shopify
   const isLocal = product.status === 'LOCAL' || product.status === 'DRAFT';
   const localVariants = product.variants.filter(v => v.shopifyActive === false);
   const localStock = localVariants.reduce((sum, v) => sum + Math.max(0, v.quantity), 0);
 
-  // Métachamps manquants : comparer au minimum (parmi celles qui en ont) pour éviter les faux positifs recto/verso
+  // Métachamps manquants
   const shopifyVariants = product.variants.filter(v => v.shopifyActive !== false);
   const variantsWithMeta = shopifyVariants.filter(v => (v.metafields?.length || 0) > 0);
-  const minMetafields = variantsWithMeta.length > 0
-    ? variantsWithMeta.reduce((min, v) => Math.min(min, v.metafields!.length), Infinity)
-    : 0;
-  const missingMetafieldsCount = minMetafields > 0
-    ? shopifyVariants.filter(v => (v.metafields?.length || 0) < minMetafields).length
-    : 0;
+
+  let missingMetafieldsCount = 0;
+  if (shopifyVariants.length > 0) {
+    if (variantsWithMeta.length === 0) {
+      // Aucune variante n'a de métachamp — anomalie SEULEMENT si la boutique en attend
+      if (expectMetafields) missingMetafieldsCount = shopifyVariants.length;
+    } else {
+      // Au moins une variante en a — comparer au minimum (anti-faux positif Recto/Verso)
+      const minMetafields = variantsWithMeta.reduce((min, v) => Math.min(min, v.metafields!.length), Infinity);
+      missingMetafieldsCount = shopifyVariants.filter(v => (v.metafields?.length || 0) < minMetafields).length;
+    }
+  }
 
   // Formater le breakdown des tailles
   const sizeText = Object.entries(product.sizeBreakdown)
