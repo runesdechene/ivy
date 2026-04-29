@@ -192,7 +192,7 @@ export function AddContainerModal({ opened, onClose, shopId, locationId, existin
                 value={form.columns}
                 onChange={(v) => setForm({ ...form, columns: typeof v === 'number' ? v : 1 })}
                 min={1}
-                max={5}
+                max={8}
                 styles={inputStyles}
               />
             </Group>

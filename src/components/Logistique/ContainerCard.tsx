@@ -3,9 +3,9 @@
 import { useMemo } from 'react';
 import clsx from 'clsx';
 import { ActionIcon, Menu, Tooltip } from '@mantine/core';
-import { IconDots, IconTrash } from '@tabler/icons-react';
+import { IconDots, IconPencil, IconTrash } from '@tabler/icons-react';
 import type { ContainerInstance } from '@/hooks/useContainers';
-import { useDeleteContainer } from '@/hooks/useContainers';
+import { useDeleteContainer, useRenameContainer } from '@/hooks/useContainers';
 import { compareSizes } from '@/utils/size-helpers';
 import styles from './ContainerCard.module.scss';
 
@@ -109,6 +109,7 @@ function distributeBalanced(
 export function ContainerCard({ instance, onAssign, sortMode = 'color' }: Props) {
   const { type, fill, variants, products } = instance;
   const deleteMut = useDeleteContainer();
+  const renameMut = useRenameContainer();
 
   const cols = Math.max(1, type.columns ?? 1);
   const colCapacity = type.max_capacity / cols;
@@ -127,9 +128,17 @@ export function ContainerCard({ instance, onAssign, sortMode = 'color' }: Props)
     onAssign();
   };
 
+  const displayName = instance.name?.trim() || type.name;
+
   const handleDelete = async () => {
-    if (!confirm(`Retirer cette caisse "${type.name}" ?`)) return;
+    if (!confirm(`Retirer cette caisse "${displayName}" ?`)) return;
     await deleteMut.mutateAsync(instance.id);
+  };
+
+  const handleRename = async () => {
+    const next = window.prompt('Nom de la caisse (vide = nom du type) :', instance.name ?? '');
+    if (next === null) return;
+    await renameMut.mutateAsync({ id: instance.id, name: next.trim() || null });
   };
 
   return (
@@ -232,6 +241,9 @@ export function ContainerCard({ instance, onAssign, sortMode = 'color' }: Props)
               </ActionIcon>
             </Menu.Target>
             <Menu.Dropdown>
+              <Menu.Item leftSection={<IconPencil size={14} />} onClick={handleRename}>
+                Renommer
+              </Menu.Item>
               <Menu.Item
                 leftSection={<IconTrash size={14} />}
                 color="red"
@@ -245,7 +257,10 @@ export function ContainerCard({ instance, onAssign, sortMode = 'color' }: Props)
       </div>
 
       <div className={styles.footer}>
-        <span className={styles.title}>{type.name}</span>
+        <span className={styles.title}>{displayName}</span>
+        {instance.name && (
+          <span className={styles.subtitle}>{type.name}</span>
+        )}
         {products.length > 0 ? (
           <span className={styles.products}>
             {products.map((p) => p.title).join(' · ')}

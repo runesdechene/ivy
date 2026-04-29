@@ -12,6 +12,7 @@ type VariantInfo = {
 
 type InstanceResp = {
   id: string;
+  name: string | null;
   type: {
     id: string;
     name: string;
@@ -80,6 +81,7 @@ export async function GET(req: NextRequest) {
     .from('container_instances')
     .select(`
       id,
+      name,
       type:container_types(id, name, max_capacity, empty_weight_g, ratio_w, ratio_h, columns),
       affectations:container_instance_products(
         product:products(id, title, image_url, illustration_url, option1_name, option2_name, option3_name)
@@ -150,6 +152,7 @@ export async function GET(req: NextRequest) {
 
     result.push({
       id: inst.id,
+      name: inst.name ?? null,
       type: {
         id: type.id,
         name: type.name,

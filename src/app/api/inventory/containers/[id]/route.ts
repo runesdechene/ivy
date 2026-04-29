@@ -8,3 +8,29 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ success: true });
 }
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const body = await req.json();
+  const supabase = createServerClient();
+
+  const updates: Record<string, unknown> = {};
+  if (body.name !== undefined) {
+    const trimmed = typeof body.name === 'string' ? body.name.trim() : '';
+    updates.name = trimmed.length > 0 ? trimmed : null;
+  }
+  if (body.position !== undefined) updates.position = body.position;
+
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json({ error: 'no fields to update' }, { status: 400 });
+  }
+
+  const { data, error } = await supabase
+    .from('container_instances')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ instance: data });
+}

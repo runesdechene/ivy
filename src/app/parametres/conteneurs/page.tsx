@@ -227,11 +227,11 @@ export default function ConteneursPage() {
             />
             <NumberInput
               label="Compartiments"
-              description="Divisions visuelles (1-3)"
+              description="Divisions visuelles (1-8)"
               value={form.columns}
               onChange={(v) => setForm({ ...form, columns: typeof v === 'number' ? v : 1 })}
               min={1}
-              max={5}
+              max={8}
               styles={{ input: { backgroundColor: 'var(--cream)', borderColor: 'var(--divider)' } }}
             />
           </Group>

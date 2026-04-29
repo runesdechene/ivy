@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export type ContainerInstance = {
   id: string;
+  name: string | null;
   type: {
     id: string;
     name: string;
@@ -54,6 +55,21 @@ export function useDeleteContainer() {
     mutationFn: async (id: string) => {
       const r = await fetch(`/api/inventory/containers/${id}`, { method: 'DELETE' });
       if (!r.ok) throw new Error((await r.json()).error || 'delete failed');
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['containers'] }),
+  });
+}
+
+export function useRenameContainer() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string | null }) => {
+      const r = await fetch(`/api/inventory/containers/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (!r.ok) throw new Error((await r.json()).error || 'rename failed');
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['containers'] }),
   });
