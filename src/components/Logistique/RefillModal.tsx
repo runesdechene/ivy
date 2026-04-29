@@ -117,6 +117,17 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
   );
   const submitDisabled = totalAdded === 0 || submit.isPending;
 
+  const windowShortLabel = useMemo(() => {
+    if (windowParam === '7d') return '7j';
+    if (windowParam === '30d') return '30j';
+    if (windowParam === 'all') return 'tout';
+    if (windowParam === 'zone') {
+      const zone = zones.find((z) => z.id === zoneId);
+      return zone?.name || 'zone';
+    }
+    return '';
+  }, [windowParam, zoneId, zones]);
+
   const handleQty = (variantId: string, value: number) => {
     setAdjustedQty((prev) => {
       const m = new Map(prev);
@@ -302,7 +313,6 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
                       {p.variants.map((v) => {
                         const qty = adjustedQty.get(v.variantId) ?? 0;
                         const muted = qty === 0;
-                        const hasSuggestion = v.suggestedQty > 0;
                         return (
                           <tr
                             key={v.variantId}
@@ -317,9 +327,9 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
                                   />
                                 )}
                                 <span>{v.title}</span>
-                                {hasSuggestion && (
-                                  <Badge size="xs" color="orange" variant="light">
-                                    Suggéré
+                                {v.soldInWindow > 0 && (
+                                  <Badge size="xs" color="teal" variant="light">
+                                    {v.soldInWindow} / {windowShortLabel}
                                   </Badge>
                                 )}
                                 {v.sku && <span className={styles.sku}>{v.sku}</span>}
@@ -329,11 +339,11 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
                             <td>{v.soldInWindow}</td>
                             <td>
                               <div className={styles.stepper}>
-                                <Tooltip label="−5">
+                                <Tooltip label="−1">
                                   <ActionIcon
                                     variant="subtle"
                                     size="sm"
-                                    onClick={() => handleQty(v.variantId, qty - 5)}
+                                    onClick={() => handleQty(v.variantId, qty - 1)}
                                   >
                                     <IconMinus size={12} />
                                   </ActionIcon>
@@ -348,11 +358,11 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
                                   }
                                   className={styles.qtyInput}
                                 />
-                                <Tooltip label="+5">
+                                <Tooltip label="+1">
                                   <ActionIcon
                                     variant="subtle"
                                     size="sm"
-                                    onClick={() => handleQty(v.variantId, qty + 5)}
+                                    onClick={() => handleQty(v.variantId, qty + 1)}
                                   >
                                     <IconPlus size={12} />
                                   </ActionIcon>

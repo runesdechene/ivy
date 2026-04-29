@@ -24,40 +24,31 @@ function hamiltonRound(rawTargets: number[], total: number): number[] {
 }
 
 /**
- * Top-up à la capacité au prorata des sorties (Hamilton method).
+ * Suggestion = remplacer ce qu'on a vendu sur la fenêtre.
  *
- * - Si totalSold === 0 → suggestions = 0 partout (pas de fallback équiprobable :
- *   l'utilisateur ajuste manuellement ou élargit la fenêtre côté UI).
- * - Σ targetQty === maxCapacity quand totalSold > 0.
- * - Σ suggestedQty ≤ max(0, maxCapacity − Σ currentInBox), via scaling Hamilton
- *   sur le budget disponible quand les gaps cumulés excèdent ce budget.
- *   Évite que les variants surstockés "relâchent" du quota qui ferait
- *   dépasser la capacité ailleurs.
+ * - target_v = soldInWindow (ce qu'on a écoulé sur la fenêtre)
+ * - suggested_v = max(0, target_v − currentInBox)
+ * - Si Σ suggested > budget (max_capacity − Σ current), on scale proportionnellement
+ *   via Hamilton pour que la suggestion par défaut tienne dans la caisse.
+ *   L'utilisateur peut toujours sur-commander manuellement après coup.
+ *
+ * Pas de fallback équiprobable, pas de prorata sur la capacité : si une variante
+ * n'a rien vendu, on suggère 0. Réaliste et prévisible.
  */
 export function computeRefillSuggestions(
   variants: VariantInput[],
   maxCapacity: number,
 ): VariantSuggestion[] {
-  if (variants.length === 0 || maxCapacity <= 0) {
-    return variants.map((v) => ({ ...v, targetQty: 0, suggestedQty: 0 }));
-  }
+  if (variants.length === 0) return [];
 
-  const totalSold = variants.reduce((sum, v) => sum + v.soldInWindow, 0);
-
-  if (totalSold === 0) {
-    return variants.map((v) => ({ ...v, targetQty: 0, suggestedQty: 0 }));
-  }
-
-  const rawTargets = variants.map((v) => (v.soldInWindow / totalSold) * maxCapacity);
-  const targets = hamiltonRound(rawTargets, maxCapacity);
-
+  const targets = variants.map((v) => v.soldInWindow);
   const gaps = variants.map((v, i) => Math.max(0, targets[i] - v.currentInBox));
   const totalGap = gaps.reduce((s, n) => s + n, 0);
+
   const sumCurrent = variants.reduce((s, v) => s + v.currentInBox, 0);
   const budget = Math.max(0, maxCapacity - sumCurrent);
 
   let suggested: number[];
-
   if (totalGap === 0 || budget === 0) {
     suggested = variants.map(() => 0);
   } else if (totalGap <= budget) {

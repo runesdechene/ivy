@@ -1,4 +1,4 @@
-// Sanity check Hamilton math (mirror of src/utils/refill-math.ts in plain JS)
+// Sanity check replacement-based math (mirror of src/utils/refill-math.ts)
 
 function hamiltonRound(rawTargets, total) {
   const floors = rawTargets.map((t) => Math.floor(t));
@@ -15,16 +15,8 @@ function hamiltonRound(rawTargets, total) {
 }
 
 function computeRefillSuggestions(variants, maxCapacity) {
-  if (variants.length === 0 || maxCapacity <= 0) {
-    return variants.map((v) => ({ ...v, targetQty: 0, suggestedQty: 0 }));
-  }
-  const totalSold = variants.reduce((sum, v) => sum + v.soldInWindow, 0);
-  if (totalSold === 0) {
-    return variants.map((v) => ({ ...v, targetQty: 0, suggestedQty: 0 }));
-  }
-  const rawTargets = variants.map((v) => (v.soldInWindow / totalSold) * maxCapacity);
-  const targets = hamiltonRound(rawTargets, maxCapacity);
-
+  if (variants.length === 0) return [];
+  const targets = variants.map((v) => v.soldInWindow);
   const gaps = variants.map((v, i) => Math.max(0, targets[i] - v.currentInBox));
   const totalGap = gaps.reduce((s, n) => s + n, 0);
   const sumCurrent = variants.reduce((s, v) => s + v.currentInBox, 0);
@@ -48,133 +40,119 @@ function computeRefillSuggestions(variants, maxCapacity) {
 }
 
 let allOk = true;
-
 function expect(label, pred, extra) {
   console.log(`${pred ? '✓' : '✗'} ${label}${extra ? ' — ' + extra : ''}`);
   if (!pred) allOk = false;
-  return pred;
 }
 
-// A — prorata simple (totalSold > 0, gaps fit budget)
+// A — replacement simple : suggestion = sold − current
 {
   const r = computeRefillSuggestions(
     [
-      { variantId: 'a', soldInWindow: 50, currentInBox: 5 },
-      { variantId: 'b', soldInWindow: 30, currentInBox: 0 },
-      { variantId: 'c', soldInWindow: 20, currentInBox: 10 },
+      { variantId: 'a', soldInWindow: 5, currentInBox: 0 },
+      { variantId: 'b', soldInWindow: 3, currentInBox: 1 },
+      { variantId: 'c', soldInWindow: 0, currentInBox: 0 },
     ],
     70,
   );
-  const sumT = r.reduce((s, v) => s + v.targetQty, 0);
-  const sumS = r.reduce((s, v) => s + v.suggestedQty, 0);
-  const sumCurrent = 15;
-  const budget = 70 - sumCurrent;
-  expect('A - Σ target = 70', sumT === 70);
-  expect('A - Σ suggested ≤ budget (55)', sumS <= budget, `got ${sumS}`);
-  expect('A - final ≤ capacity', sumCurrent + sumS <= 70, `got ${sumCurrent + sumS}`);
+  expect('A1 - sold=5 current=0 → suggested=5', r[0].suggestedQty === 5);
+  expect('A2 - sold=3 current=1 → suggested=2', r[1].suggestedQty === 2);
+  expect('A3 - sold=0 → suggested=0', r[2].suggestedQty === 0);
 }
 
-// B — totalSold == 0 (PAS de fallback équiprobable, tout 0)
+// B — totalSold == 0 → tout 0
 {
   const r = computeRefillSuggestions(
     [
       { variantId: 'a', soldInWindow: 0, currentInBox: 0 },
       { variantId: 'b', soldInWindow: 0, currentInBox: 0 },
-      { variantId: 'c', soldInWindow: 0, currentInBox: 0 },
     ],
     70,
   );
-  expect(
-    'B - tout 0 quand totalSold = 0',
-    r.every((v) => v.targetQty === 0 && v.suggestedQty === 0),
-  );
+  expect('B - all 0 quand aucune sortie', r.every((v) => v.suggestedQty === 0));
 }
 
-// C — N=0
-{
-  const r = computeRefillSuggestions([], 70);
-  expect('C - empty input → empty output', r.length === 0);
-}
+// C — empty
+expect('C - empty input → empty', computeRefillSuggestions([], 70).length === 0);
 
-// D — capacity 0
-{
-  const r = computeRefillSuggestions([{ variantId: 'a', soldInWindow: 5, currentInBox: 0 }], 0);
-  expect('D - capacity 0 → all 0', r.every((v) => v.targetQty === 0 && v.suggestedQty === 0));
-}
-
-// E — 7 variants dispersés, gaps fit budget
+// D — variant overstocké relatif à ses ventes, caisse pas encore pleine
 {
   const r = computeRefillSuggestions(
     [
-      { variantId: 'a', soldInWindow: 17, currentInBox: 2 },
-      { variantId: 'b', soldInWindow: 23, currentInBox: 0 },
-      { variantId: 'c', soldInWindow: 11, currentInBox: 5 },
-      { variantId: 'd', soldInWindow: 5, currentInBox: 1 },
-      { variantId: 'e', soldInWindow: 9, currentInBox: 0 },
-      { variantId: 'f', soldInWindow: 31, currentInBox: 8 },
-      { variantId: 'g', soldInWindow: 4, currentInBox: 3 },
+      { variantId: 'a', soldInWindow: 5, currentInBox: 20 }, // overstocked relativement
+      { variantId: 'b', soldInWindow: 10, currentInBox: 0 },
+    ],
+    70,
+  );
+  // sumCurrent = 20, budget = 50
+  // gap_a = max(0, 5-20) = 0
+  // gap_b = max(0, 10-0) = 10
+  // totalGap = 10 ≤ budget → use as-is
+  expect('D - overstocké → suggested 0', r[0].suggestedQty === 0);
+  expect('D - other variant gets full replacement', r[1].suggestedQty === 10);
+}
+
+// E — réaliste : 30j sur 7 variants, ventes raisonnables
+{
+  const r = computeRefillSuggestions(
+    [
+      { variantId: 'a', soldInWindow: 5, currentInBox: 2 },
+      { variantId: 'b', soldInWindow: 8, currentInBox: 0 },
+      { variantId: 'c', soldInWindow: 3, currentInBox: 5 },
+      { variantId: 'd', soldInWindow: 1, currentInBox: 1 },
+      { variantId: 'e', soldInWindow: 4, currentInBox: 0 },
+      { variantId: 'f', soldInWindow: 7, currentInBox: 8 },
+      { variantId: 'g', soldInWindow: 0, currentInBox: 3 },
     ],
     100,
   );
-  const sumT = r.reduce((s, v) => s + v.targetQty, 0);
+  // Each variant gets max(0, sold - current)
+  // a: 3, b: 8, c: 0 (current >= sold), d: 0, e: 4, f: 0, g: 0
+  expect('E - a: max(0, 5-2)=3', r[0].suggestedQty === 3);
+  expect('E - b: max(0, 8-0)=8', r[1].suggestedQty === 8);
+  expect('E - c: max(0, 3-5)=0', r[2].suggestedQty === 0);
+  expect('E - e: max(0, 4-0)=4', r[4].suggestedQty === 4);
+  expect('E - f: max(0, 7-8)=0', r[5].suggestedQty === 0);
   const sumS = r.reduce((s, v) => s + v.suggestedQty, 0);
-  const sumCurrent = r.reduce((s, v) => s + v.currentInBox, 0);
-  expect('E - Σ target = 100', sumT === 100);
-  expect('E - final ≤ capacity', sumCurrent + sumS <= 100, `final = ${sumCurrent + sumS}`);
+  expect('E - Σ suggestion = 15 (réaliste, pas inflation)', sumS === 15);
 }
 
-// F — overstocked variant → suggestion 0 sur ce variant
+// F — caisse déjà overflow → all 0
 {
   const r = computeRefillSuggestions(
     [
-      { variantId: 'a', soldInWindow: 50, currentInBox: 100 },
-      { variantId: 'b', soldInWindow: 50, currentInBox: 0 },
-    ],
-    20,
-  );
-  expect('F - overstocked variant → suggested 0', r[0].suggestedQty === 0);
-  expect('F - other variant gets 0 too (already over capacity)', r[1].suggestedQty === 0);
-}
-
-// G — cap-to-budget : variant surstocké relâche du quota mais ne fait pas exploser
-// les autres au-delà du budget disponible.
-// A overstocked (current 50, target 20), B at 0 (target 50). Sans cap, B aurait
-// suggested = 50, mais sum_current = 50 → budget = 20. Suggestions doivent rester ≤ 20.
-{
-  const r = computeRefillSuggestions(
-    [
-      { variantId: 'a', soldInWindow: 20, currentInBox: 50 },
-      { variantId: 'b', soldInWindow: 50, currentInBox: 0 },
+      { variantId: 'a', soldInWindow: 5, currentInBox: 80 },
+      { variantId: 'b', soldInWindow: 5, currentInBox: 0 },
     ],
     70,
   );
-  const sumS = r.reduce((s, v) => s + v.suggestedQty, 0);
-  const sumCurrent = 50;
-  const budget = 20;
-  expect('G - Σ suggested ≤ budget (cap au budget disponible)', sumS <= budget, `got ${sumS}/${budget}`);
-  expect('G - final ≤ capacity', sumCurrent + sumS <= 70, `final = ${sumCurrent + sumS}`);
-  expect('G - A (surstocké) → 0', r[0].suggestedQty === 0);
-  expect('G - B reçoit le budget complet', r[1].suggestedQty === 20);
+  expect('F - over capacity → all 0', r.every((v) => v.suggestedQty === 0));
 }
 
-// H — caisse déjà au-dessus de la capacité
+// G — Σ gaps > budget → scale au budget via Hamilton
 {
   const r = computeRefillSuggestions(
     [
-      { variantId: 'a', soldInWindow: 50, currentInBox: 80 },
-      { variantId: 'b', soldInWindow: 50, currentInBox: 0 },
+      { variantId: 'a', soldInWindow: 30, currentInBox: 0 }, // gap 30
+      { variantId: 'b', soldInWindow: 20, currentInBox: 0 }, // gap 20
     ],
-    70,
+    40,
   );
   const sumS = r.reduce((s, v) => s + v.suggestedQty, 0);
-  expect('H - caisse déjà overflow → toutes suggestions 0', sumS === 0);
+  expect('G - sum gaps=50 > budget=40 → scale au budget', sumS === 40);
+  expect('G - prorata: a~24, b~16', r[0].suggestedQty === 24 && r[1].suggestedQty === 16);
 }
 
-// I — un seul variant, données réalistes
+// H — budget large, suggestions tiennent → pas de scale
 {
-  const r = computeRefillSuggestions([{ variantId: 'a', soldInWindow: 25, currentInBox: 10 }], 40);
-  expect('I - single variant target = capacity', r[0].targetQty === 40);
-  expect('I - suggested = capacity − current', r[0].suggestedQty === 30);
+  const r = computeRefillSuggestions(
+    [
+      { variantId: 'a', soldInWindow: 3, currentInBox: 0 },
+      { variantId: 'b', soldInWindow: 4, currentInBox: 0 },
+    ],
+    100,
+  );
+  expect('H - sum gaps=7 ≤ budget=100 → use gaps as-is', r[0].suggestedQty === 3 && r[1].suggestedQty === 4);
 }
 
 console.log(allOk ? '\nAll checks passed.' : '\nSome checks failed.');
