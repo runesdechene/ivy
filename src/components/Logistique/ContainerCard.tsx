@@ -247,7 +247,11 @@ export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color'
         {instance.name && (
           <span className={styles.subtitle}>{type.name}</span>
         )}
-        {products.length > 0 ? (
+        {(instance.filter_product_type || instance.filter_size) ? (
+          <span className={clsx(styles.products, styles.filter)}>
+            Filtre · {[instance.filter_product_type, instance.filter_size].filter(Boolean).join(' · ')}
+          </span>
+        ) : products.length > 0 ? (
           <span className={styles.products}>
             {products.map((p) => p.title).join(' · ')}
           </span>

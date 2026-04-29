@@ -10,9 +10,18 @@ type VariantInfo = {
   qty: number;
 };
 
+type ProductInfo = {
+  id: string;
+  title: string;
+  image_url: string | null;
+  illustration_url: string | null;
+};
+
 type InstanceResp = {
   id: string;
   name: string | null;
+  filter_product_type: string | null;
+  filter_size: string | null;
   type: {
     id: string;
     name: string;
@@ -22,7 +31,7 @@ type InstanceResp = {
     ratio_h: number;
     columns: number;
   };
-  products: { id: string; title: string; image_url: string | null; illustration_url: string | null }[];
+  products: ProductInfo[];
   fill: { units: number; pct: number; weight_g: number | null };
   variants: VariantInfo[];
 };
@@ -82,6 +91,8 @@ export async function GET(req: NextRequest) {
     .select(`
       id,
       name,
+      filter_product_type,
+      filter_size,
       type:container_types(id, name, max_capacity, empty_weight_g, ratio_w, ratio_h, columns),
       affectations:container_instance_products(
         product:products(id, title, image_url, illustration_url, option1_name, option2_name, option3_name)
@@ -96,53 +107,76 @@ export async function GET(req: NextRequest) {
   const result: InstanceResp[] = [];
 
   for (const inst of (instances ?? []) as any[]) {
-    const products = (inst.affectations ?? [])
-      .map((a: any) => a.product)
-      .filter(Boolean);
-    const productIds = products.map((p: any) => p.id);
+    const isFilterMode = !!(inst.filter_product_type || inst.filter_size);
+
+    // 1) Résoudre la liste des produits candidats selon le mode
+    let resolvedProducts: any[] = [];
+    if (isFilterMode) {
+      let q = supabase
+        .from('products')
+        .select(`
+          id, title, image_url, illustration_url,
+          option1_name, option2_name, option3_name
+        `)
+        .eq('shop_id', shopId);
+      if (inst.filter_product_type) {
+        q = q.eq('product_type', inst.filter_product_type);
+      }
+      const { data, error } = await q;
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      resolvedProducts = data ?? [];
+    } else {
+      resolvedProducts = (inst.affectations ?? [])
+        .map((a: any) => a.product)
+        .filter(Boolean);
+    }
+
+    const productIds = resolvedProducts.map((p: any) => p.id);
+    const productById = new Map(resolvedProducts.map((p: any) => [p.id, p]));
 
     const variants: VariantInfo[] = [];
+    const productIdsWithStock = new Set<string>();
     let units = 0;
 
     if (productIds.length > 0) {
-      const { data: prodWithVariants, error: vErr } = await supabase
-        .from('products')
+      const { data: variantsRaw, error: vErr } = await supabase
+        .from('product_variants')
         .select(`
           id,
-          option1_name,
-          option2_name,
-          option3_name,
-          variants:product_variants(
-            id,
-            title,
-            option1,
-            option2,
-            option3,
-            inventory_levels(quantity, location_id)
-          )
+          title,
+          option1,
+          option2,
+          option3,
+          product_id,
+          inventory_levels(quantity, location_id)
         `)
-        .in('id', productIds);
+        .in('product_id', productIds);
 
       if (vErr) return NextResponse.json({ error: vErr.message }, { status: 500 });
 
-      for (const p of (prodWithVariants ?? []) as any[]) {
-        for (const v of (p.variants ?? []) as any[]) {
-          const lvl = (v.inventory_levels ?? []).find(
-            (l: any) => String(l.location_id) === String(locationId),
-          );
-          const qty = Math.max(0, lvl?.quantity ?? 0);
-          if (qty <= 0) continue;
-          const color = extractColor(v, p);
-          variants.push({
-            id: v.id,
-            title: v.title,
-            color,
-            color_hex: resolveHex(color),
-            size: extractSize(v, p),
-            qty,
-          });
-          units += qty;
-        }
+      for (const v of (variantsRaw ?? []) as any[]) {
+        const p: any = productById.get(v.product_id);
+        if (!p) continue;
+        const lvl = (v.inventory_levels ?? []).find(
+          (l: any) => String(l.location_id) === String(locationId),
+        );
+        const qty = Math.max(0, lvl?.quantity ?? 0);
+        if (qty <= 0) continue;
+        const size = extractSize(v, p);
+        // En mode filtre avec filter_size renseigné, on ne garde que les
+        // variants dont la taille extraite matche.
+        if (isFilterMode && inst.filter_size && size !== inst.filter_size) continue;
+        const color = extractColor(v, p);
+        variants.push({
+          id: v.id,
+          title: v.title,
+          color,
+          color_hex: resolveHex(color),
+          size,
+          qty,
+        });
+        productIdsWithStock.add(v.product_id);
+        units += qty;
       }
     }
 
@@ -150,9 +184,18 @@ export async function GET(req: NextRequest) {
     const max = type?.max_capacity ?? 1;
     const pct = Math.min(100, Math.round((units / max) * 100));
 
+    // En mode filtre on n'affiche dans products[] que ceux qui ont effectivement
+    // contribué des variants (sinon une caisse "size=M" listerait tous les produits
+    // du shop, y compris ceux sans variant M en stock).
+    const productsToShow = isFilterMode
+      ? resolvedProducts.filter((p: any) => productIdsWithStock.has(p.id))
+      : resolvedProducts;
+
     result.push({
       id: inst.id,
       name: inst.name ?? null,
+      filter_product_type: inst.filter_product_type ?? null,
+      filter_size: inst.filter_size ?? null,
       type: {
         id: type.id,
         name: type.name,
@@ -162,7 +205,7 @@ export async function GET(req: NextRequest) {
         ratio_h: type.ratio_h,
         columns: type.columns ?? 1,
       },
-      products: products.map((p: any) => ({
+      products: productsToShow.map((p: any) => ({
         id: p.id,
         title: p.title,
         image_url: p.image_url ?? null,

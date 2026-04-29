@@ -20,6 +20,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     updates.name = trimmed.length > 0 ? trimmed : null;
   }
   if (body.position !== undefined) updates.position = body.position;
+  if (body.filter_product_type !== undefined) {
+    const v = typeof body.filter_product_type === 'string' ? body.filter_product_type.trim() : null;
+    updates.filter_product_type = v && v.length > 0 ? v : null;
+  }
+  if (body.filter_size !== undefined) {
+    const v = typeof body.filter_size === 'string' ? body.filter_size.trim() : null;
+    updates.filter_size = v && v.length > 0 ? v : null;
+  }
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: 'no fields to update' }, { status: 400 });

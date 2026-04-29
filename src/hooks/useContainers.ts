@@ -5,6 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 export type ContainerInstance = {
   id: string;
   name: string | null;
+  filter_product_type: string | null;
+  filter_size: string | null;
   type: {
     id: string;
     name: string;
@@ -111,6 +113,42 @@ export function useSetContainerProducts() {
       if (!r.ok) throw new Error((await r.json()).error || 'set products failed');
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['containers'] }),
+  });
+}
+
+export function useSetContainerFilters() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      filter_product_type,
+      filter_size,
+    }: {
+      id: string;
+      filter_product_type: string | null;
+      filter_size: string | null;
+    }) => {
+      const r = await fetch(`/api/inventory/containers/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filter_product_type, filter_size }),
+      });
+      if (!r.ok) throw new Error((await r.json()).error || 'set filters failed');
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['containers'] }),
+  });
+}
+
+export function useProductTypes(shopId: string | undefined) {
+  return useQuery<string[]>({
+    queryKey: ['product-types', shopId],
+    enabled: !!shopId,
+    queryFn: async () => {
+      const r = await fetch(`/api/inventory/products/types?shopId=${shopId}`);
+      if (!r.ok) throw new Error('fetch types failed');
+      const d = await r.json();
+      return d.types as string[];
+    },
   });
 }
 

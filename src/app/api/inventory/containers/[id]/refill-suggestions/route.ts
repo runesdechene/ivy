@@ -55,6 +55,7 @@ export async function GET(
     .from('container_instances')
     .select(`
       id, shop_id, location_id, name,
+      filter_product_type, filter_size,
       type:container_types(id, name, max_capacity)
     `)
     .eq('id', containerId)
@@ -65,6 +66,7 @@ export async function GET(
   }
   const type = Array.isArray(container.type) ? container.type[0] : container.type;
   const containerName = container.name?.trim() || type.name;
+  const isFilterMode = !!(container.filter_product_type || container.filter_size);
 
   const { data: colorRules } = await supabase
     .from('color_rules')
@@ -79,19 +81,32 @@ export async function GET(
   const resolveHex = (color: string | null): string | null =>
     color ? colorHexMap.get(color.toLowerCase().trim()) || null : null;
 
-  const { data: cipRows } = await supabase
-    .from('container_instance_products')
-    .select(`
-      product:products(
-        id, title, status,
-        option1_name, option2_name, option3_name
-      )
-    `)
-    .eq('container_instance_id', containerId);
-
-  const products = (cipRows ?? [])
-    .map((r: any) => r.product)
-    .filter(Boolean);
+  // Résoudre les produits selon le mode (filtre ou affectation explicite).
+  let products: any[] = [];
+  if (isFilterMode) {
+    let q = supabase
+      .from('products')
+      .select('id, title, status, option1_name, option2_name, option3_name')
+      .eq('shop_id', container.shop_id);
+    if (container.filter_product_type) {
+      q = q.eq('product_type', container.filter_product_type);
+    }
+    const { data } = await q;
+    products = data ?? [];
+  } else {
+    const { data: cipRows } = await supabase
+      .from('container_instance_products')
+      .select(`
+        product:products(
+          id, title, status,
+          option1_name, option2_name, option3_name
+        )
+      `)
+      .eq('container_instance_id', containerId);
+    products = (cipRows ?? [])
+      .map((r: any) => r.product)
+      .filter(Boolean);
+  }
   const productIds = products.map((p: any) => p.id);
 
   if (productIds.length === 0) {
@@ -111,12 +126,21 @@ export async function GET(
     `)
     .in('product_id', productIds);
 
-  // On garde TOUTES les variantes des produits affectés (pas de filtre
-  // shopify_active) pour que le total currentInBox du modal matche celui
-  // affiché sur la card extérieure. Une variante archivée mais avec du stock
-  // doit apparaître pour ne pas sous-compter le remplissage de la caisse.
+  // On garde TOUTES les variantes des produits candidats (pas de filtre
+  // shopify_active côté serveur) pour que le total currentInBox du modal
+  // matche celui affiché sur la card extérieure.
+  // En mode filtre avec filter_size renseigné, on filtre les variants dont
+  // la taille extraite ne matche pas — cohérent avec la card.
   const productById = new Map(products.map((p: any) => [p.id, p]));
-  const variants = variantsRaw ?? [];
+  const allVariants = variantsRaw ?? [];
+  const variants = (isFilterMode && container.filter_size)
+    ? allVariants.filter((v: any) => {
+        const p: any = productById.get(v.product_id);
+        if (!p) return false;
+        const size = extractByOptionName(v, p, SIZE_OPTION_NAMES);
+        return size === container.filter_size;
+      })
+    : allVariants;
   const variantIds = variants.map((v: any) => v.id);
 
   if (variantIds.length === 0) {
