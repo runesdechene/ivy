@@ -220,17 +220,25 @@ export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color'
                       </span>
                     )}
                     <div className={styles.sectionStripes}>
-                      {sec.items.flatMap((v) => {
+                      {sec.items.flatMap((v, vIdx) => {
                         const tip = `${v.color || ''} ${v.size || ''} — ${v.qty}`.trim();
                         const bg = colorToCss(v.color_hex);
-                        return Array.from({ length: v.qty }).map((_, i) => (
-                          <Tooltip key={`${v.id}-${i}`} label={tip} withArrow>
-                            <div
-                              className={styles.block}
-                              style={{ flexGrow: 1, background: bg }}
-                            />
-                          </Tooltip>
-                        ));
+                        const isLastVariantInSection = vIdx === sec.items.length - 1;
+                        return Array.from({ length: v.qty }).map((_, i) => {
+                          const isVariantBoundary =
+                            i === v.qty - 1 && !isLastVariantInSection;
+                          return (
+                            <Tooltip key={`${v.id}-${i}`} label={tip} withArrow>
+                              <div
+                                className={clsx(
+                                  styles.block,
+                                  isVariantBoundary && styles.variantBoundary,
+                                )}
+                                style={{ flexGrow: 1, background: bg }}
+                              />
+                            </Tooltip>
+                          );
+                        });
                       })}
                     </div>
                   </div>

@@ -166,6 +166,10 @@ $unit: 140px;
   }
 }
 
+.variantBoundary {
+  border-bottom: 2px solid rgba(0, 0, 0, 0.42);
+}
+
 .stats {
   display: flex;
   align-items: center;
