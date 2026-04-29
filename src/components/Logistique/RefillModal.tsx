@@ -407,9 +407,10 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
                                   min={0}
                                   hideControls
                                   value={qty}
-                                  onChange={(val) =>
-                                    handleQty(v.variantId, typeof val === 'number' ? val : 0)
-                                  }
+                                  onChange={(val) => {
+                                    const n = typeof val === 'number' ? val : Number(val);
+                                    handleQty(v.variantId, Number.isFinite(n) ? n : 0);
+                                  }}
                                   className={styles.qtyInput}
                                 />
                                 <Tooltip label="+1">
