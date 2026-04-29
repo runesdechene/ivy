@@ -14,6 +14,7 @@ export interface RefillVariant {
   soldInWindow: number;
   soldLifetime: number;
   pendingInOrder: number;
+  pendingInDrafts: number;
   suggestedQty: number;
 }
 
@@ -86,9 +87,10 @@ export interface RefillSubmitInput {
 }
 
 export interface RefillSubmitResponse {
-  orderId: string;
-  orderNumber: string;
+  orderId: string | null;
+  orderNumber: string | null;
   unitsAdded: number;
+  unitsRemoved: number;
   variantsAdded: number;
   errors?: Array<{ variantId: string; reason: string }>;
 }

@@ -33,11 +33,13 @@ export async function POST(
       l &&
       typeof l.variantId === 'string' &&
       typeof l.quantity === 'number' &&
-      l.quantity > 0,
+      l.quantity !== 0,
   );
   if (cleanLines.length === 0) {
-    return NextResponse.json({ error: 'Toutes les quantités sont à 0' }, { status: 400 });
+    return NextResponse.json({ error: 'Aucune ligne à traiter' }, { status: 400 });
   }
+  const positiveLines = cleanLines.filter((l) => l.quantity > 0);
+  const negativeLines = cleanLines.filter((l) => l.quantity < 0);
 
   const supabase = createServerClient();
 
@@ -51,9 +53,11 @@ export async function POST(
     return NextResponse.json({ error: 'Container not found' }, { status: 404 });
   }
 
-  // 2. Determine target supplier_order
-  let targetOrderId: string;
-  let targetOrderNumber: string;
+  // 2. Determine target supplier_order — uniquement si on a au moins 1 ajout.
+  //    Pour des retraits seuls (que des lignes négatives), inutile d'ouvrir
+  //    un nouveau brouillon vide.
+  let targetOrderId: string | null = null;
+  let targetOrderNumber: string | null = null;
 
   if (orderId) {
     const { data: existing } = await supabase
@@ -72,7 +76,7 @@ export async function POST(
     }
     targetOrderId = existing.id;
     targetOrderNumber = existing.order_number;
-  } else {
+  } else if (positiveLines.length > 0) {
     const { count } = await supabase
       .from('supplier_orders')
       .select('*', { count: 'exact', head: true })
@@ -97,12 +101,21 @@ export async function POST(
     targetOrderNumber = newOrder.order_number;
   }
 
+  // 2b. Charger tous les drafts du shop — utilisés pour les retraits, qui
+  //     peuvent toucher n'importe quelle commande draft (pas juste la cible).
+  const { data: allDraftOrders } = await supabase
+    .from('supplier_orders')
+    .select('id')
+    .eq('shop_id', shopId)
+    .eq('status', 'draft');
+  const allDraftOrderIds = (allDraftOrders ?? []).map((o: { id: string }) => o.id);
+
   // 3. Lookup variant info — cost, shopify_id, title (Shopify-formatted with " / "),
   //    sku, parent product title. Tout doit matcher exactement le format utilisé par
   //    POST /api/suppliers/orders/[orderId]/items (le flow standard d'ajout de
   //    produits) sinon le groupement par variantKey de la page commande casse et
   //    les variantes apparaissent en doublon.
-  const variantIds = cleanLines.map((l) => l.variantId);
+  const variantIds = positiveLines.map((l) => l.variantId);
   const { data: variantsInfo } = await supabase
     .from('product_variants')
     .select('id, sku, title, cost, shopify_id, product:products(title)')
@@ -116,14 +129,14 @@ export async function POST(
     shopifyId: string | null;
   };
   const variantInfoById = new Map<string, VariantInfo>();
-  for (const v of (variantsInfo ?? []) as Array<{
+  for (const v of ((variantsInfo ?? []) as Array<{
     id: string;
     sku: string | null;
     title: string | null;
     cost: number | null;
     shopify_id: string | null;
     product: { title?: string | null } | { title?: string | null }[] | null;
-  }>) {
+  }>)) {
     const product = Array.isArray(v.product) ? v.product[0] : v.product;
     variantInfoById.set(v.id, {
       sku: v.sku,
@@ -157,9 +170,8 @@ export async function POST(
     }
   }
 
-  // 5. Build per-unit rows (1 ligne = 1 unité, quantity toujours 1) — strictement
-  //    aligné avec l'endpoint standard. Permet le groupement correct côté page
-  //    commande de stock + le suivi unitaire (validation, impression, etc.).
+  // 5. Build per-unit rows pour les ajouts (positiveLines). 1 ligne = 1 unité,
+  //    quantity toujours 1 — strictement aligné avec l'endpoint /items standard.
   type ItemInsert = {
     order_id: string;
     variant_id: string;
@@ -175,76 +187,118 @@ export async function POST(
   const itemsToInsert: ItemInsert[] = [];
   const errors: Array<{ variantId: string; reason: string }> = [];
   let unitsAdded = 0;
+  let unitsRemoved = 0;
   const distinctVariants = new Set<string>();
 
-  for (const line of cleanLines) {
-    const info = variantInfoById.get(line.variantId);
-    if (!info) {
-      errors.push({ variantId: line.variantId, reason: 'Variant not found' });
-      continue;
+  if (targetOrderId) {
+    for (const line of positiveLines) {
+      const info = variantInfoById.get(line.variantId);
+      if (!info) {
+        errors.push({ variantId: line.variantId, reason: 'Variant not found' });
+        continue;
+      }
+      const metafields = info.shopifyId
+        ? variantMetafieldsMap[info.shopifyId] || {}
+        : {};
+      for (let i = 0; i < line.quantity; i++) {
+        itemsToInsert.push({
+          order_id: targetOrderId,
+          variant_id: line.variantId,
+          product_title: info.productTitle,
+          variant_title: info.variantTitle,
+          sku: info.sku,
+          quantity: 1,
+          unit_price: info.cost,
+          line_total: info.cost,
+          metafields,
+          is_validated: false,
+        });
+      }
+      unitsAdded += line.quantity;
+      distinctVariants.add(line.variantId);
     }
-    const metafields = info.shopifyId
-      ? variantMetafieldsMap[info.shopifyId] || {}
-      : {};
-    for (let i = 0; i < line.quantity; i++) {
-      itemsToInsert.push({
-        order_id: targetOrderId,
-        variant_id: line.variantId,
-        product_title: info.productTitle,
-        variant_title: info.variantTitle,
-        sku: info.sku,
-        quantity: 1,
-        unit_price: info.cost,
-        line_total: info.cost,
-        metafields,
-        is_validated: false,
-      });
+
+    if (itemsToInsert.length > 0) {
+      const { error: insErr } = await supabase
+        .from('supplier_order_items')
+        .insert(itemsToInsert);
+      if (insErr) {
+        console.error('refill insert items failed:', insErr);
+        return NextResponse.json({ error: insErr.message }, { status: 500 });
+      }
     }
-    unitsAdded += line.quantity;
-    distinctVariants.add(line.variantId);
   }
 
-  if (itemsToInsert.length > 0) {
-    const { error: insErr } = await supabase
+  // 6. Traiter les retraits (negativeLines) : pour chaque variant, supprimer
+  //    jusqu'à |quantity| rows depuis n'importe quelle commande draft du shop.
+  //    Limité à ce qui existe — donc pas d'erreur si l'utilisateur demande plus
+  //    que disponible (le NumberInput côté UI capait déjà à -pendingInDrafts).
+  const ordersAffected = new Set<string>();
+  if (targetOrderId) ordersAffected.add(targetOrderId);
+
+  if (negativeLines.length > 0 && allDraftOrderIds.length > 0) {
+    for (const line of negativeLines) {
+      const toRemove = Math.abs(line.quantity);
+      const { data: rowsToDelete } = await supabase
+        .from('supplier_order_items')
+        .select('id, order_id')
+        .in('order_id', allDraftOrderIds)
+        .eq('variant_id', line.variantId)
+        .limit(toRemove);
+      if (rowsToDelete && rowsToDelete.length > 0) {
+        const ids = rowsToDelete.map((r: { id: string }) => r.id);
+        const { error: delErr } = await supabase
+          .from('supplier_order_items')
+          .delete()
+          .in('id', ids);
+        if (delErr) {
+          errors.push({ variantId: line.variantId, reason: delErr.message });
+        } else {
+          unitsRemoved += rowsToDelete.length;
+          distinctVariants.add(line.variantId);
+          for (const r of rowsToDelete) {
+            if (r.order_id) ordersAffected.add(r.order_id);
+          }
+        }
+      }
+    }
+  }
+
+  // 7. Recompute order totals — pour TOUTES les commandes touchées (cible +
+  //    tout draft où on a supprimé des lignes).
+  for (const orderIdAffected of ordersAffected) {
+    const { data: allItems } = await supabase
       .from('supplier_order_items')
-      .insert(itemsToInsert);
-    if (insErr) {
-      console.error('refill insert items failed:', insErr);
-      return NextResponse.json({ error: insErr.message }, { status: 500 });
-    }
+      .select('line_total, is_validated')
+      .eq('order_id', orderIdAffected);
+    const subtotal =
+      allItems?.filter((i) => i.is_validated).reduce(
+        (sum, i) => sum + (Number(i.line_total) || 0),
+        0,
+      ) || 0;
+    const { data: orderRow } = await supabase
+      .from('supplier_orders')
+      .select('balance_adjustment')
+      .eq('id', orderIdAffected)
+      .single();
+    const balance = Number(orderRow?.balance_adjustment) || 0;
+    const totalHt = subtotal + balance;
+    await supabase
+      .from('supplier_orders')
+      .update({
+        subtotal,
+        total_ht: totalHt,
+        total_ttc: totalHt * 1.2,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', orderIdAffected);
   }
-
-  // 6. Recompute order totals (subtotal sur items validés uniquement)
-  const { data: allItems } = await supabase
-    .from('supplier_order_items')
-    .select('line_total, is_validated')
-    .eq('order_id', targetOrderId);
-  const subtotal =
-    allItems?.filter((i) => i.is_validated).reduce(
-      (sum, i) => sum + (Number(i.line_total) || 0),
-      0,
-    ) || 0;
-  const { data: orderRow } = await supabase
-    .from('supplier_orders')
-    .select('balance_adjustment')
-    .eq('id', targetOrderId)
-    .single();
-  const balance = Number(orderRow?.balance_adjustment) || 0;
-  const totalHt = subtotal + balance;
-  await supabase
-    .from('supplier_orders')
-    .update({
-      subtotal,
-      total_ht: totalHt,
-      total_ttc: totalHt * 1.2,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', targetOrderId);
 
   return NextResponse.json({
     orderId: targetOrderId,
     orderNumber: targetOrderNumber,
     unitsAdded,
+    unitsRemoved,
     variantsAdded: distinctVariants.size,
     errors: errors.length > 0 ? errors : undefined,
   });

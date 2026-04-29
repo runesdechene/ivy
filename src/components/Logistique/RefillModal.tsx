@@ -69,9 +69,10 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
   const [chosenOrderId, setChosenOrderId] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<{
-    orderId: string;
-    orderNumber: string;
+    orderId: string | null;
+    orderNumber: string | null;
     unitsAdded: number;
+    unitsRemoved: number;
     variantsAdded: number;
   } | null>(null);
 
@@ -134,11 +135,17 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
     }
   }, [opened]);
 
-  const totalAdded = useMemo(
-    () => Array.from(adjustedQty.values()).reduce((s, n) => s + n, 0),
-    [adjustedQty],
-  );
-  const submitDisabled = totalAdded === 0 || submit.isPending;
+  const { totalAdded, totalRemoved } = useMemo(() => {
+    let added = 0;
+    let removed = 0;
+    for (const n of adjustedQty.values()) {
+      if (n > 0) added += n;
+      else if (n < 0) removed += -n;
+    }
+    return { totalAdded: added, totalRemoved: removed };
+  }, [adjustedQty]);
+  const hasChanges = totalAdded > 0 || totalRemoved > 0;
+  const submitDisabled = !hasChanges || submit.isPending;
 
   // Total currentInBox cumulé par couleur ou par taille selon le tri actif,
   // calculé sur toutes les variantes de toutes les products de la caisse.
@@ -166,10 +173,10 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
     return '';
   }, [windowParam, zoneId, zones]);
 
-  const handleQty = (variantId: string, value: number) => {
+  const handleQty = (variantId: string, value: number, min: number = 0) => {
     setAdjustedQty((prev) => {
       const m = new Map(prev);
-      m.set(variantId, Math.max(0, Math.floor(value)));
+      m.set(variantId, Math.max(min, Math.floor(value)));
       return m;
     });
   };
@@ -178,7 +185,7 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
     if (!data) return;
     setSubmitError(null);
     const lines = Array.from(adjustedQty.entries())
-      .filter(([, qty]) => qty > 0)
+      .filter(([, qty]) => qty !== 0)
       .map(([variantId, quantity]) => ({ variantId, quantity }));
     try {
       const res = await submit.mutateAsync({
@@ -191,6 +198,7 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
         orderId: res.orderId,
         orderNumber: res.orderNumber,
         unitsAdded: res.unitsAdded,
+        unitsRemoved: res.unitsRemoved,
         variantsAdded: res.variantsAdded,
       });
       if (res.errors?.length) {
@@ -234,20 +242,30 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
       {submitSuccess && (
         <div className={styles.success}>
           <p>
-            ✅ <strong>{submitSuccess.unitsAdded}</strong> unité(s) sur{' '}
-            <strong>{submitSuccess.variantsAdded}</strong> variante(s) ajoutée(s) à{' '}
-            <strong>{submitSuccess.orderNumber}</strong>
+            ✅
+            {submitSuccess.unitsAdded > 0 && (
+              <> <strong>{submitSuccess.unitsAdded}</strong> unité(s) ajoutée(s)</>
+            )}
+            {submitSuccess.unitsAdded > 0 && submitSuccess.unitsRemoved > 0 && ' · '}
+            {submitSuccess.unitsRemoved > 0 && (
+              <> <strong>{submitSuccess.unitsRemoved}</strong> unité(s) retirée(s)</>
+            )}
+            {submitSuccess.orderNumber && (
+              <> sur <strong>{submitSuccess.orderNumber}</strong></>
+            )}
           </p>
           {submitError && <p className={styles.warn}>{submitError}</p>}
           <div className={styles.successActions}>
-            <Button
-              component="a"
-              href={`/ivy/commandes/stock/${submitSuccess.orderId}`}
-              rightSection={<IconExternalLink size={14} />}
-              variant="light"
-            >
-              Ouvrir la commande
-            </Button>
+            {submitSuccess.orderId && (
+              <Button
+                component="a"
+                href={`/ivy/commandes/stock/${submitSuccess.orderId}`}
+                rightSection={<IconExternalLink size={14} />}
+                variant="light"
+              >
+                Ouvrir la commande
+              </Button>
+            )}
             <Button onClick={onClose}>Fermer</Button>
           </div>
         </div>
@@ -429,19 +447,29 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
                                   <ActionIcon
                                     variant="subtle"
                                     size="sm"
-                                    onClick={() => handleQty(v.variantId, qty - 1)}
+                                    onClick={() =>
+                                      handleQty(
+                                        v.variantId,
+                                        qty - 1,
+                                        -(v.pendingInDrafts || 0),
+                                      )
+                                    }
                                   >
                                     <IconMinus size={12} />
                                   </ActionIcon>
                                 </Tooltip>
                                 <NumberInput
                                   size="xs"
-                                  min={0}
+                                  min={-(v.pendingInDrafts || 0)}
                                   hideControls
                                   value={qty}
                                   onChange={(val) => {
                                     const n = typeof val === 'number' ? val : Number(val);
-                                    handleQty(v.variantId, Number.isFinite(n) ? n : 0);
+                                    handleQty(
+                                      v.variantId,
+                                      Number.isFinite(n) ? n : 0,
+                                      -(v.pendingInDrafts || 0),
+                                    );
                                   }}
                                   className={styles.qtyInput}
                                 />
@@ -449,7 +477,13 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
                                   <ActionIcon
                                     variant="subtle"
                                     size="sm"
-                                    onClick={() => handleQty(v.variantId, qty + 1)}
+                                    onClick={() =>
+                                      handleQty(
+                                        v.variantId,
+                                        qty + 1,
+                                        -(v.pendingInDrafts || 0),
+                                      )
+                                    }
                                   >
                                     <IconPlus size={12} />
                                   </ActionIcon>

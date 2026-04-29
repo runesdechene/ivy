@@ -24,6 +24,7 @@ const eurFormatter = new Intl.NumberFormat('fr-FR', {
 const formatEur = (n: number): string => eurFormatter.format(n);
 
 function weatherEmoji(pct: number): { emoji: string; label: string } {
+  if (pct > 100) return { emoji: '⚠️', label: 'Saturée' };
   if (pct >= 70) return { emoji: '☀️', label: 'Bien rempli' };
   if (pct >= 40) return { emoji: '☁️', label: 'À surveiller' };
   return { emoji: '⛈️', label: 'À recommander' };
@@ -206,7 +207,12 @@ export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color'
 
   const w = UNIT * type.ratio_w;
   const h = UNIT * type.ratio_h;
-  const weather = weatherEmoji(fill.pct);
+  const realPct =
+    type.max_capacity > 0
+      ? Math.round((fill.units / type.max_capacity) * 100)
+      : 0;
+  const overflow = Math.max(0, fill.units - type.max_capacity);
+  const weather = weatherEmoji(realPct);
 
   const displayName = instance.name?.trim() || type.name;
 
@@ -285,9 +291,14 @@ export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color'
           <span className={styles.weatherBadge}>{weather.emoji}</span>
         </Tooltip>
         <span className={styles.statBadge}>
-          {fill.pct}% · {fill.units}/{type.max_capacity}
+          {realPct}% · {fill.units}/{type.max_capacity}
           {fill.weight_g != null && ` · ${(fill.weight_g / 1000).toFixed(1)} kg`}
         </span>
+        {overflow > 0 && (
+          <Tooltip label={`${overflow} unité(s) au-delà de la capacité`} withArrow>
+            <span className={styles.overflowBadge}>+{overflow} hors cap.</span>
+          </Tooltip>
+        )}
         {instance.draft_qty > 0 && (
           <Tooltip label={`${instance.draft_qty} unité(s) déjà en commande brouillon`} withArrow>
             <span className={styles.draftBadge}>+{instance.draft_qty} brouillon</span>

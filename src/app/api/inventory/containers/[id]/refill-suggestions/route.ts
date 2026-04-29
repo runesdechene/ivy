@@ -267,6 +267,10 @@ export async function GET(
   };
 
   const pendingByVariant = new Map<string, number>();
+  // pendingInDrafts : qty draft uniquement, utilisé pour le min négatif du
+  // NumberInput dans la modal — on ne peut retirer que ce qui est encore
+  // modifiable (status='draft'). Les in_progress sont locked.
+  const pendingDraftByVariant = new Map<string, number>();
   const pendingBreakdownMap = new Map<string, PendingBucket>();
 
   if (openOrderIds.length > 0 && filteredVariantIds.length > 0) {
@@ -281,6 +285,12 @@ export async function GET(
       pendingByVariant.set(it.variant_id, (pendingByVariant.get(it.variant_id) || 0) + q);
       const info = orderInfoById.get(it.order_id);
       if (!info) continue;
+      if (info.status === 'draft') {
+        pendingDraftByVariant.set(
+          it.variant_id,
+          (pendingDraftByVariant.get(it.variant_id) || 0) + q,
+        );
+      }
       const line: PendingLine = {
         variantId: it.variant_id,
         productTitle: it.product_title,
@@ -347,6 +357,7 @@ export async function GET(
       soldInWindow: soldByVariant.get(v.id) || 0,
       soldLifetime: lifetimeSoldByVariant.get(v.id) || 0,
       pendingInOrder: pendingByVariant.get(v.id) || 0,
+      pendingInDrafts: pendingDraftByVariant.get(v.id) || 0,
       suggestedQty: sug?.suggestedQty ?? 0,
     };
     if (!variantByProduct.has(v.product_id)) variantByProduct.set(v.product_id, []);
