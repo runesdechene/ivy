@@ -6,6 +6,7 @@ type VariantInfo = {
   title: string;
   color: string | null;
   color_hex: string | null;
+  size: string | null;
   qty: number;
 };
 
@@ -26,10 +27,12 @@ type InstanceResp = {
 };
 
 const COLOR_OPTION_NAMES = ['couleur', 'color', 'colour'];
+const SIZE_OPTION_NAMES = ['taille', 'size'];
 
-function extractColor(
+function extractByOptionName(
   variant: { option1?: string | null; option2?: string | null; option3?: string | null },
   product: { option1_name?: string | null; option2_name?: string | null; option3_name?: string | null },
+  matchNames: string[],
 ): string | null {
   const slots: Array<[string | null | undefined, string | null | undefined]> = [
     [product.option1_name, variant.option1],
@@ -37,12 +40,15 @@ function extractColor(
     [product.option3_name, variant.option3],
   ];
   for (const [name, value] of slots) {
-    if (name && COLOR_OPTION_NAMES.includes(String(name).toLowerCase()) && value) {
+    if (name && matchNames.includes(String(name).toLowerCase()) && value) {
       return value;
     }
   }
   return null;
 }
+
+const extractColor = (v: any, p: any) => extractByOptionName(v, p, COLOR_OPTION_NAMES);
+const extractSize = (v: any, p: any) => extractByOptionName(v, p, SIZE_OPTION_NAMES);
 
 export async function GET(req: NextRequest) {
   const shopId = req.nextUrl.searchParams.get('shopId');
@@ -130,6 +136,7 @@ export async function GET(req: NextRequest) {
             title: v.title,
             color,
             color_hex: resolveHex(color),
+            size: extractSize(v, p),
             qty,
           });
           units += qty;

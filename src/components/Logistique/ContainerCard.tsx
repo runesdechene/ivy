@@ -6,6 +6,7 @@ import { ActionIcon, Menu, Tooltip } from '@mantine/core';
 import { IconDots, IconTrash } from '@tabler/icons-react';
 import type { ContainerInstance } from '@/hooks/useContainers';
 import { useDeleteContainer } from '@/hooks/useContainers';
+import { compareSizes } from '@/utils/size-helpers';
 import styles from './ContainerCard.module.scss';
 
 const UNIT = 140;
@@ -24,38 +25,101 @@ function weatherEmoji(pct: number): { emoji: string; label: string } {
 interface Props {
   instance: ContainerInstance;
   onAssign: () => void;
+  sortMode?: 'color' | 'size';
 }
 
-export function ContainerCard({ instance, onAssign }: Props) {
+type Variant = ContainerInstance['variants'][number];
+
+/**
+ * Distribue les variantes en N colonnes en gardant les groupes (couleur ou taille)
+ * contigus : on remplit la colonne 1 jusqu'à atteindre la capacité, puis colonne 2, etc.
+ * Les groupes ne sont jamais coupés (sauf si un seul groupe dépasse la capacité d'une colonne).
+ */
+function distributeSequential(
+  variants: Variant[],
+  cols: number,
+  capPerCol: number,
+  mode: 'color' | 'size',
+): { items: Variant[]; total: number; label: string }[] {
+  const buckets = Array.from({ length: cols }, () => ({ items: [] as Variant[], total: 0, label: '' }));
+  if (variants.length === 0) return buckets;
+
+  const groupKey = (v: Variant) =>
+    mode === 'color' ? v.color || '_' : v.size || '_';
+
+  // Group
+  const groups = new Map<string, Variant[]>();
+  for (const v of variants) {
+    const k = groupKey(v);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k)!.push(v);
+  }
+
+  // Sort group keys
+  const sortedKeys = Array.from(groups.keys()).sort((a, b) => {
+    if (mode === 'size') return compareSizes(a, b);
+    return a.localeCompare(b);
+  });
+
+  // Within each group, secondary sort
+  for (const k of sortedKeys) {
+    const items = groups.get(k)!;
+    if (mode === 'color') {
+      items.sort((a, b) => compareSizes(a.size, b.size));
+    } else {
+      items.sort((a, b) => (a.color || '').localeCompare(b.color || ''));
+    }
+  }
+
+  // Sequential fill : on remplit colonne par colonne, en gardant les groupes contigus
+  let colIdx = 0;
+  for (const key of sortedKeys) {
+    const items = groups.get(key)!;
+    const groupTotal = items.reduce((s, v) => s + v.qty, 0);
+
+    // Si la colonne courante est déjà ≥ capacité ET il en reste, passer à la suivante
+    if (
+      buckets[colIdx].total >= capPerCol &&
+      colIdx < cols - 1
+    ) {
+      colIdx++;
+    }
+    // Si le groupe ferait largement déborder ET on est en milieu de colonne
+    // (au moins un peu rempli) ET il reste de la place dans une colonne plus loin,
+    // on saute aussi
+    else if (
+      buckets[colIdx].total > 0 &&
+      buckets[colIdx].total + groupTotal > capPerCol * 1.5 &&
+      colIdx < cols - 1
+    ) {
+      colIdx++;
+    }
+
+    for (const v of items) {
+      buckets[colIdx].items.push(v);
+      buckets[colIdx].total += v.qty;
+    }
+    if (!buckets[colIdx].label) {
+      buckets[colIdx].label = key === '_' ? '' : key;
+    } else if (key !== '_') {
+      buckets[colIdx].label += ` · ${key}`;
+    }
+  }
+
+  return buckets;
+}
+
+export function ContainerCard({ instance, onAssign, sortMode = 'color' }: Props) {
   const { type, fill, variants, products } = instance;
   const deleteMut = useDeleteContainer();
 
   const cols = Math.max(1, type.columns ?? 1);
   const colCapacity = type.max_capacity / cols;
 
-  // Distribution greedy : pour chaque variante (qty desc) on l'assigne à la colonne
-  // la moins remplie. Permet de répartir les variantes sur N colonnes.
-  const columnsData = useMemo(() => {
-    const buckets: { items: typeof variants; total: number }[] = Array.from(
-      { length: cols },
-      () => ({ items: [], total: 0 }),
-    );
-    if (variants.length === 0) return buckets;
-    const sorted = [...variants].sort((a, b) => b.qty - a.qty);
-    for (const v of sorted) {
-      let target = buckets[0];
-      for (const b of buckets) {
-        if (b.total < target.total) target = b;
-      }
-      target.items.push(v);
-      target.total += v.qty;
-    }
-    // Trier les variantes de chaque colonne par couleur (groupage visuel)
-    for (const b of buckets) {
-      b.items.sort((a, c) => (a.color || '').localeCompare(c.color || ''));
-    }
-    return buckets;
-  }, [variants, cols]);
+  const columnsData = useMemo(
+    () => distributeSequential(variants, cols, colCapacity, sortMode),
+    [variants, cols, colCapacity, sortMode],
+  );
 
   const w = UNIT * type.ratio_w;
   const h = UNIT * type.ratio_h;
@@ -121,9 +185,16 @@ export function ContainerCard({ instance, onAssign }: Props) {
           const colPct = colCapacity > 0 ? Math.min(100, (bucket.total / colCapacity) * 100) : 0;
           return (
             <div key={idx} className={styles.column}>
+              {bucket.label && colPct < 95 && (
+                <span className={styles.columnLabel}>{bucket.label}</span>
+              )}
               <div className={styles.columnFill} style={{ height: `${colPct}%` }}>
                 {bucket.items.map((v) => (
-                  <Tooltip key={v.id} label={`${v.title} — ${v.qty}`} withArrow>
+                  <Tooltip
+                    key={v.id}
+                    label={`${v.color || ''} ${v.size || ''} — ${v.qty}`.trim()}
+                    withArrow
+                  >
                     <div
                       className={styles.block}
                       style={{

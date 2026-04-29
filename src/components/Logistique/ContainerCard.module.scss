@@ -71,6 +71,25 @@ $unit: 140px;
   }
 }
 
+.columnLabel {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: $slate-muted;
+  text-transform: uppercase;
+  z-index: 2;
+  pointer-events: none;
+  padding: 0 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .columnFill {
   position: absolute;
   left: 0;

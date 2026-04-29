@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { IconPlus } from '@tabler/icons-react';
-import { Loader } from '@mantine/core';
+import { Loader, SegmentedControl } from '@mantine/core';
 import { useShop } from '@/context/ShopContext';
 import { useLocation } from '@/context/LocationContext';
 import { useContainers } from '@/hooks/useContainers';
@@ -22,6 +22,7 @@ export default function LogistiquePage() {
 
   const [adding, setAdding] = useState(false);
   const [assigningId, setAssigningId] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<'color' | 'size'>('color');
 
   const counters = useMemo(() => {
     const map = new Map<string, number>();
@@ -56,6 +57,15 @@ export default function LogistiquePage() {
           <IconPlus size={14} />
           Ajouter un conteneur
         </button>
+        <SegmentedControl
+          value={sortMode}
+          onChange={(v) => setSortMode(v as 'color' | 'size')}
+          data={[
+            { label: 'Par couleur', value: 'color' },
+            { label: 'Par taille', value: 'size' },
+          ]}
+          size="xs"
+        />
         {counters.length > 0 && (
           <div className={styles.counters}>
             {counters.map((c) => (
@@ -83,6 +93,7 @@ export default function LogistiquePage() {
             <ContainerCard
               key={inst.id}
               instance={inst}
+              sortMode={sortMode}
               onAssign={() => setAssigningId(inst.id)}
             />
           ))}
