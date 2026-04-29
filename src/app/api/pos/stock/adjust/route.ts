@@ -43,6 +43,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Resolve locationId → Supabase UUID for stock_movements logging.
+    // The HUB de stand passes a Shopify numeric ID (string), but
+    // stock_movements.location_id is UUID FK → locations(id). Without this
+    // resolution, every insert silently fails (type mismatch + FK violation),
+    // leaving the table empty and breaking the Festival dashboard / study zones.
+    // inventory_levels.location_id stays Shopify ID — it's a different schema.
+    let locationUuid: string | null = null;
+    if (locationId) {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(locationId);
+      if (isUuid) {
+        locationUuid = locationId;
+      } else {
+        const { data: loc } = await supabase
+          .from('locations')
+          .select('id')
+          .eq('shopify_id', locationId)
+          .maybeSingle();
+        locationUuid = loc?.id || null;
+      }
+    }
+
     // Get shop for Shopify credentials
     const { data: shop, error: shopError } = await supabase
       .from('shops')
@@ -163,11 +184,11 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Queue movement for logging
+        // Queue movement for logging (location_id must be UUID, not Shopify ID)
         if (item.productTitle) {
           movementsToLog.push({
             shop_id: shopId,
-            location_id: locationId || null,
+            location_id: locationUuid,
             variant_id: resolvedVariantId,
             product_title: item.productTitle,
             variant_title: item.variantTitle || null,
@@ -223,14 +244,20 @@ export async function POST(request: NextRequest) {
         const { data: existing } = await existingQuery.maybeSingle();
 
         if (existing) {
-          await supabase
+          const { error: updateErr } = await supabase
             .from('stock_movements')
             .update({ quantity: existing.quantity + movement.quantity })
             .eq('id', existing.id);
+          if (updateErr) {
+            console.error('stock_movements update failed:', updateErr, { movement });
+          }
         } else {
-          await supabase
+          const { error: insertErr } = await supabase
             .from('stock_movements')
             .insert({ ...movement, moved_on: today });
+          if (insertErr) {
+            console.error('stock_movements insert failed:', insertErr, { movement });
+          }
         }
       }
 
