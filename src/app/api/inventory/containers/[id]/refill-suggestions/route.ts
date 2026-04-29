@@ -111,12 +111,12 @@ export async function GET(
     `)
     .in('product_id', productIds);
 
+  // On garde TOUTES les variantes des produits affectés (pas de filtre
+  // shopify_active) pour que le total currentInBox du modal matche celui
+  // affiché sur la card extérieure. Une variante archivée mais avec du stock
+  // doit apparaître pour ne pas sous-compter le remplissage de la caisse.
   const productById = new Map(products.map((p: any) => [p.id, p]));
-  const variants = (variantsRaw ?? []).filter((v: any) => {
-    const p: any = productById.get(v.product_id);
-    if (!p) return false;
-    return v.shopify_active === true || p.status === 'local';
-  });
+  const variants = variantsRaw ?? [];
   const variantIds = variants.map((v: any) => v.id);
 
   if (variantIds.length === 0) {
@@ -124,7 +124,7 @@ export async function GET(
       containerId,
       containerName,
       capacity: { max: type.max_capacity, current: 0, pct: 0 },
-      window: { type: 'days', label: 'Aucune variante vivante' },
+      window: { type: 'days', label: 'Aucune variante' },
       products: [],
     });
   }
