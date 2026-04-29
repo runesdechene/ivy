@@ -9,7 +9,7 @@ import { useDeleteContainer } from '@/hooks/useContainers';
 import { compareSizes } from '@/utils/size-helpers';
 import styles from './ContainerCard.module.scss';
 
-const UNIT = 140;
+const UNIT = 200;
 
 function colorToCss(hex: string | null | undefined): string {
   if (hex && /^#[0-9a-f]{3,8}$/i.test(hex)) return hex;
@@ -170,7 +170,7 @@ export function ContainerCard({ instance, onAssign, sortMode = 'color' }: Props)
           <span className={styles.weatherBadge}>{weather.emoji}</span>
         </Tooltip>
         <span className={styles.statBadge}>
-          {fill.pct}%
+          {fill.pct}% · {fill.units}/{type.max_capacity}
           {fill.weight_g != null && ` · ${(fill.weight_g / 1000).toFixed(1)} kg`}
         </span>
       </div>

@@ -137,13 +137,13 @@ $unit: 140px;
 }
 
 .sectionCount {
-  background: $moss;
-  color: $cream;
+  background: rgba(0, 0, 0, 0.08);
+  color: $slate;
   border-radius: 8px;
-  padding: 0 5px;
+  padding: 0 6px;
   font-size: 9px;
   font-weight: 700;
-  min-width: 14px;
+  min-width: 16px;
   text-align: center;
 }
 
