@@ -240,6 +240,17 @@ $unit: 140px;
   color: $slate;
 }
 
+.draftBadge {
+  background: rgba(181, 106, 74, 0.12);
+  color: var(--color-rust, #b56a4a);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid rgba(181, 106, 74, 0.25);
+  cursor: help;
+}
+
 .menu {
   position: absolute;
   top: 6px;

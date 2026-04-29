@@ -34,6 +34,7 @@ type InstanceResp = {
   };
   products: ProductInfo[];
   fill: { units: number; pct: number; weight_g: number | null };
+  draft_qty: number;
   variants: VariantInfo[];
 };
 
@@ -105,6 +106,15 @@ export async function GET(req: NextRequest) {
 
   if (iErr) return NextResponse.json({ error: iErr.message }, { status: 500 });
 
+  // Préchargement : ids des supplier_orders en brouillon pour ce shop. Une
+  // seule query, partagée entre toutes les instances.
+  const { data: draftOrders } = await supabase
+    .from('supplier_orders')
+    .select('id')
+    .eq('shop_id', shopId)
+    .eq('status', 'draft');
+  const draftOrderIds = (draftOrders ?? []).map((o: { id: string }) => o.id);
+
   const result: InstanceResp[] = [];
 
   for (const inst of (instances ?? []) as any[]) {
@@ -137,6 +147,7 @@ export async function GET(req: NextRequest) {
 
     const variants: VariantInfo[] = [];
     const productIdsWithStock = new Set<string>();
+    const caisseVariantIds: string[] = [];
     let units = 0;
 
     if (productIds.length > 0) {
@@ -158,15 +169,21 @@ export async function GET(req: NextRequest) {
       for (const v of (variantsRaw ?? []) as any[]) {
         const p: any = productById.get(v.product_id);
         if (!p) continue;
+        const size = extractSize(v, p);
+        // En mode filtre avec filter_size renseigné, on ne garde que les
+        // variants dont la taille extraite matche.
+        if (isFilterMode && inst.filter_size && size !== inst.filter_size) continue;
+
+        // Track ALL caisse variants (qty > 0 ou non) pour le calcul draft_qty :
+        // une variante avec stock physique 0 mais des items en commande
+        // brouillon doit compter.
+        caisseVariantIds.push(v.id);
+
         const lvl = (v.inventory_levels ?? []).find(
           (l: any) => String(l.location_id) === String(locationId),
         );
         const qty = Math.max(0, lvl?.quantity ?? 0);
         if (qty <= 0) continue;
-        const size = extractSize(v, p);
-        // En mode filtre avec filter_size renseigné, on ne garde que les
-        // variants dont la taille extraite matche.
-        if (isFilterMode && inst.filter_size && size !== inst.filter_size) continue;
         const color = extractColor(v, p);
         variants.push({
           id: v.id,
@@ -180,6 +197,21 @@ export async function GET(req: NextRequest) {
         productIdsWithStock.add(v.product_id);
         units += qty;
       }
+    }
+
+    // Compte la qty totale en commandes brouillon pour les variantes de cette
+    // caisse. Inclut filter_size si applicable.
+    let draft_qty = 0;
+    if (draftOrderIds.length > 0 && caisseVariantIds.length > 0) {
+      const { data: draftItems } = await supabase
+        .from('supplier_order_items')
+        .select('quantity')
+        .in('order_id', draftOrderIds)
+        .in('variant_id', caisseVariantIds);
+      draft_qty = (draftItems ?? []).reduce(
+        (s: number, i: { quantity: number | null }) => s + (Number(i.quantity) || 0),
+        0,
+      );
     }
 
     const type = Array.isArray(inst.type) ? inst.type[0] : inst.type;
@@ -214,6 +246,7 @@ export async function GET(req: NextRequest) {
         illustration_url: p.illustration_url ?? null,
       })),
       fill: { units, pct, weight_g: null },
+      draft_qty,
       variants,
     });
   }

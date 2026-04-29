@@ -281,6 +281,11 @@ export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color'
           {fill.pct}% · {fill.units}/{type.max_capacity}
           {fill.weight_g != null && ` · ${(fill.weight_g / 1000).toFixed(1)} kg`}
         </span>
+        {instance.draft_qty > 0 && (
+          <Tooltip label={`${instance.draft_qty} unité(s) déjà en commande brouillon`} withArrow>
+            <span className={styles.draftBadge}>+{instance.draft_qty} brouillon</span>
+          </Tooltip>
+        )}
       </div>
 
       <div
