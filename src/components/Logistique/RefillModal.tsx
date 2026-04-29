@@ -337,8 +337,8 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
                     <thead>
                       <tr>
                         <th>Variante</th>
-                        <th>Caisse</th>
-                        <th>Sorties</th>
+                        <th>Emplacement</th>
+                        <th>Vendus</th>
                         <th>Quantité</th>
                       </tr>
                     </thead>
