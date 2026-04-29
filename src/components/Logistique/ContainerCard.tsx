@@ -41,6 +41,52 @@ type Variant = ContainerInstance['variants'][number];
 type Section = { key: string; items: Variant[]; total: number };
 type Column = { sections: Section[]; total: number; sortKey: string };
 
+/**
+ * Distribution "flat" pour les caisses en mode filtre : pas de regroupement
+ * par couleur/taille, chaque variante est sa propre cellule. Tri stable par
+ * produit alpha → taille (si pas de filtre size) → couleur. Variants répartis
+ * séquentiellement sur toutes les colonnes selon totalQty/cols.
+ */
+function distributeFlat(
+  variants: Variant[],
+  cols: number,
+  hasSizeFilter: boolean,
+): Column[] {
+  const buckets: Column[] = Array.from({ length: cols }, () => ({
+    sections: [],
+    total: 0,
+    sortKey: '',
+  }));
+  if (variants.length === 0) return buckets;
+
+  const sorted = [...variants].sort((a, b) => {
+    const productCmp = (a.product_title || '').localeCompare(b.product_title || '');
+    if (productCmp !== 0) return productCmp;
+    if (!hasSizeFilter) {
+      const sizeCmp = compareSizes(a.size, b.size);
+      if (sizeCmp !== 0) return sizeCmp;
+    }
+    return (a.color || '').localeCompare(b.color || '');
+  });
+
+  const totalQty = sorted.reduce((s, v) => s + v.qty, 0);
+  const targetPerCol = totalQty > 0 ? totalQty / cols : 0;
+
+  let colIdx = 0;
+  let colTotal = 0;
+  for (const v of sorted) {
+    if (colIdx < cols - 1 && colTotal > 0 && colTotal >= targetPerCol) {
+      colIdx += 1;
+      colTotal = 0;
+    }
+    buckets[colIdx].sections.push({ key: v.id, items: [v], total: v.qty });
+    buckets[colIdx].total += v.qty;
+    colTotal += v.qty;
+  }
+
+  return buckets;
+}
+
 function distributeOrdered(
   variants: Variant[],
   cols: number,
@@ -111,8 +157,11 @@ export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color'
   const colCapacity = type.max_capacity / cols;
 
   const columnsData = useMemo(
-    () => distributeOrdered(variants, cols, sortMode),
-    [variants, cols, sortMode],
+    () =>
+      isFilterMode
+        ? distributeFlat(variants, cols, !!instance.filter_size)
+        : distributeOrdered(variants, cols, sortMode),
+    [variants, cols, sortMode, isFilterMode, instance.filter_size],
   );
 
   const w = UNIT * type.ratio_w;
@@ -214,7 +263,7 @@ export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color'
                     className={styles.section}
                     style={{ flexGrow: sec.total }}
                   >
-                    {sec.key !== '_' && (
+                    {!isFilterMode && sec.key !== '_' && (
                       <span className={styles.sectionLabel}>
                         <span className={styles.sectionCount}>{sec.total}</span>{' '}
                         {sec.key}
@@ -231,11 +280,14 @@ export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color'
                           // - hauteur proportionnelle à qty (flexGrow)
                           // - sub-divisions par unité (stripes internes) pour
                           //   conserver l'effet "pile" comme en mode produit
-                          // - label "Produit" centré en absolute par-dessus
+                          // - label "Produit · Taille · Couleur" centré en
+                          //   absolute par-dessus, en sautant la dimension
+                          //   filtrée pour ne pas répéter
                           // - bordure noire entre variantes consécutives
-                          const sizePart =
-                            !instance.filter_size && v.size ? ` · ${v.size}` : '';
-                          const label = `${v.product_title || ''}${sizePart}`.trim();
+                          const labelParts = [v.product_title || ''];
+                          if (!instance.filter_size && v.size) labelParts.push(v.size);
+                          if (v.color) labelParts.push(v.color);
+                          const label = labelParts.filter(Boolean).join(' · ');
                           return (
                             <Tooltip key={v.id} label={tip} withArrow>
                               <div
