@@ -75,7 +75,16 @@ function distributeFlat(
   let colIdx = 0;
   let colTotal = 0;
   for (const v of sorted) {
-    if (colIdx < cols - 1 && colTotal > 0 && colTotal >= targetPerCol) {
+    // On avance vers la colonne suivante si l'ajout pousserait le centre du
+    // variant au-delà de la cible. L'ancien check "colTotal >= target" se
+    // déclenchait après coup, faisant déborder chaque col et laissant la
+    // dernière vide. Le check "midpoint > target" décide AVANT l'ajout
+    // laquelle des deux colonnes laisse le total le plus proche de la cible.
+    if (
+      colIdx < cols - 1 &&
+      colTotal > 0 &&
+      colTotal + v.qty / 2 > targetPerCol
+    ) {
       colIdx += 1;
       colTotal = 0;
     }
