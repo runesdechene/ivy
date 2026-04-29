@@ -235,27 +235,58 @@ export async function GET(
 
   // Quantités déjà engagées dans des supplier_orders non-completed (draft +
   // in_progress). Évite que l'utilisateur double-commande sans s'en rendre
-  // compte.
+  // compte. On lit direct dans supplier_order_items, donc le chiffre suit
+  // toute édition de la commande (qty modifiée, ligne supprimée, etc.) au
+  // prochain refetch.
   const { data: openOrders } = await supabase
     .from('supplier_orders')
-    .select('id')
+    .select('id, order_number, status')
     .eq('shop_id', container.shop_id)
     .in('status', ['draft', 'in_progress']);
-  const openOrderIds = (openOrders ?? []).map((o: { id: string }) => o.id);
+
+  const orderInfoById = new Map(
+    (openOrders ?? []).map((o: { id: string; order_number: string; status: string }) => [
+      o.id,
+      { orderNumber: o.order_number, status: o.status },
+    ]),
+  );
+  const openOrderIds = Array.from(orderInfoById.keys());
 
   const pendingByVariant = new Map<string, number>();
-  if (openOrderIds.length > 0) {
+  const pendingBreakdownMap = new Map<
+    string,
+    { orderId: string; orderNumber: string; status: string; qty: number }
+  >();
+
+  if (openOrderIds.length > 0 && filteredVariantIds.length > 0) {
     const { data: pendingItems } = await supabase
       .from('supplier_order_items')
-      .select('variant_id, quantity')
+      .select('variant_id, quantity, order_id')
       .in('order_id', openOrderIds)
       .in('variant_id', filteredVariantIds);
     for (const it of pendingItems ?? []) {
       if (!it.variant_id) continue;
-      const prev = pendingByVariant.get(it.variant_id) || 0;
-      pendingByVariant.set(it.variant_id, prev + (Number(it.quantity) || 0));
+      const q = Number(it.quantity) || 0;
+      pendingByVariant.set(it.variant_id, (pendingByVariant.get(it.variant_id) || 0) + q);
+      const info = orderInfoById.get(it.order_id);
+      if (info) {
+        const existing = pendingBreakdownMap.get(it.order_id);
+        if (existing) {
+          existing.qty += q;
+        } else {
+          pendingBreakdownMap.set(it.order_id, {
+            orderId: it.order_id,
+            orderNumber: info.orderNumber,
+            status: info.status,
+            qty: q,
+          });
+        }
+      }
     }
   }
+  const pendingBreakdown = Array.from(pendingBreakdownMap.values()).sort((a, b) =>
+    a.orderNumber.localeCompare(b.orderNumber),
+  );
 
   // Variantes non-Shopify (archived ou produit local) ne reçoivent pas de
   // suggestion : on ne peut commander chez le fournisseur que ce qui existe
@@ -327,6 +358,7 @@ export async function GET(
     containerName,
     capacity: { max: type.max_capacity, current: totalCurrent, pct, pending: totalPending },
     window: { type: windowType, label: windowLabel },
+    pendingBreakdown,
     products: productsOut,
   });
 }

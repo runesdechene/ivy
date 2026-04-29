@@ -443,6 +443,7 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
                 pending={data.capacity.pending}
                 added={totalAdded}
                 capacity={data.capacity.max}
+                pendingBreakdown={data.pendingBreakdown}
               />
               <Button
                 size="md"

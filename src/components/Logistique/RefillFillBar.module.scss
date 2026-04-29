@@ -58,6 +58,11 @@
   font-weight: 400;
 }
 
+.pendingPill {
+  cursor: help;
+  border-bottom: 1px dotted rgba(0, 0, 0, 0.35);
+}
+
 .overflow {
   background: #d23a3a;
   opacity: 0.85;

@@ -23,11 +23,19 @@ export interface RefillProduct {
   variants: RefillVariant[];
 }
 
+export interface PendingOrderBreakdown {
+  orderId: string;
+  orderNumber: string;
+  status: string;
+  qty: number;
+}
+
 export interface RefillSuggestionsResponse {
   containerId: string;
   containerName: string;
   capacity: { max: number; current: number; pct: number; pending: number };
   window: { type: 'days' | 'zone' | 'all'; label: string };
+  pendingBreakdown: PendingOrderBreakdown[];
   products: RefillProduct[];
 }
 
@@ -42,6 +50,12 @@ export function useRefillSuggestions(
   return useQuery<RefillSuggestionsResponse>({
     queryKey: ['refill-suggestions', containerId, windowParam, zoneId],
     enabled: !!containerId && enabled && (windowParam !== 'zone' || !!zoneId),
+    // Toujours refetch à chaque ouverture pour que pendingInOrder reflète
+    // l'état actuel des supplier_orders (l'utilisateur peut avoir édité une
+    // commande ailleurs entre deux ouvertures de la modal).
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    staleTime: 0,
     queryFn: async () => {
       const url = new URL(
         `/api/inventory/containers/${containerId}/refill-suggestions`,

@@ -1,6 +1,8 @@
 'use client';
 
 import clsx from 'clsx';
+import { Tooltip } from '@mantine/core';
+import { type PendingOrderBreakdown } from '@/hooks/useRefill';
 import styles from './RefillFillBar.module.scss';
 
 interface Props {
@@ -8,9 +10,10 @@ interface Props {
   pending: number;
   added: number;
   capacity: number;
+  pendingBreakdown?: PendingOrderBreakdown[];
 }
 
-export function RefillFillBar({ current, pending, added, capacity }: Props) {
+export function RefillFillBar({ current, pending, added, capacity, pendingBreakdown }: Props) {
   const safeCap = Math.max(1, capacity);
   const total = current + pending + added;
   const overflow = Math.max(0, total - safeCap);
@@ -55,8 +58,23 @@ export function RefillFillBar({ current, pending, added, capacity }: Props) {
           Actuel <strong>{current}</strong>
           {pending > 0 && (
             <>
-              {' '}+ <strong>{pending}</strong>{' '}
-              <span className={styles.pendingHint}>en commande</span>
+              {' '}+{' '}
+              <Tooltip
+                label={
+                  pendingBreakdown && pendingBreakdown.length > 0
+                    ? pendingBreakdown
+                        .map((b) => `${b.orderNumber} (${b.status}) : ${b.qty}`)
+                        .join('\n')
+                    : 'Aucun détail'
+                }
+                multiline
+                withArrow
+              >
+                <span className={styles.pendingPill}>
+                  <strong>{pending}</strong>{' '}
+                  <span className={styles.pendingHint}>en commande</span>
+                </span>
+              </Tooltip>
             </>
           )}
           {' '}→ Après <strong>{total}</strong> / {capacity}
