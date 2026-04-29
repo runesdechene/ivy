@@ -250,7 +250,10 @@ export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color'
           <span className={styles.thumbPlaceholder}>—</span>
         ) : (
           products.map((p) => {
-            const src = p.image_url || p.illustration_url;
+            // On utilise uniquement l'illustration (méta-objet
+            // custom.illustration_produit, motif en noir) — même source que la
+            // page feuillet d'impression. Le mockup p.image_url est ignoré.
+            const src = p.illustration_url;
             return (
               <Tooltip key={p.id} label={p.title} withArrow>
                 {src ? (
