@@ -440,6 +440,7 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
             <div className={styles.footer}>
               <RefillFillBar
                 current={data.capacity.current}
+                pending={data.capacity.pending}
                 added={totalAdded}
                 capacity={data.capacity.max}
               />

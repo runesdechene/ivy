@@ -13,6 +13,7 @@ export interface RefillVariant {
   currentAtLocation: number;
   soldInWindow: number;
   soldLifetime: number;
+  pendingInOrder: number;
   suggestedQty: number;
 }
 
@@ -25,7 +26,7 @@ export interface RefillProduct {
 export interface RefillSuggestionsResponse {
   containerId: string;
   containerName: string;
-  capacity: { max: number; current: number; pct: number };
+  capacity: { max: number; current: number; pct: number; pending: number };
   window: { type: 'days' | 'zone' | 'all'; label: string };
   products: RefillProduct[];
 }

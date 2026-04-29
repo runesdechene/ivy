@@ -233,6 +233,30 @@ export async function GET(
     qtyByVariant.set(l.variant_id, Math.max(0, l.quantity || 0));
   }
 
+  // Quantités déjà engagées dans des supplier_orders non-completed (draft +
+  // in_progress). Évite que l'utilisateur double-commande sans s'en rendre
+  // compte.
+  const { data: openOrders } = await supabase
+    .from('supplier_orders')
+    .select('id')
+    .eq('shop_id', container.shop_id)
+    .in('status', ['draft', 'in_progress']);
+  const openOrderIds = (openOrders ?? []).map((o: { id: string }) => o.id);
+
+  const pendingByVariant = new Map<string, number>();
+  if (openOrderIds.length > 0) {
+    const { data: pendingItems } = await supabase
+      .from('supplier_order_items')
+      .select('variant_id, quantity')
+      .in('order_id', openOrderIds)
+      .in('variant_id', filteredVariantIds);
+    for (const it of pendingItems ?? []) {
+      if (!it.variant_id) continue;
+      const prev = pendingByVariant.get(it.variant_id) || 0;
+      pendingByVariant.set(it.variant_id, prev + (Number(it.quantity) || 0));
+    }
+  }
+
   // Variantes non-Shopify (archived ou produit local) ne reçoivent pas de
   // suggestion : on ne peut commander chez le fournisseur que ce qui existe
   // sur Shopify. On zéro le soldInWindow pour le math, mais leur currentInBox
@@ -273,6 +297,7 @@ export async function GET(
       // au badge "5 / 30j" d'être informatif même sur les variantes non-Shopify.
       soldInWindow: soldByVariant.get(v.id) || 0,
       soldLifetime: lifetimeSoldByVariant.get(v.id) || 0,
+      pendingInOrder: pendingByVariant.get(v.id) || 0,
       suggestedQty: sug?.suggestedQty ?? 0,
     };
     if (!variantByProduct.has(v.product_id)) variantByProduct.set(v.product_id, []);
@@ -289,6 +314,10 @@ export async function GET(
     .sort((a: any, b: any) => a.title.localeCompare(b.title));
 
   const totalCurrent = inputs.reduce((s, v) => s + v.currentInBox, 0);
+  const totalPending = filteredVariants.reduce(
+    (s: number, v: any) => s + (pendingByVariant.get(v.id) || 0),
+    0,
+  );
   const pct = type.max_capacity > 0
     ? Math.min(100, Math.round((totalCurrent / type.max_capacity) * 100))
     : 0;
@@ -296,7 +325,7 @@ export async function GET(
   return NextResponse.json({
     containerId,
     containerName,
-    capacity: { max: type.max_capacity, current: totalCurrent, pct },
+    capacity: { max: type.max_capacity, current: totalCurrent, pct, pending: totalPending },
     window: { type: windowType, label: windowLabel },
     products: productsOut,
   });

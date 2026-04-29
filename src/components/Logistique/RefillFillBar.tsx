@@ -5,17 +5,22 @@ import styles from './RefillFillBar.module.scss';
 
 interface Props {
   current: number;
+  pending: number;
   added: number;
   capacity: number;
 }
 
-export function RefillFillBar({ current, added, capacity }: Props) {
+export function RefillFillBar({ current, pending, added, capacity }: Props) {
   const safeCap = Math.max(1, capacity);
-  const total = current + added;
+  const total = current + pending + added;
   const overflow = Math.max(0, total - safeCap);
   const overflowPct = overflow > 0 ? (overflow / safeCap) * 100 : 0;
   const currentPct = Math.min(100, (current / safeCap) * 100);
-  const addedPct = Math.min(100 - currentPct, (added / safeCap) * 100);
+  const pendingPct = Math.min(Math.max(0, 100 - currentPct), (pending / safeCap) * 100);
+  const addedPct = Math.min(
+    Math.max(0, 100 - currentPct - pendingPct),
+    (added / safeCap) * 100,
+  );
 
   return (
     <div className={styles.wrap}>
@@ -25,6 +30,13 @@ export function RefillFillBar({ current, added, capacity }: Props) {
           style={{ width: `${currentPct}%` }}
           aria-label={`Actuel ${current}`}
         />
+        {pending > 0 && (
+          <div
+            className={clsx(styles.zone, styles.pending)}
+            style={{ width: `${pendingPct}%` }}
+            aria-label={`En commande ${pending}`}
+          />
+        )}
         <div
           className={clsx(styles.zone, styles.added)}
           style={{ width: `${addedPct}%` }}
@@ -40,7 +52,14 @@ export function RefillFillBar({ current, added, capacity }: Props) {
       </div>
       <div className={styles.labels}>
         <span className={styles.label}>
-          Actuel <strong>{current}</strong> → Après <strong>{total}</strong> / {capacity}
+          Actuel <strong>{current}</strong>
+          {pending > 0 && (
+            <>
+              {' '}+ <strong>{pending}</strong>{' '}
+              <span className={styles.pendingHint}>en commande</span>
+            </>
+          )}
+          {' '}→ Après <strong>{total}</strong> / {capacity}
         </span>
         {overflow > 0 && <span className={styles.overflowLabel}>+{overflow} hors capacité</span>}
       </div>
