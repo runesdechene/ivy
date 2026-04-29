@@ -58,24 +58,20 @@ $unit: 140px;
   border: 1px solid var(--divider);
   border-radius: 6px;
   overflow: hidden;
-}
-
-.compartments {
-  position: absolute;
-  inset: 0;
   display: grid;
-  pointer-events: none;
-  z-index: 1;
 }
 
-.divider {
+.column {
+  position: relative;
   border-right: 1px solid rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+
   &:last-child {
     border-right: none;
   }
 }
 
-.fill {
+.columnFill {
   position: absolute;
   left: 0;
   right: 0;

@@ -30,20 +30,32 @@ export function ContainerCard({ instance, onAssign }: Props) {
   const { type, fill, variants, products } = instance;
   const deleteMut = useDeleteContainer();
 
-  const blocks = useMemo(() => {
-    if (variants.length === 0 || fill.units === 0) return [];
-    // Trier par couleur (groupé) pour des stripes plus lisibles
-    const sorted = [...variants].sort((a, b) =>
-      (a.color || '').localeCompare(b.color || ''),
+  const cols = Math.max(1, type.columns ?? 1);
+  const colCapacity = type.max_capacity / cols;
+
+  // Distribution greedy : pour chaque variante (qty desc) on l'assigne à la colonne
+  // la moins remplie. Permet de répartir les variantes sur N colonnes.
+  const columnsData = useMemo(() => {
+    const buckets: { items: typeof variants; total: number }[] = Array.from(
+      { length: cols },
+      () => ({ items: [], total: 0 }),
     );
-    return sorted.map((v) => ({
-      key: v.id,
-      title: v.title,
-      qty: v.qty,
-      color: colorToCss(v.color_hex),
-      flex: v.qty,
-    }));
-  }, [variants, fill.units]);
+    if (variants.length === 0) return buckets;
+    const sorted = [...variants].sort((a, b) => b.qty - a.qty);
+    for (const v of sorted) {
+      let target = buckets[0];
+      for (const b of buckets) {
+        if (b.total < target.total) target = b;
+      }
+      target.items.push(v);
+      target.total += v.qty;
+    }
+    // Trier les variantes de chaque colonne par couleur (groupage visuel)
+    for (const b of buckets) {
+      b.items.sort((a, c) => (a.color || '').localeCompare(c.color || ''));
+    }
+    return buckets;
+  }, [variants, cols]);
 
   const w = UNIT * type.ratio_w;
   const h = UNIT * type.ratio_h;
@@ -58,8 +70,6 @@ export function ContainerCard({ instance, onAssign }: Props) {
     if (!confirm(`Retirer cette caisse "${type.name}" ?`)) return;
     await deleteMut.mutateAsync(instance.id);
   };
-
-  const cols = Math.max(1, type.columns ?? 1);
 
   return (
     <div
@@ -94,7 +104,10 @@ export function ContainerCard({ instance, onAssign }: Props) {
         )}
       </div>
 
-      <div className={styles.box} style={{ width: w, height: h }}>
+      <div
+        className={styles.box}
+        style={{ width: w, height: h, gridTemplateColumns: `repeat(${cols}, 1fr)` }}
+      >
         <Tooltip label={weather.label} withArrow>
           <span className={styles.weatherBadge}>{weather.emoji}</span>
         </Tooltip>
@@ -104,31 +117,27 @@ export function ContainerCard({ instance, onAssign }: Props) {
           {fill.weight_g != null && ` · ${(fill.weight_g / 1000).toFixed(1)} kg`}
         </span>
 
-        <div className={styles.fill} style={{ height: `${Math.min(100, fill.pct)}%` }}>
-          {blocks.map((b) => (
-            <Tooltip key={b.key} label={`${b.title} — ${b.qty}`} withArrow>
-              <div
-                className={styles.block}
-                style={{
-                  flexGrow: b.flex,
-                  background: b.color,
-                  minHeight: 4,
-                }}
-              />
-            </Tooltip>
-          ))}
-        </div>
-
-        {cols > 1 && (
-          <div
-            className={styles.compartments}
-            style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
-          >
-            {Array.from({ length: cols }).map((_, i) => (
-              <div key={i} className={styles.divider} />
-            ))}
-          </div>
-        )}
+        {columnsData.map((bucket, idx) => {
+          const colPct = colCapacity > 0 ? Math.min(100, (bucket.total / colCapacity) * 100) : 0;
+          return (
+            <div key={idx} className={styles.column}>
+              <div className={styles.columnFill} style={{ height: `${colPct}%` }}>
+                {bucket.items.map((v) => (
+                  <Tooltip key={v.id} label={`${v.title} — ${v.qty}`} withArrow>
+                    <div
+                      className={styles.block}
+                      style={{
+                        flexGrow: v.qty,
+                        background: colorToCss(v.color_hex),
+                        minHeight: 3,
+                      }}
+                    />
+                  </Tooltip>
+                ))}
+              </div>
+            </div>
+          );
+        })}
 
         <div data-noprop="true" className={styles.menu}>
           <Menu position="bottom-end" withArrow>
