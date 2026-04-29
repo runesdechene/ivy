@@ -329,23 +329,57 @@ async function phaseProducts(
   }
 
   send('🔍 Vérification des variantes locales...', 'info');
-  let localVariantsCount = 0;
   const syncedProductIds = Object.keys(byProduct);
-  for (let pi = 0; pi < syncedProductIds.length; pi++) {
-    const pid = syncedProductIds[pi];
-    const { data: marked } = await supabase.from('product_variants')
-      .update({ shopify_active: false })
-      .eq('product_id', pid)
-      .eq('shopify_active', true)
-      .not('shopify_id', 'in', `(${byProduct[pid].join(',')})`)
-      .select('id');
 
-    if (marked) localVariantsCount += marked.length;
+  // Build O(1) lookup set per product
+  const keepByProduct = new Map<string, Set<string>>();
+  for (const pid of syncedProductIds) {
+    keepByProduct.set(pid, new Set(byProduct[pid]));
+  }
 
-    if (syncedProductIds.length > 20 && (pi + 1) % 20 === 0) {
-      send(`  └─ ${pi + 1}/${syncedProductIds.length} produits vérifiés...`, 'progress');
+  // Load all currently-active variants for synced products (paginated to bypass 1000-row limit)
+  const activeVariants: { id: string; product_id: string; shopify_id: string }[] = [];
+  for (let i = 0; i < syncedProductIds.length; i += 50) {
+    const batch = syncedProductIds.slice(i, i + 50);
+    let from = 0;
+    while (true) {
+      const { data } = await supabase
+        .from('product_variants')
+        .select('id, product_id, shopify_id')
+        .in('product_id', batch)
+        .eq('shopify_active', true)
+        .range(from, from + 999);
+      if (data && data.length > 0) {
+        activeVariants.push(...data);
+        if (data.length < 1000) break;
+        from += 1000;
+      } else break;
     }
   }
+
+  // Compute variant IDs absent from this sync
+  const toDeactivate = activeVariants
+    .filter(v => {
+      const keep = keepByProduct.get(v.product_id);
+      return !keep || !keep.has(v.shopify_id);
+    })
+    .map(v => v.id);
+
+  // Single bulk update (chunked to avoid PostgREST URL length limits)
+  if (toDeactivate.length > 0) {
+    for (let i = 0; i < toDeactivate.length; i += 500) {
+      const batch = toDeactivate.slice(i, i + 500);
+      const { error } = await supabase
+        .from('product_variants')
+        .update({ shopify_active: false })
+        .in('id', batch);
+      if (error) {
+        send(`    ❌ Erreur désactivation: ${error.message}`, 'error');
+        break;
+      }
+    }
+  }
+  const localVariantsCount = toDeactivate.length;
 
   if (localVariantsCount > 0) {
     send(`📌 ${localVariantsCount} variante${localVariantsCount > 1 ? 's' : ''} marquée${localVariantsCount > 1 ? 's' : ''} comme locale${localVariantsCount > 1 ? 's' : ''}`, 'info');
