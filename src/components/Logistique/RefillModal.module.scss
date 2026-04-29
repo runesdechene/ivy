@@ -140,13 +140,20 @@
   th:nth-child(2),
   th:nth-child(3) {
     text-align: right;
-    width: 80px;
+    width: 90px;
   }
 
   td:nth-child(4),
   th:nth-child(4) {
     width: 140px;
   }
+}
+
+.pendingInline {
+  color: var(--color-rust, #b56a4a);
+  font-weight: 500;
+  font-size: 12px;
+  margin-left: 2px;
 }
 
 .variantCell {
