@@ -10,6 +10,7 @@ import { useContainerTypes } from '@/hooks/useContainerTypes';
 import { ContainerCard } from '@/components/Logistique/ContainerCard';
 import { AddContainerModal } from '@/components/Logistique/AddContainerModal';
 import { AssignProductsModal } from '@/components/Logistique/AssignProductsModal';
+import { RefillModal } from '@/components/Logistique/RefillModal';
 import styles from './logistique.module.scss';
 
 export default function LogistiquePage() {
@@ -22,6 +23,7 @@ export default function LogistiquePage() {
 
   const [adding, setAdding] = useState(false);
   const [assigningId, setAssigningId] = useState<string | null>(null);
+  const [refillingId, setRefillingId] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<'color' | 'size'>('color');
 
   const counters = useMemo(() => {
@@ -95,6 +97,7 @@ export default function LogistiquePage() {
               instance={inst}
               sortMode={sortMode}
               onAssign={() => setAssigningId(inst.id)}
+              onRefill={() => setRefillingId(inst.id)}
             />
           ))}
         </div>
@@ -122,6 +125,15 @@ export default function LogistiquePage() {
           />
         );
       })()}
+
+      {refillingId && currentShop && (
+        <RefillModal
+          opened={!!refillingId}
+          onClose={() => setRefillingId(null)}
+          containerId={refillingId}
+          shopId={currentShop.id}
+        />
+      )}
     </div>
   );
 }

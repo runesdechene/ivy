@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import clsx from 'clsx';
 import { ActionIcon, Menu, Tooltip } from '@mantine/core';
-import { IconDots, IconPencil, IconPackage, IconTrash } from '@tabler/icons-react';
+import { IconDots, IconPencil, IconPackage, IconRefresh, IconTrash } from '@tabler/icons-react';
 import type { ContainerInstance } from '@/hooks/useContainers';
 import { useDeleteContainer, useRenameContainer } from '@/hooks/useContainers';
 import { compareSizes } from '@/utils/size-helpers';
@@ -25,6 +25,7 @@ function weatherEmoji(pct: number): { emoji: string; label: string } {
 interface Props {
   instance: ContainerInstance;
   onAssign: () => void;
+  onRefill: () => void;
   sortMode?: 'color' | 'size';
 }
 
@@ -106,7 +107,7 @@ function distributeBalanced(
   return buckets;
 }
 
-export function ContainerCard({ instance, onAssign, sortMode = 'color' }: Props) {
+export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color' }: Props) {
   const { type, fill, variants, products } = instance;
   const deleteMut = useDeleteContainer();
   const renameMut = useRenameContainer();
@@ -146,6 +147,9 @@ export function ContainerCard({ instance, onAssign, sortMode = 'color' }: Props)
             </ActionIcon>
           </Menu.Target>
           <Menu.Dropdown>
+            <Menu.Item leftSection={<IconRefresh size={14} />} onClick={onRefill}>
+              Refournir
+            </Menu.Item>
             <Menu.Item leftSection={<IconPackage size={14} />} onClick={onAssign}>
               Affecter des produits
             </Menu.Item>
