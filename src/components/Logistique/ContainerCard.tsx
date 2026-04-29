@@ -103,6 +103,7 @@ function distributeOrdered(
 
 export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color' }: Props) {
   const { type, fill, variants, products } = instance;
+  const isFilterMode = !!(instance.filter_product_type || instance.filter_size);
   const deleteMut = useDeleteContainer();
   const renameMut = useRenameContainer();
 
@@ -224,21 +225,44 @@ export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color'
                         const tip = `${v.color || ''} ${v.size || ''} — ${v.qty}`.trim();
                         const bg = colorToCss(v.color_hex);
                         const isLastVariantInSection = vIdx === sec.items.length - 1;
-                        return Array.from({ length: v.qty }).map((_, i) => {
-                          const isVariantBoundary =
-                            i === v.qty - 1 && !isLastVariantInSection;
+
+                        if (isFilterMode) {
+                          // En mode filtre la caisse mélange souvent plusieurs
+                          // produits sous une même teinte. On rend une cellule
+                          // unique par variante avec un label "Produit" (ou
+                          // "Produit · Taille" si la taille n'est pas filtrée),
+                          // séparée des suivantes par un trait visible.
+                          const sizePart =
+                            !instance.filter_size && v.size ? ` · ${v.size}` : '';
+                          const label = `${v.product_title || ''}${sizePart}`.trim();
                           return (
-                            <Tooltip key={`${v.id}-${i}`} label={tip} withArrow>
+                            <Tooltip key={v.id} label={tip} withArrow>
                               <div
                                 className={clsx(
-                                  styles.block,
-                                  isVariantBoundary && styles.variantBoundary,
+                                  styles.variantBlock,
+                                  !isLastVariantInSection && styles.variantBoundary,
                                 )}
-                                style={{ flexGrow: 1, background: bg }}
-                              />
+                                style={{ flexGrow: v.qty, background: bg }}
+                              >
+                                {label && (
+                                  <span className={styles.variantLabel}>{label}</span>
+                                )}
+                              </div>
                             </Tooltip>
                           );
-                        });
+                        }
+
+                        // Mode classique : 1 stripe par unité de qty (effet de
+                        // pile). Les boutiques par produit gardent ce rendu
+                        // tel quel — pas de boundary marqué.
+                        return Array.from({ length: v.qty }).map((_, i) => (
+                          <Tooltip key={`${v.id}-${i}`} label={tip} withArrow>
+                            <div
+                              className={styles.block}
+                              style={{ flexGrow: 1, background: bg }}
+                            />
+                          </Tooltip>
+                        ));
                       })}
                     </div>
                   </div>

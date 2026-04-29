@@ -4,6 +4,7 @@ import { createServerClient } from '@/supabase/client';
 type VariantInfo = {
   id: string;
   title: string;
+  product_title: string;
   color: string | null;
   color_hex: string | null;
   size: string | null;
@@ -170,6 +171,7 @@ export async function GET(req: NextRequest) {
         variants.push({
           id: v.id,
           title: v.title,
+          product_title: p.title || '',
           color,
           color_hex: resolveHex(color),
           size,
