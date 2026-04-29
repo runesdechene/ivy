@@ -313,6 +313,7 @@ export async function POST(request: Request) {
           .from('product_variants')
           .select('id, shopify_id')
           .in('product_id', pBatch)
+          .order('id')
           .range(from, from + 999);
         if (data && data.length > 0) {
           allInsertedVariants.push(...data);

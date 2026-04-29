@@ -272,6 +272,7 @@ export async function deduplicateLocalVariants(
         .from('product_variants')
         .select('id, product_id, option1, option2, option3, shopify_active')
         .in('product_id', pBatch)
+        .order('id')
         .range(from, from + 999);
       if (data && data.length > 0) {
         variants.push(...data);

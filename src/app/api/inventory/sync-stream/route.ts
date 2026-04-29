@@ -56,6 +56,7 @@ async function loadActiveVariants(shopId: string, productType: string | null) {
         .select('id, shopify_id, inventory_item_id')
         .in('product_id', batch)
         .eq('shopify_active', true)
+        .order('id')
         .range(from, from + 999);
       if (data && data.length > 0) {
         allVariants.push(...data);
@@ -348,6 +349,7 @@ async function phaseProducts(
         .select('id, product_id, shopify_id')
         .in('product_id', batch)
         .eq('shopify_active', true)
+        .order('id')
         .range(from, from + 999);
       if (data && data.length > 0) {
         activeVariants.push(...data);
