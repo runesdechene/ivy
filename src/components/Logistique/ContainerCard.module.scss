@@ -158,15 +158,16 @@ $unit: 140px;
 .block {
   flex-shrink: 0;
   width: 100%;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
   transition: filter 0.15s ease;
+  min-height: 1px;
 
   &:first-child {
     border-bottom: none;
   }
 
   &:hover {
-    filter: brightness(1.1);
+    filter: brightness(1.12);
   }
 }
 

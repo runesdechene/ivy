@@ -198,22 +198,18 @@ export function ContainerCard({ instance, onAssign, sortMode = 'color' }: Props)
                       </span>
                     )}
                     <div className={styles.sectionStripes}>
-                      {sec.items.map((v) => (
-                        <Tooltip
-                          key={v.id}
-                          label={`${v.color || ''} ${v.size || ''} — ${v.qty}`.trim()}
-                          withArrow
-                        >
-                          <div
-                            className={styles.block}
-                            style={{
-                              flexGrow: v.qty,
-                              background: colorToCss(v.color_hex),
-                              minHeight: 3,
-                            }}
-                          />
-                        </Tooltip>
-                      ))}
+                      {sec.items.flatMap((v) => {
+                        const tip = `${v.color || ''} ${v.size || ''} — ${v.qty}`.trim();
+                        const bg = colorToCss(v.color_hex);
+                        return Array.from({ length: v.qty }).map((_, i) => (
+                          <Tooltip key={`${v.id}-${i}`} label={tip} withArrow>
+                            <div
+                              className={styles.block}
+                              style={{ flexGrow: 1, background: bg }}
+                            />
+                          </Tooltip>
+                        ));
+                      })}
                     </div>
                   </div>
                 ))}
