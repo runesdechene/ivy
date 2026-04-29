@@ -35,6 +35,8 @@ type InstanceResp = {
   products: ProductInfo[];
   fill: { units: number; pct: number; weight_g: number | null };
   draft_qty: number;
+  value_cost: number;
+  value_sale: number;
   variants: VariantInfo[];
 };
 
@@ -150,6 +152,9 @@ export async function GET(req: NextRequest) {
     const caisseVariantIds: string[] = [];
     let units = 0;
 
+    let value_cost = 0;
+    let value_sale = 0;
+
     if (productIds.length > 0) {
       const { data: variantsRaw, error: vErr } = await supabase
         .from('product_variants')
@@ -160,6 +165,8 @@ export async function GET(req: NextRequest) {
           option2,
           option3,
           product_id,
+          price,
+          cost,
           inventory_levels(quantity, location_id)
         `)
         .in('product_id', productIds);
@@ -196,6 +203,8 @@ export async function GET(req: NextRequest) {
         });
         productIdsWithStock.add(v.product_id);
         units += qty;
+        value_cost += (Number(v.cost) || 0) * qty;
+        value_sale += (Number(v.price) || 0) * qty;
       }
     }
 
@@ -247,6 +256,8 @@ export async function GET(req: NextRequest) {
       })),
       fill: { units, pct, weight_g: null },
       draft_qty,
+      value_cost,
+      value_sale,
       variants,
     });
   }

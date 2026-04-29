@@ -16,6 +16,13 @@ function colorToCss(hex: string | null | undefined): string {
   return '#cdcdcd';
 }
 
+const eurFormatter = new Intl.NumberFormat('fr-FR', {
+  style: 'currency',
+  currency: 'EUR',
+  maximumFractionDigits: 0,
+});
+const formatEur = (n: number): string => eurFormatter.format(n);
+
 function weatherEmoji(pct: number): { emoji: string; label: string } {
   if (pct >= 70) return { emoji: '☀️', label: 'Bien rempli' };
   if (pct >= 40) return { emoji: '☁️', label: 'À surveiller' };
@@ -375,6 +382,11 @@ export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color'
         <span className={styles.title}>{displayName}</span>
         {instance.name && (
           <span className={styles.subtitle}>{type.name}</span>
+        )}
+        {(instance.value_cost > 0 || instance.value_sale > 0) && (
+          <span className={styles.values}>
+            Coût {formatEur(instance.value_cost)} · Vente {formatEur(instance.value_sale)}
+          </span>
         )}
         {(instance.filter_product_type || instance.filter_size) ? (
           <span className={clsx(styles.products, styles.filter)}>

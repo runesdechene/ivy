@@ -19,6 +19,8 @@ export type ContainerInstance = {
   products: { id: string; title: string; image_url: string | null; illustration_url: string | null }[];
   fill: { units: number; pct: number; weight_g: number | null };
   draft_qty: number;
+  value_cost: number;
+  value_sale: number;
   variants: { id: string; title: string; product_title: string; color: string | null; color_hex: string | null; size: string | null; qty: number }[];
 };
 
