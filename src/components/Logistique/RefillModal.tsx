@@ -11,11 +11,18 @@ import {
   ActionIcon,
   Tooltip,
   Badge,
+  SegmentedControl,
 } from '@mantine/core';
 import { IconMinus, IconPlus, IconExternalLink } from '@tabler/icons-react';
-import { useRefillSuggestions, useSubmitRefill, RefillWindow } from '@/hooks/useRefill';
+import {
+  useRefillSuggestions,
+  useSubmitRefill,
+  RefillWindow,
+  RefillVariant,
+} from '@/hooks/useRefill';
 import { RefillFillBar } from './RefillFillBar';
 import { supabase } from '@/supabase/client';
+import { compareSizes } from '@/utils/size-helpers';
 import styles from './RefillModal.module.scss';
 
 interface Props {
@@ -36,9 +43,25 @@ interface StudyZone {
   name: string;
 }
 
+type VariantSort = 'color' | 'size';
+
+function sortVariants(variants: RefillVariant[], mode: VariantSort): RefillVariant[] {
+  return [...variants].sort((a, b) => {
+    if (mode === 'color') {
+      const colorCmp = (a.color || '').localeCompare(b.color || '');
+      if (colorCmp !== 0) return colorCmp;
+      return compareSizes(a.size, b.size);
+    }
+    const sizeCmp = compareSizes(a.size, b.size);
+    if (sizeCmp !== 0) return sizeCmp;
+    return (a.color || '').localeCompare(b.color || '');
+  });
+}
+
 export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
   const [windowParam, setWindowParam] = useState<RefillWindow>('30d');
   const [zoneId, setZoneId] = useState<string | null>(null);
+  const [variantSort, setVariantSort] = useState<VariantSort>('color');
   const [zones, setZones] = useState<StudyZone[]>([]);
   const [drafts, setDrafts] = useState<DraftOrder[]>([]);
   const [adjustedQty, setAdjustedQty] = useState<Map<string, number>>(new Map());
@@ -257,6 +280,15 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
       {!submitSuccess && confirmStep === null && (
         <>
           <div className={styles.header}>
+            <SegmentedControl
+              size="xs"
+              value={variantSort}
+              onChange={(v) => setVariantSort(v as VariantSort)}
+              data={[
+                { label: 'Par couleur', value: 'color' },
+                { label: 'Par taille', value: 'size' },
+              ]}
+            />
             <div className={styles.windowSelector}>
               <Select
                 size="sm"
@@ -297,7 +329,9 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
 
           {data && data.products.length > 0 && (
             <div className={styles.body}>
-              {data.products.map((p) => (
+              {data.products.map((p) => {
+                const orderedVariants = sortVariants(p.variants, variantSort);
+                return (
                 <div key={p.productId} className={styles.product}>
                   <h4 className={styles.productTitle}>{p.title}</h4>
                   <table className={styles.table}>
@@ -310,7 +344,7 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
                       </tr>
                     </thead>
                     <tbody>
-                      {p.variants.map((v) => {
+                      {orderedVariants.map((v) => {
                         const qty = adjustedQty.get(v.variantId) ?? 0;
                         const muted = qty === 0;
                         return (
@@ -375,7 +409,8 @@ export function RefillModal({ opened, onClose, containerId, shopId }: Props) {
                     </tbody>
                   </table>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
