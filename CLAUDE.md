@@ -1,9 +1,9 @@
 # Ivy — Production & Stock SaaS
 
 > Next.js 16 · React 19 · TypeScript strict · Mantine 7 · Supabase · Shopify Admin API · pnpm · Netlify
-> Mémoire unifiée : **vault Ivy** (Obsidian) + **Graphify** (TS + SQL) + **Context7**
+> Mémoire unifiée : **vault Ivy** (filesystem) + **Graphify** (TS + SQL) + **Context7**
 
-> Identité, routing par intent et règle d'or : voir `~/ivy-vault/CLAUDE.md` (auto-chargé via MCP `obsidian-mcp-ivy`).
+> Identité, routing par intent et règle d'or : voir `~/ivy-vault/CLAUDE.md` (auto-chargé via le mécanisme natif Claude Code des CLAUDE.md hiérarchiques).
 
 ## 4-Layer Query Rule
 
@@ -11,7 +11,7 @@ Avant de lire un fichier brut, interroger dans cet ordre :
 
 1. **Lib externe** (Next.js, React, Mantine, Supabase, Shopify Admin API, TanStack Query, Tabler Icons…) → **Context7 MCP**
 2. **Structure / relation code local** → **Graphify** (`graphify-out/graph.json` + `GRAPH_REPORT.md`)
-3. **Domaine / décision / gotcha / préférence** → **Obsidian MCP** (`obsidian-mcp-ivy`)
+3. **Domaine / décision / gotcha / préférence** → **Filesystem direct** sur `~/ivy-vault/` (Read par chemin, Glob pour lister, Grep pour terme exact). Le routing par intent du `~/ivy-vault/CLAUDE.md` canalise les lectures.
 4. **Édition de code ou fallback** → **Read** du fichier brut (Grep pour lookup atomique)
 
 ## Graphify
@@ -33,7 +33,7 @@ Les pipelines AST et SQL sont indépendantes — les nodes SQL (`category: "sql"
 
 | Composant | Lieu | Rôle |
 |-----------|------|------|
-| **Vault Ivy** | `~/ivy-vault/` (junction → EGIDE/Ivy/) | Domaine, décisions, gotchas, préférences |
+| **Vault Ivy** | `~/ivy-vault/` (symlink → `IVY - Obsidian/`, gitignored) | Domaine, décisions, gotchas, préférences — accédé en filesystem |
 | **App Next.js** | `src/` | UI + API routes |
 | **Supabase** | `supabase/migrations/` | DB + RLS multi-tenant |
 | **Shopify Admin API** | externe (GraphQL) | Source produits / variantes / metafields |
