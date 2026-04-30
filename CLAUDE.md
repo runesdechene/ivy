@@ -21,13 +21,13 @@ Avant de lire un fichier brut, interroger dans cet ordre :
 
 **Auto via post-commit hook** (`.git/hooks/post-commit`) :
 - Rebuild AST sur tout commit (zone `graphify-hook-start/end`)
-- Lance `scripts/graphify-sql.py` si le commit touche `supabase/migrations/` (zone `graphify-sql-hook-start/end`)
+- Lance `scripts/graphify-supabase.py` si le commit touche `supabase/migrations/` ou `src/**/*.{ts,tsx}` (zone `graphify-supabase-hook-start/end`)
 
 **Rebuilds manuels** :
 - TS / TSX : `python -c "from graphify.watch import _rebuild_code; from pathlib import Path; _rebuild_code(Path('.'))"`
-- SQL : `python scripts/graphify-sql.py`
+- SQL + edges code→SQL : `python scripts/graphify-supabase.py`
 
-Les pipelines AST et SQL sont indépendantes — les nodes SQL (`category: "sql"`) survivent au rebuild AST.
+Les pipelines AST et Supabase sont indépendantes — les nodes SQL (`category: "sql"`) survivent au rebuild AST. Le script Supabase couvre à la fois le parsing des migrations et les edges `references` reliant chaque fichier TS/TSX aux tables qu'il interroge via `.from('table')`.
 
 ## Ecosystem
 

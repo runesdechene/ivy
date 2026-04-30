@@ -1,7 +1,7 @@
-"""Tests pour scripts/graphify-sql.py (renomme graphify-supabase.py en Task 4).
+"""Tests pour scripts/graphify-supabase.py.
 
 Lance avec :
-    python scripts/test_graphify_sql.py
+    python scripts/test_graphify_supabase.py
 """
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SCRIPT_PATH = REPO_ROOT / "scripts" / "graphify-sql.py"
+SCRIPT_PATH = REPO_ROOT / "scripts" / "graphify-supabase.py"
 
 
 def load_script_module():
