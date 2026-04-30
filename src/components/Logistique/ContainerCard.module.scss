@@ -206,15 +206,17 @@ $unit: 140px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
-  color: rgba(0, 0, 0, 0.85);
-  background: rgba(255, 255, 255, 0.92);
-  padding: 3px 8px;
-  border-radius: 8px;
-  max-width: calc(100% - 8px);
-  line-height: 1.15;
+  gap: 0;
+  // Texte directement posé sur la couleur de fond. Couleur blanche avec
+  // ombre noire portée pour rester lisible sur n'importe quelle teinte
+  // (clair ou foncée), sans masquer la couleur sous une pill blanche.
+  color: rgba(255, 255, 255, 0.96);
+  text-shadow:
+    0 0 1px rgba(0, 0, 0, 0.85),
+    0 1px 2px rgba(0, 0, 0, 0.55);
+  max-width: calc(100% - 6px);
+  line-height: 1.1;
   text-align: center;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
   pointer-events: none;
 
   > span {
@@ -230,19 +232,19 @@ $unit: 140px;
   font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: rgba(0, 0, 0, 0.55);
+  letter-spacing: 0.05em;
+  opacity: 0.85;
 }
 
 .variantLabelProduct {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .variantLabelOpts {
   font-size: 10px;
   font-weight: 500;
-  color: rgba(0, 0, 0, 0.65);
+  opacity: 0.92;
 }
 
 .stats {
