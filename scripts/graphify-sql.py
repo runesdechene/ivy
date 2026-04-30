@@ -329,6 +329,13 @@ def main() -> int:
     graph["nodes"].extend(deduped)
     graph[edges_key].extend(all_edges)
 
+    # Edges code TS/TSX -> tables SQL (whitelist par les ids deja connus)
+    sql_table_ids = {n["id"] for n in deduped if n.get("category") == "sql"}
+    ts_edges = parse_ts_supabase(REPO_ROOT, sql_table_ids)
+    if ts_edges:
+        print(f"  TS->SQL : {len(ts_edges)} edges 'references' generes depuis src/")
+        graph[edges_key].extend(ts_edges)
+
     GRAPH_PATH.write_text(json.dumps(graph, indent=2), encoding="utf-8")
 
     sql_ids = {n["id"] for n in graph["nodes"] if n.get("category") == "sql"}
