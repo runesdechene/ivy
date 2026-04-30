@@ -12,13 +12,31 @@ const SIZE_ORDER = [
 ];
 
 /**
+ * Normalise une taille vers la notation canonique : "XXL"→"2XL", "XXXL"→"3XL", etc.
+ * Les tailles déjà canoniques (S, M, L, XL, 2XL, …) sont inchangées (à part trim/upper).
+ * Plusieurs fournisseurs Shopify livrent "XXL" et d'autres "2XL" — on harmonise au match.
+ */
+export function normalizeSize(size: string | null | undefined): string | null {
+  if (!size) return null;
+  const trimmed = String(size).trim().toUpperCase();
+  if (!trimmed) return null;
+  // "XXL"+ → "2XL"+ (mais "XL" reste "XL", "XS" n'est pas concerné car finit par S)
+  const xMatch = trimmed.match(/^(X+)L$/);
+  if (xMatch && xMatch[1].length >= 2) {
+    return `${xMatch[1].length}XL`;
+  }
+  return trimmed;
+}
+
+/**
  * Obtient l'index de tri d'une taille
  * @param size Taille à évaluer
  * @returns Index dans l'ordre de tri (-1 si non trouvé)
  */
 export function getSizeIndex(size: string | null | undefined): number {
-  if (!size) return -1;
-  return SIZE_ORDER.indexOf(size.toUpperCase());
+  const normalized = normalizeSize(size);
+  if (!normalized) return -1;
+  return SIZE_ORDER.indexOf(normalized);
 }
 
 /**

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/supabase/client';
+import { normalizeSize } from '@/utils/size-helpers';
 
 type VariantInfo = {
   id: string;
@@ -128,6 +129,11 @@ export async function GET(req: NextRequest) {
     const filterSizes: string[] = Array.isArray(inst.filter_size)
       ? inst.filter_size.filter((s: unknown) => typeof s === 'string' && s.trim().length > 0)
       : [];
+    // Normalise XXL→2XL etc. pour le match — Shopify renvoie les deux notations
+    // selon le fournisseur, mais elles désignent la même taille.
+    const filterSizesNormalized = new Set(
+      filterSizes.map((s) => normalizeSize(s)).filter((s): s is string => !!s),
+    );
     const isFilterMode = filterTypes.length > 0 || filterSizes.length > 0;
 
     // 1) Résoudre la liste des produits candidats selon le mode
@@ -186,8 +192,11 @@ export async function GET(req: NextRequest) {
         if (!p) continue;
         const size = extractSize(v, p);
         // En mode filtre avec filter_size renseigné, on ne garde que les
-        // variants dont la taille extraite matche une des valeurs.
-        if (isFilterMode && filterSizes.length > 0 && (!size || !filterSizes.includes(size))) continue;
+        // variants dont la taille extraite matche une des valeurs (normalisées).
+        if (isFilterMode && filterSizesNormalized.size > 0) {
+          const norm = normalizeSize(size);
+          if (!norm || !filterSizesNormalized.has(norm)) continue;
+        }
 
         // Track ALL caisse variants (qty > 0 ou non) pour le calcul draft_qty :
         // une variante avec stock physique 0 mais des items en commande

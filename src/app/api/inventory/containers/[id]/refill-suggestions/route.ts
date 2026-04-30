@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/supabase/client';
 import { computeRefillSuggestions, VariantInput } from '@/utils/refill-math';
+import { normalizeSize } from '@/utils/size-helpers';
 
 const COLOR_OPTION_NAMES = ['couleur', 'color', 'colour'];
 const SIZE_OPTION_NAMES = ['taille', 'size'];
@@ -139,12 +140,16 @@ export async function GET(
   // la taille extraite ne matche pas — cohérent avec la card.
   const productById = new Map(products.map((p: any) => [p.id, p]));
   const allVariants = variantsRaw ?? [];
-  const variants = (isFilterMode && filterSizes.length > 0)
+  // Normalise XXL→2XL etc. — Shopify renvoie les deux notations selon le fournisseur.
+  const filterSizesNormalized = new Set(
+    filterSizes.map((s) => normalizeSize(s)).filter((s): s is string => !!s),
+  );
+  const variants = (isFilterMode && filterSizesNormalized.size > 0)
     ? allVariants.filter((v: any) => {
         const p: any = productById.get(v.product_id);
         if (!p) return false;
-        const size = extractByOptionName(v, p, SIZE_OPTION_NAMES);
-        return !!size && filterSizes.includes(size);
+        const norm = normalizeSize(extractByOptionName(v, p, SIZE_OPTION_NAMES));
+        return !!norm && filterSizesNormalized.has(norm);
       })
     : allVariants;
   const variantIds = variants.map((v: any) => v.id);

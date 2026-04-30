@@ -10,6 +10,7 @@ import {
   useShopProducts,
   useProductTypes,
 } from '@/hooks/useContainers';
+import { normalizeSize } from '@/utils/size-helpers';
 
 interface Props {
   opened: boolean;
@@ -18,7 +19,9 @@ interface Props {
   shopId: string;
 }
 
-const STANDARD_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL'];
+// Notation canonique : 2XL/3XL/… (cohérent avec SIZE_ORDER de size-helpers).
+// Les variantes Shopify en "XXL" sont matchées via normalizeSize().
+const STANDARD_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'];
 
 type Mode = 'product' | 'filter';
 
@@ -40,7 +43,13 @@ export function AssignProductsModal({ opened, onClose, instance, shopId }: Props
     setMode(hasTypes || hasSizes ? 'filter' : 'product');
     setSelected(instance.products.map((p) => p.id));
     setFilterTypes(instance.filter_product_type ?? []);
-    setFilterSizes(instance.filter_size ?? []);
+    // Normalise à la lecture pour qu'un ancien filtre "XXL" stocké en DB
+    // s'affiche pré-coché comme "2XL" dans la nouvelle UI canonique.
+    setFilterSizes(
+      (instance.filter_size ?? [])
+        .map((s) => normalizeSize(s))
+        .filter((s): s is string => !!s),
+    );
   }, [opened, instance]);
 
   const submit = async () => {
