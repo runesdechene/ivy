@@ -40,11 +40,20 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# python (scripts utilitaires graphify-supabase)
+__pycache__/
+*.pyc
+
 .idea
 !.env.dist
 
-# local tooling (OpenWolf state, Claude project config, Graphify outputs)
+# local tooling (OpenWolf archive, Claude project config, Graphify outputs)
 /.wolf
+/.wolf-archive
 /.claude
 /graphify-out
 /.superpowers
+/CLAUDE.md.openwolf-era
+
+# Obsidian vault dédié (mémoire Ivy — voir ~/ivy-vault junction et CLAUDE.md)
+/IVY - Obsidian
