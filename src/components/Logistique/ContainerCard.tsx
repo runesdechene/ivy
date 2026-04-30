@@ -391,7 +391,13 @@ export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color'
                     )}
                     <div className={styles.sectionStripes}>
                       {sec.items.flatMap((v, vIdx) => {
-                        const tip = `${v.color || ''} ${v.size || ''} — ${v.qty}`.trim();
+                        // Tooltip complet : type (si pertinent) · produit · variante · qty
+                        const tipParts: string[] = [];
+                        if (v.product_type) tipParts.push(v.product_type);
+                        if (v.product_title) tipParts.push(v.product_title);
+                        const variantBits = [v.color, v.size].filter(Boolean).join(' ');
+                        if (variantBits) tipParts.push(variantBits);
+                        const tip = `${tipParts.join(' · ')} — ${v.qty}`;
                         const bg = colorToCss(v.color_hex);
                         const isLastVariantInSection = vIdx === sec.items.length - 1;
 
