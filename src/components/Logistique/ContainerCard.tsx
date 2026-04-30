@@ -68,6 +68,11 @@ function distributeFlat(
   if (variants.length === 0) return buckets;
 
   const sorted = [...variants].sort((a, b) => {
+    // Regrouper visuellement les variantes du même product_type quand on
+    // mélange plusieurs types dans une caisse filtre (ex: Le Zippé +
+    // Le Robuste) — sinon le tri alphabétique par titre les interleave.
+    const typeCmp = (a.product_type || '').localeCompare(b.product_type || '');
+    if (typeCmp !== 0) return typeCmp;
     const productCmp = (a.product_title || '').localeCompare(b.product_title || '');
     if (productCmp !== 0) return productCmp;
     if (!hasSizeFilter) {
@@ -349,7 +354,14 @@ export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color'
                           //   absolute par-dessus, en sautant la dimension
                           //   filtrée pour ne pas répéter
                           // - bordure noire entre variantes consécutives
-                          const labelParts = [v.product_title || ''];
+                          // Préfixer par le product_type uniquement quand le
+                          // filtre couvre plusieurs types : sinon c'est
+                          // redondant avec l'info en footer de la caisse.
+                          const labelParts: string[] = [];
+                          if (filterTypes.length > 1 && v.product_type) {
+                            labelParts.push(v.product_type);
+                          }
+                          if (v.product_title) labelParts.push(v.product_title);
                           if (!hideSizeInLabel && v.size) labelParts.push(v.size);
                           if (v.color) labelParts.push(v.color);
                           const label = labelParts.filter(Boolean).join(' · ');

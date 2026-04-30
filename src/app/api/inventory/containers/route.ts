@@ -5,6 +5,7 @@ type VariantInfo = {
   id: string;
   title: string;
   product_title: string;
+  product_type: string | null;
   color: string | null;
   color_hex: string | null;
   size: string | null;
@@ -99,7 +100,7 @@ export async function GET(req: NextRequest) {
       filter_size,
       type:container_types(id, name, max_capacity, empty_weight_g, ratio_w, ratio_h, columns),
       affectations:container_instance_products(
-        product:products(id, title, image_url, illustration_url, option1_name, option2_name, option3_name)
+        product:products(id, title, image_url, illustration_url, product_type, option1_name, option2_name, option3_name)
       )
     `)
     .eq('shop_id', shopId)
@@ -134,7 +135,7 @@ export async function GET(req: NextRequest) {
       let q = supabase
         .from('products')
         .select(`
-          id, title, image_url, illustration_url,
+          id, title, image_url, illustration_url, product_type,
           option1_name, option2_name, option3_name
         `)
         .eq('shop_id', shopId);
@@ -202,6 +203,7 @@ export async function GET(req: NextRequest) {
           id: v.id,
           title: v.title,
           product_title: p.title || '',
+          product_type: p.product_type || null,
           color,
           color_hex: resolveHex(color),
           size,
