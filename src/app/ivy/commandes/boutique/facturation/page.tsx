@@ -238,14 +238,10 @@ export default function FacturationBoutiquePage() {
   };
 
   const calculateOrderCost = (order: Order): number => {
-    let idx = 0;
-    const itemsCost = order.line_items
-      .filter(item => !item.isCancelled)
-      .reduce((sum, item) => {
-        const cost = getItemBilledCost(order, item, idx);
-        idx++;
-        return sum + cost;
-      }, 0);
+    const itemsCost = order.line_items.reduce((sum, item, idx) => {
+      if (item.isCancelled) return sum;
+      return sum + getItemBilledCost(order, item, idx);
+    }, 0);
     return itemsCost + (itemsCost > 0 ? handlingFee : 0);
   };
 
@@ -389,14 +385,10 @@ export default function FacturationBoutiquePage() {
                   </thead>
                   <tbody>
                     {currentMonthOrders.map((order) => {
-                      let itemIdx = 0;
-                      const itemsCost = order.line_items
-                        .filter(item => !item.isCancelled)
-                        .reduce((sum, item) => {
-                          const cost = getItemBilledCost(order, item, itemIdx);
-                          itemIdx++;
-                          return sum + cost;
-                        }, 0);
+                      const itemsCost = order.line_items.reduce((sum, item, idx) => {
+                        if (item.isCancelled) return sum;
+                        return sum + getItemBilledCost(order, item, idx);
+                      }, 0);
                       const totalCost = itemsCost + (itemsCost > 0 ? handlingFee : 0);
 
                       return (
@@ -410,8 +402,8 @@ export default function FacturationBoutiquePage() {
                           <td className={styles.td}>
                             <div>
                               {order.line_items
-                                .filter(item => !item.isCancelled)
                                 .map((item, index) => {
+                                  if (item.isCancelled) return null;
                                   const color = getColorFromVariant(item);
                                   const size = getSizeFromVariant(item);
                                   const encodedOrderId = encodeFirestoreId(order.shopify_id);
@@ -484,11 +476,9 @@ export default function FacturationBoutiquePage() {
                         <span className={styles.amount}>
                           {formatEuro(
                             currentMonthOrders.reduce((sum, o) => {
-                              let idx = 0;
-                              return sum + o.line_items.filter(i => !i.isCancelled).reduce((s, i) => {
-                                const cost = getItemBilledCost(o, i, idx);
-                                idx++;
-                                return s + cost;
+                              return sum + o.line_items.reduce((s, i, idx) => {
+                                if (i.isCancelled) return s;
+                                return s + getItemBilledCost(o, i, idx);
                               }, 0);
                             }, 0)
                           )}
@@ -498,11 +488,9 @@ export default function FacturationBoutiquePage() {
                         <span className={styles.amount}>
                           {formatEuro(
                             currentMonthOrders.reduce((sum, o) => {
-                              let idx = 0;
-                              const hasChecked = o.line_items.filter(i => !i.isCancelled).some(i => {
-                                const cost = getItemBilledCost(o, i, idx);
-                                idx++;
-                                return cost > 0;
+                              const hasChecked = o.line_items.some((i, idx) => {
+                                if (i.isCancelled) return false;
+                                return getItemBilledCost(o, i, idx) > 0;
                               });
                               return sum + (hasChecked ? handlingFee : 0);
                             }, 0)
