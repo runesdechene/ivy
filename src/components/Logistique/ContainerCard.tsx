@@ -354,17 +354,16 @@ export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color'
                           //   absolute par-dessus, en sautant la dimension
                           //   filtrée pour ne pas répéter
                           // - bordure noire entre variantes consécutives
-                          // Préfixer par le product_type uniquement quand le
-                          // filtre couvre plusieurs types : sinon c'est
-                          // redondant avec l'info en footer de la caisse.
-                          const labelParts: string[] = [];
-                          if (filterTypes.length > 1 && v.product_type) {
-                            labelParts.push(v.product_type);
-                          }
-                          if (v.product_title) labelParts.push(v.product_title);
-                          if (!hideSizeInLabel && v.size) labelParts.push(v.size);
-                          if (v.color) labelParts.push(v.color);
-                          const label = labelParts.filter(Boolean).join(' · ');
+                          // Empilement vertical pour rester lisible quand on a
+                          // beaucoup d'info (type + produit + taille + couleur).
+                          // Le type n'apparaît que si la caisse mélange plusieurs
+                          // types — sinon il est en footer de caisse.
+                          const showType = filterTypes.length > 1 && !!v.product_type;
+                          const variantLine = [
+                            !hideSizeInLabel ? v.size : null,
+                            v.color,
+                          ].filter(Boolean).join(' · ');
+                          const hasAnyLabel = showType || !!v.product_title || !!variantLine;
                           return (
                             <Tooltip key={v.id} label={tip} withArrow>
                               <div
@@ -377,8 +376,18 @@ export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color'
                                 {Array.from({ length: v.qty }).map((_, i) => (
                                   <div key={i} className={styles.variantStripe} />
                                 ))}
-                                {label && (
-                                  <span className={styles.variantLabel}>{label}</span>
+                                {hasAnyLabel && (
+                                  <span className={styles.variantLabel}>
+                                    {showType && (
+                                      <span className={styles.variantLabelType}>{v.product_type}</span>
+                                    )}
+                                    {v.product_title && (
+                                      <span className={styles.variantLabelProduct}>{v.product_title}</span>
+                                    )}
+                                    {variantLine && (
+                                      <span className={styles.variantLabelOpts}>{variantLine}</span>
+                                    )}
+                                  </span>
                                 )}
                               </div>
                             </Tooltip>
