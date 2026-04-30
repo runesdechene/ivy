@@ -40,6 +40,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# python (scripts utilitaires graphify-supabase)
+__pycache__/
+*.pyc
+
 .idea
 !.env.dist
 
