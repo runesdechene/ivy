@@ -21,7 +21,7 @@ Avant de lire un fichier brut, interroger dans cet ordre :
 
 **Auto via post-commit hook** (`.git/hooks/post-commit`) :
 - Rebuild AST sur tout commit (zone `graphify-hook-start/end`)
-- Lance `scripts/graphify-supabase.py` si le commit touche `supabase/migrations/` ou `src/**/*.{ts,tsx}` (zone `graphify-supabase-hook-start/end`)
+- Lance `scripts/graphify-supabase.py` à chaque commit (zone `graphify-supabase-hook-start/end`). Inconditionnel car l'AST rebuild wipe les edges `references` file→table — il faut les ré-injecter à chaque fois.
 
 **Rebuilds manuels** :
 - TS / TSX : `python -c "from graphify.watch import _rebuild_code; from pathlib import Path; _rebuild_code(Path('.'))"`
