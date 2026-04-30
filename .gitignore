@@ -43,8 +43,10 @@ next-env.d.ts
 .idea
 !.env.dist
 
-# local tooling (OpenWolf state, Claude project config, Graphify outputs)
+# local tooling (OpenWolf archive, Claude project config, Graphify outputs)
 /.wolf
+/.wolf-archive
 /.claude
 /graphify-out
 /.superpowers
+/CLAUDE.md.openwolf-era
