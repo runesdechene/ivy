@@ -47,6 +47,17 @@ REF_RE = re.compile(
 
 MIGRATION_REF_RE = re.compile(r"\b(\d{3})_[a-zA-Z0-9_-]+\.sql\b")
 
+# Pattern .from('table') ou .from("table") avec litteral string only.
+# On capture pas .from(varName) intentionnellement -- on s'arrete aux litteraux
+# pour eviter les faux positifs et garder la regex simple.
+TS_FROM_RE = re.compile(
+    r"\.from\(\s*['\"]([a-zA-Z_]\w*)['\"]\s*\)",
+)
+
+# Globs scannes pour le code TS qui parle a Supabase.
+# Specifique a Ivy (single Next.js avec src/ a la racine).
+TS_GLOBS = ("src/**/*.ts", "src/**/*.tsx")
+
 # Préfixes typiques des variables PL/pgSQL — à exclure des refs.
 PLPGSQL_VAR_PREFIXES = ("v_", "p_", "tmp_", "_v_", "_p_")
 
@@ -188,6 +199,57 @@ def parse_migration(path: Path) -> dict:
             break
 
     return {"nodes": nodes, "edges": edges, "defined_ids": defined_ids}
+
+
+def parse_ts_supabase(repo_root: Path, sql_table_ids: set[str]) -> list[dict]:
+    """Scanne les fichiers TS/TSX et produit des edges 'references' file->table.
+
+    - repo_root : racine du repo (utilisee pour calculer les chemins relatifs)
+    - sql_table_ids : whitelist des ids SQL existants (ex: {"sql_products", ...}).
+      Un match `.from('x')` ne cree d'edge que si `sql_<slug(x)>` est dans cet ensemble.
+
+    Retourne une liste d'edges (dicts au format graphify), un par couple (fichier, table)
+    avec weight = nombre d'occurrences dans le fichier.
+    """
+    edges: list[dict] = []
+    seen_files: set[Path] = set()
+
+    for pattern in TS_GLOBS:
+        for ts_path in sorted(repo_root.glob(pattern)):
+            if ts_path in seen_files:
+                continue
+            seen_files.add(ts_path)
+
+            try:
+                text = ts_path.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                continue
+
+            counts: dict[str, int] = {}
+            for m in TS_FROM_RE.finditer(text):
+                table = m.group(1)
+                target_id = f"sql_{slug(table)}"
+                if target_id not in sql_table_ids:
+                    continue
+                counts[target_id] = counts.get(target_id, 0) + 1
+
+            if not counts:
+                continue
+
+            rel_path = ts_path.relative_to(repo_root).as_posix()
+            source_id = slug(rel_path.replace("/", "_"))
+            for target_id, count in sorted(counts.items()):
+                edges.append({
+                    "source": source_id,
+                    "target": target_id,
+                    "relation": "references",
+                    "confidence": "EXTRACTED",
+                    "confidence_score": 1.0,
+                    "source_file": rel_path,
+                    "weight": float(count),
+                })
+
+    return edges
 
 
 def main() -> int:

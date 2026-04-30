@@ -70,5 +70,106 @@ class TestParseSqlMigration(unittest.TestCase):
         self.assertIn("sql_products", targets)
 
 
+class TestParseTsSupabase(unittest.TestCase):
+    """Tests pour parse_ts_supabase : extraction des .from('table') du code TS."""
+
+    def _run(self, files: dict, whitelist: set):
+        """files = {chemin_relatif: contenu}. Retourne edges."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            (tmp_path / "src").mkdir()
+            for rel, content in files.items():
+                full = tmp_path / rel
+                full.parent.mkdir(parents=True, exist_ok=True)
+                full.write_text(content, encoding="utf-8")
+            original_root = mod.REPO_ROOT
+            mod.REPO_ROOT = tmp_path
+            try:
+                edges = mod.parse_ts_supabase(tmp_path, whitelist)
+            finally:
+                mod.REPO_ROOT = original_root
+        return edges
+
+    def test_simple_from_creates_edge_when_table_in_whitelist(self):
+        edges = self._run(
+            {"src/api.ts": "supabase.from('products').select('*')"},
+            whitelist={"sql_products"},
+        )
+        self.assertEqual(len(edges), 1)
+        e = edges[0]
+        self.assertEqual(e["target"], "sql_products")
+        self.assertEqual(e["relation"], "references")
+        self.assertEqual(e["weight"], 1)
+        self.assertEqual(e["source_file"], "src/api.ts")
+
+    def test_from_with_unknown_table_is_skipped(self):
+        edges = self._run(
+            {"src/api.ts": "supabase.from('not_a_real_table').select()"},
+            whitelist={"sql_products"},
+        )
+        self.assertEqual(edges, [])
+
+    def test_buffer_from_utf8_is_skipped_via_whitelist(self):
+        edges = self._run(
+            {"src/api.ts": "Buffer.from('utf-8')"},
+            whitelist={"sql_products"},
+        )
+        self.assertEqual(edges, [])
+
+    def test_multiple_calls_same_table_dedup_with_weight(self):
+        content = """
+        supabase.from('products').select();
+        supabase.from('products').insert({});
+        supabase.from('products').update({});
+        """
+        edges = self._run(
+            {"src/api.ts": content},
+            whitelist={"sql_products"},
+        )
+        self.assertEqual(len(edges), 1)
+        self.assertEqual(edges[0]["weight"], 3)
+
+    def test_multiple_files_each_get_their_edge(self):
+        edges = self._run(
+            {
+                "src/a.ts": "supabase.from('products').select()",
+                "src/b.ts": "supabase.from('products').select()",
+            },
+            whitelist={"sql_products"},
+        )
+        self.assertEqual(len(edges), 2)
+        sources = {e["source_file"] for e in edges}
+        self.assertEqual(sources, {"src/a.ts", "src/b.ts"})
+
+    def test_tsx_files_are_scanned(self):
+        edges = self._run(
+            {"src/component.tsx": "supabase.from('products').select()"},
+            whitelist={"sql_products"},
+        )
+        self.assertEqual(len(edges), 1)
+
+    def test_from_with_variable_arg_is_not_matched(self):
+        edges = self._run(
+            {"src/api.ts": "supabase.from(tableName).select()"},
+            whitelist={"sql_products"},
+        )
+        self.assertEqual(edges, [])
+
+    def test_double_quoted_literal_is_matched(self):
+        edges = self._run(
+            {"src/api.ts": 'supabase.from("products").select()'},
+            whitelist={"sql_products"},
+        )
+        self.assertEqual(len(edges), 1)
+
+    def test_edge_source_id_is_slug_of_relative_path(self):
+        edges = self._run(
+            {"src/app/api/inventory/route.ts": "supabase.from('products').select()"},
+            whitelist={"sql_products"},
+        )
+        self.assertEqual(len(edges), 1)
+        self.assertEqual(edges[0]["source"], "src_app_api_inventory_route_ts")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
