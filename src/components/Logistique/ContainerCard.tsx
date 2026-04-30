@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import clsx from 'clsx';
 import { ActionIcon, Menu, Tooltip } from '@mantine/core';
 import { IconDots, IconPencil, IconPackage, IconRefresh, IconTrash } from '@tabler/icons-react';
@@ -208,12 +208,34 @@ export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color'
   const cols = Math.max(1, type.columns ?? 1);
   const colCapacity = type.max_capacity / cols;
 
+  // Filtre visuel : cliquer sur une vignette de produit en haut isole ce
+  // produit dans le rendu de la caisse. Multi-sélection possible. Set vide
+  // = tous les produits sont affichés (état par défaut).
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
+  const hasSelection = selectedProductIds.size > 0;
+  const toggleProduct = (id: string) => {
+    setSelectedProductIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const filteredVariants = useMemo(
+    () =>
+      hasSelection
+        ? variants.filter((v) => selectedProductIds.has(v.product_id))
+        : variants,
+    [variants, selectedProductIds, hasSelection],
+  );
+
   const columnsData = useMemo(
     () =>
       isFilterMode
-        ? distributeFlat(variants, cols, hideSizeInLabel)
-        : distributeOrdered(variants, cols, sortMode),
-    [variants, cols, sortMode, isFilterMode, hideSizeInLabel],
+        ? distributeFlat(filteredVariants, cols, hideSizeInLabel)
+        : distributeOrdered(filteredVariants, cols, sortMode),
+    [filteredVariants, cols, sortMode, isFilterMode, hideSizeInLabel],
   );
 
   const w = UNIT * type.ratio_w;
@@ -278,18 +300,46 @@ export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color'
             // custom.illustration_produit, motif en noir) — même source que la
             // page feuillet d'impression. Le mockup p.image_url est ignoré.
             const src = p.illustration_url;
+            const isSelected = selectedProductIds.has(p.id);
+            // Quand au moins un produit est sélectionné, ceux qui ne le sont
+            // pas passent en dimmer pour signaler le filtre actif.
+            const dim = hasSelection && !isSelected;
+            const tip = isSelected
+              ? `${p.title} — cliquer pour retirer du filtre`
+              : hasSelection
+                ? `${p.title} — cliquer pour ajouter au filtre`
+                : `${p.title} — cliquer pour filtrer`;
             return (
-              <Tooltip key={p.id} label={p.title} withArrow>
+              <Tooltip key={p.id} label={tip} withArrow>
                 {src ? (
-                  <span
-                    className={styles.thumb}
+                  <button
+                    type="button"
+                    onClick={() => toggleProduct(p.id)}
+                    className={clsx(
+                      styles.thumb,
+                      styles.thumbInteractive,
+                      isSelected && styles.thumbSelected,
+                      dim && styles.thumbDimmed,
+                    )}
                     style={{ backgroundImage: `url("${src}")` }}
                     aria-label={p.title}
+                    aria-pressed={isSelected}
                   />
                 ) : (
-                  <span className={styles.thumbPlaceholder} aria-label={p.title}>
+                  <button
+                    type="button"
+                    onClick={() => toggleProduct(p.id)}
+                    className={clsx(
+                      styles.thumbPlaceholder,
+                      styles.thumbInteractive,
+                      isSelected && styles.thumbSelected,
+                      dim && styles.thumbDimmed,
+                    )}
+                    aria-label={p.title}
+                    aria-pressed={isSelected}
+                  >
                     {p.title.slice(0, 1)}
-                  </span>
+                  </button>
                 )}
               </Tooltip>
             );

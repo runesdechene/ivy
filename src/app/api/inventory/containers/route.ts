@@ -4,6 +4,7 @@ import { createServerClient } from '@/supabase/client';
 type VariantInfo = {
   id: string;
   title: string;
+  product_id: string;
   product_title: string;
   product_type: string | null;
   color: string | null;
@@ -202,6 +203,7 @@ export async function GET(req: NextRequest) {
         variants.push({
           id: v.id,
           title: v.title,
+          product_id: v.product_id,
           product_title: p.title || '',
           product_type: p.product_type || null,
           color,

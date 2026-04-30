@@ -45,6 +45,33 @@ $unit: 140px;
   flex-shrink: 0;
 }
 
+.thumbInteractive {
+  cursor: pointer;
+  padding: 0;
+  appearance: none;
+  transition: opacity 0.15s ease, transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    border-color: var(--moss);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--moss);
+    outline-offset: 2px;
+  }
+}
+
+.thumbSelected {
+  border-color: var(--moss);
+  box-shadow: 0 0 0 2px rgba(108, 142, 88, 0.35);
+}
+
+.thumbDimmed {
+  opacity: 0.35;
+  filter: grayscale(0.4);
+}
+
 .box {
   position: relative;
   background: var(--cream);
