@@ -478,16 +478,25 @@ export default function OrderDetailPage() {
         }),
       });
 
+      const data = await response.json().catch(() => ({}));
+
       if (response.ok) {
-        const data = await response.json();
         notifications.show({
-          title: 'Succès',
+          title: data.partial ? 'Succès partiel' : 'Succès',
           message: data.message || 'Métachamps mis à jour',
-          color: 'green',
+          color: data.partial ? 'yellow' : 'green',
+          autoClose: data.partial ? 8000 : 4000,
         });
         fetchOrder();
       } else {
-        throw new Error('Failed to refresh');
+        // Le serveur a refusé d'écrire (typiquement 502 si tous les batchs Shopify
+        // ont échoué) → on affiche le vrai message, on ne touche surtout pas à la DB.
+        notifications.show({
+          title: 'Erreur',
+          message: data.error || `Impossible de rafraîchir les métachamps (HTTP ${response.status})`,
+          color: 'red',
+          autoClose: 10000,
+        });
       }
     } catch (err) {
       console.error('Error refreshing metafields:', err);

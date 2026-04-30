@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/supabase/client';
+import { fetchVariantMetafieldsByDisplayName } from '@/lib/shopify-metafields';
 
 interface RefillLine {
   variantId: string;
@@ -156,18 +157,40 @@ export async function POST(
     .eq('is_active', true);
 
   let variantMetafieldsMap: Record<string, Record<string, string>> = {};
+  let metafieldsFetchFailed = false;
   if (metafieldConfigs && metafieldConfigs.length > 0) {
     const shopifyIds = Array.from(variantInfoById.values())
       .map((i) => i.shopifyId)
       .filter((s): s is string => !!s);
     if (shopifyIds.length > 0) {
-      variantMetafieldsMap = await fetchVariantMetafields(
+      const fetchResult = await fetchVariantMetafieldsByDisplayName(
         supabase,
         shopId,
         shopifyIds,
         metafieldConfigs,
       );
+      variantMetafieldsMap = fetchResult.byShopifyId;
+      // Tous les batchs ont échoué : on REFUSE de créer la commande avec des
+      // métachamps vides — c'était la cause de la perte de données sur batch 0004.
+      if (fetchResult.totalBatches > 0 && fetchResult.failedBatches === fetchResult.totalBatches) {
+        metafieldsFetchFailed = true;
+      }
     }
+  }
+
+  if (metafieldsFetchFailed) {
+    // Si on vient de créer un nouveau brouillon (orderId param non fourni),
+    // le supprimer pour ne pas polluer la liste avec des BATCH-NNNN vides.
+    if (!orderId && targetOrderId) {
+      await supabase.from('supplier_orders').delete().eq('id', targetOrderId);
+    }
+    return NextResponse.json(
+      {
+        error:
+          'Échec de récupération des métachamps Shopify (throttle ou erreur réseau). Aucune commande créée. Réessaie dans quelques secondes.',
+      },
+      { status: 502 },
+    );
   }
 
   // 5. Build per-unit rows pour les ajouts (positiveLines). 1 ligne = 1 unité,
@@ -304,88 +327,3 @@ export async function POST(
   });
 }
 
-// Récupère les métachamps Shopify des variantes (copie de la logique de
-// POST /api/suppliers/orders/[orderId]/items pour cohérence stricte).
-async function fetchVariantMetafields(
-  supabase: ReturnType<typeof createServerClient>,
-  shopId: string,
-  variantShopifyIds: string[],
-  metafieldConfigs: Array<{ namespace: string; key: string; display_name: string }>,
-): Promise<Record<string, Record<string, string>>> {
-  try {
-    const { data: shop } = await supabase
-      .from('shops')
-      .select('shopify_url, shopify_token')
-      .eq('id', shopId)
-      .single();
-
-    if (!shop) return {};
-
-    const variantGids = variantShopifyIds.map(
-      (id) => `gid://shopify/ProductVariant/${id}`,
-    );
-
-    const allMetafieldsQuery = `
-      query GetVariantMetafields($ids: [ID!]!) {
-        nodes(ids: $ids) {
-          ... on ProductVariant {
-            id
-            sku
-            metafields(first: 50) {
-              edges { node { namespace key value } }
-            }
-          }
-        }
-      }
-    `;
-
-    const response = await fetch(
-      `https://${shop.shopify_url}/admin/api/2024-01/graphql.json`,
-      {
-        method: 'POST',
-        headers: {
-          'X-Shopify-Access-Token': shop.shopify_token,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          query: allMetafieldsQuery,
-          variables: { ids: variantGids },
-        }),
-      },
-    );
-
-    if (!response.ok) return {};
-    const data = await response.json();
-    if (data.errors) return {};
-
-    const result: Record<string, Record<string, string>> = {};
-    const configuredKeysMap = new Map<
-      string,
-      { namespace: string; key: string; display_name: string }
-    >();
-    for (const c of metafieldConfigs) {
-      configuredKeysMap.set(`${c.namespace}.${c.key}`.toLowerCase(), c);
-    }
-
-    for (const node of data.data?.nodes || []) {
-      if (!node?.id) continue;
-      const shopifyId = String(node.id).replace('gid://shopify/ProductVariant/', '');
-      result[shopifyId] = {};
-      for (const edge of node.metafields?.edges || []) {
-        const mf = edge.node;
-        if (mf && mf.value) {
-          const fullKeyLower = `${mf.namespace}.${mf.key}`.toLowerCase();
-          const config = configuredKeysMap.get(fullKeyLower);
-          if (config) {
-            const displayName = config.display_name || `${mf.namespace}.${mf.key}`;
-            result[shopifyId][displayName] = mf.value;
-          }
-        }
-      }
-    }
-    return result;
-  } catch (err) {
-    console.error('fetchVariantMetafields failed:', err);
-    return {};
-  }
-}

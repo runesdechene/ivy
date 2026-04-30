@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { fetchVariantMetafieldsByDisplayName } from '@/lib/shopify-metafields';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -42,11 +43,29 @@ export async function POST(
 
     // Récupérer les métachamps des variantes via GraphQL si configurés
     let variantMetafieldsMap: Record<string, Record<string, string>> = {};
+    let metafieldsFetchFailed = false;
     if (metafieldConfigs && metafieldConfigs.length > 0) {
-      variantMetafieldsMap = await fetchVariantMetafields(
-        shopId, 
-        Object.values(variantShopifyIdMap), 
-        metafieldConfigs
+      const shopifyIds = Object.values(variantShopifyIdMap).filter((s): s is string => !!s);
+      if (shopifyIds.length > 0) {
+        const fetchResult = await fetchVariantMetafieldsByDisplayName(
+          supabase,
+          shopId,
+          shopifyIds,
+          metafieldConfigs
+        );
+        variantMetafieldsMap = fetchResult.byShopifyId;
+        // Tous les batchs ont échoué → on ne crée pas la commande avec des metafields
+        // factices (vide), c'est ce qui causait la perte de données auparavant.
+        if (fetchResult.totalBatches > 0 && fetchResult.failedBatches === fetchResult.totalBatches) {
+          metafieldsFetchFailed = true;
+        }
+      }
+    }
+
+    if (metafieldsFetchFailed) {
+      return NextResponse.json(
+        { error: 'Échec de récupération des métachamps Shopify (throttle ou erreur réseau). Réessaie dans quelques secondes.' },
+        { status: 502 }
       );
     }
 
@@ -236,38 +255,72 @@ export async function PUT(
         return NextResponse.json({ message: 'Aucun métachamp configuré' });
       }
 
-      // Récupérer les métachamps via GraphQL
-      const variantMetafieldsMap = await fetchVariantMetafields(
+      // Récupérer les métachamps via GraphQL (batché, retries, ne renvoie que ce qui a réussi)
+      const shopifyIdsToFetch = Object.values(variantShopifyIdMap).filter((s): s is string => !!s);
+      const fetchResult = await fetchVariantMetafieldsByDisplayName(
+        supabase,
         shopId,
-        Object.values(variantShopifyIdMap),
+        shopifyIdsToFetch,
         metafieldConfigs
       );
 
-      // Mettre à jour chaque article avec ses métachamps
+      // Si TOUS les batchs ont échoué → ne rien écrire en DB. Refuser proprement.
+      // (avant ce fix, la fonction retournait {} silencieusement et écrasait
+      //  les métachamps existants → perte de données.)
+      if (fetchResult.totalBatches > 0 && fetchResult.failedBatches === fetchResult.totalBatches) {
+        return NextResponse.json(
+          {
+            error: 'Échec de récupération des métachamps Shopify (throttle ou erreur réseau). Aucun changement appliqué. Réessaie dans quelques secondes.',
+          },
+          { status: 502 }
+        );
+      }
+
+      // Mettre à jour chaque article — UNIQUEMENT pour les variantes que Shopify
+      // a effectivement retournées. Les autres conservent leurs métachamps existants
+      // pour ne pas perdre d'information sur un succès partiel.
       let updatedCount = 0;
+      let skippedCount = 0;
+      const nowIso = new Date().toISOString();
       for (const item of orderItems) {
-        if (!item.variant_id) continue;
-        
+        if (!item.variant_id) {
+          skippedCount++;
+          continue;
+        }
+
         const shopifyId = variantShopifyIdMap[item.variant_id];
-        const metafields = shopifyId ? (variantMetafieldsMap[shopifyId] || {}) : {};
+        if (!shopifyId || !fetchResult.fetchedShopifyIds.has(shopifyId)) {
+          skippedCount++;
+          continue;
+        }
+
+        const metafields = fetchResult.byShopifyId[shopifyId] || {};
 
         await supabase
           .from('supplier_order_items')
-          .update({ 
+          .update({
             metafields,
-            updated_at: new Date().toISOString()
+            updated_at: nowIso,
           })
           .eq('id', item.id);
 
         updatedCount++;
       }
 
-      // Compter combien ont des métachamps non-vides
-      const withMetafields = Object.values(variantMetafieldsMap).filter(m => Object.keys(m).length > 0).length;
-      
-      return NextResponse.json({ 
-        message: `${updatedCount} articles traités, ${withMetafields} variantes avec métachamps`,
+      const withMetafields = Object.values(fetchResult.byShopifyId).filter(
+        m => Object.keys(m).length > 0
+      ).length;
+
+      const partial = fetchResult.failedBatches > 0;
+      return NextResponse.json({
+        message: partial
+          ? `${updatedCount} articles mis à jour, ${skippedCount} préservés (échec partiel : ${fetchResult.failedBatches}/${fetchResult.totalBatches} batchs Shopify ont échoué). Relance pour compléter.`
+          : `${updatedCount} articles mis à jour, ${withMetafields} variantes avec métachamps`,
         updatedCount,
+        skippedCount,
+        partial,
+        failedBatches: fetchResult.failedBatches,
+        totalBatches: fetchResult.totalBatches,
       });
     }
 
@@ -408,108 +461,3 @@ async function updateOrderTotals(orderId: string, shopId: string) {
     .eq('shop_id', shopId);
 }
 
-// Récupérer les métachamps des variantes via GraphQL
-async function fetchVariantMetafields(
-  shopId: string,
-  variantShopifyIds: string[],
-  metafieldConfigs: Array<{ namespace: string; key: string; display_name: string }>
-): Promise<Record<string, Record<string, string>>> {
-  try {
-    // Récupérer les infos du shop
-    const { data: shop } = await supabase
-      .from('shops')
-      .select('shopify_url, shopify_token')
-      .eq('id', shopId)
-      .single();
-
-    if (!shop) return {};
-
-    // Construire les GIDs des variantes
-    const variantGids = variantShopifyIds.map(id => `gid://shopify/ProductVariant/${id}`);
-
-    // Requête GraphQL pour récupérer tous les métachamps
-    const allMetafieldsQuery = `
-      query GetVariantMetafields($ids: [ID!]!) {
-        nodes(ids: $ids) {
-          ... on ProductVariant {
-            id
-            sku
-            metafields(first: 50) {
-              edges {
-                node {
-                  namespace
-                  key
-                  value
-                }
-              }
-            }
-          }
-        }
-      }
-    `;
-
-    const response = await fetch(
-      `https://${shop.shopify_url}/admin/api/2024-01/graphql.json`,
-      {
-        method: 'POST',
-        headers: {
-          'X-Shopify-Access-Token': shop.shopify_token,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          query: allMetafieldsQuery,
-          variables: { ids: variantGids },
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      console.error('GraphQL request failed:', response.status);
-      return {};
-    }
-
-    const data = await response.json();
-    
-    if (data.errors) {
-      console.error('GraphQL errors:', data.errors);
-      return {};
-    }
-
-    // Construire le map des métachamps par variant shopify_id
-    const result: Record<string, Record<string, string>> = {};
-    
-    // Créer un map des métachamps configurés pour filtrage rapide (insensible à la casse)
-    const configuredKeysMap = new Map<string, { namespace: string; key: string; display_name: string }>();
-    for (const c of metafieldConfigs) {
-      configuredKeysMap.set(`${c.namespace}.${c.key}`.toLowerCase(), c);
-    }
-    
-    for (const node of data.data?.nodes || []) {
-      if (!node?.id) continue;
-      
-      // Extraire le shopify_id du GID
-      const shopifyId = node.id.replace('gid://shopify/ProductVariant/', '');
-      
-      result[shopifyId] = {};
-      
-      // Parcourir les edges de metafields
-      for (const edge of node.metafields?.edges || []) {
-        const mf = edge.node;
-        if (mf && mf.value) {
-          const fullKeyLower = `${mf.namespace}.${mf.key}`.toLowerCase();
-          // Ne garder que les métachamps configurés (comparaison insensible à la casse)
-          const config = configuredKeysMap.get(fullKeyLower);
-          if (config) {
-            const displayName = config.display_name || `${mf.namespace}.${mf.key}`;
-            result[shopifyId][displayName] = mf.value;
-          }
-        }
-      }
-    }
-
-    return result;
-  } catch (error) {
-    console.error('Error fetching variant metafields:', error);
-    return {};
-  }
-}

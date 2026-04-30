@@ -250,6 +250,200 @@ export async function syncVariantMetafields(
   return allRows.length;
 }
 
+interface MetafieldConfigWithDisplay {
+  namespace: string;
+  key: string;
+  display_name?: string | null;
+}
+
+export interface FetchMetafieldsByDisplayNameResult {
+  /** shopify_id -> { display_name -> value } */
+  byShopifyId: Record<string, Record<string, string>>;
+  /** Variantes effectivement parcourues par Shopify (succès du batch). Sert à savoir
+   *  ce qu'il est sûr d'écraser en DB ; les variantes absentes ne doivent pas voir
+   *  leurs métachamps écrasés à `{}`. */
+  fetchedShopifyIds: Set<string>;
+  totalBatches: number;
+  failedBatches: number;
+}
+
+/**
+ * Récupère les métachamps des variantes depuis Shopify GraphQL et les retourne
+ * indexés par `display_name` (format attendu par `supplier_order_items.metafields`
+ * et `variant_metafields` côté affichage).
+ *
+ * Différences avec `syncVariantMetafields` :
+ * - Ne touche pas la table `variant_metafields` (lecture seule, pour usage transactionnel).
+ * - Retourne le résultat avec un `Set` des shopifyIds réellement récupérés afin que
+ *   l'appelant puisse éviter d'écraser des métachamps existants en cas d'échec partiel.
+ *
+ * Caractéristiques :
+ * - Requête ciblée (1 + N points par node) au lieu de `metafields(first: 50)` (~51).
+ * - Batching dynamique sous 950 points (limite Shopify 1000).
+ * - Retries sur Throttled / cost exceeded / 429.
+ */
+export async function fetchVariantMetafieldsByDisplayName(
+  supabase: SupabaseClient,
+  shopId: string,
+  variantShopifyIds: string[],
+  configs: MetafieldConfigWithDisplay[],
+  log?: LogFn
+): Promise<FetchMetafieldsByDisplayNameResult> {
+  const send = log ?? (() => {});
+  const empty: FetchMetafieldsByDisplayNameResult = {
+    byShopifyId: {},
+    fetchedShopifyIds: new Set(),
+    totalBatches: 0,
+    failedBatches: 0,
+  };
+
+  if (variantShopifyIds.length === 0 || configs.length === 0) return empty;
+
+  const { data: shop } = await supabase
+    .from('shops')
+    .select('shopify_url, shopify_token')
+    .eq('id', shopId)
+    .single();
+  if (!shop) return empty;
+
+  const configuredKeysMap = new Map<string, MetafieldConfigWithDisplay>();
+  for (const c of configs) {
+    configuredKeysMap.set(`${c.namespace}.${c.key}`.toLowerCase(), c);
+  }
+
+  // Requête ciblée : un champ `metafield(namespace, key)` par config active.
+  // Coût ≈ 1 (node) + N (un par metafield singulier).
+  const costPerNode = 1 + configs.length;
+  const batchSize = Math.min(250, Math.max(10, Math.floor(SHOPIFY_MAX_QUERY_COST / costPerNode)));
+  const query = buildTargetedMetafieldsQuery(configs);
+
+  const result: Record<string, Record<string, string>> = {};
+  const fetched = new Set<string>();
+  const totalBatches = Math.ceil(variantShopifyIds.length / batchSize);
+  let failedBatches = 0;
+  let lastActualCost = 0;
+  let lastRestoreRate = 50;
+
+  for (let i = 0; i < variantShopifyIds.length; i += batchSize) {
+    const batchNum = Math.floor(i / batchSize) + 1;
+    const batch = variantShopifyIds.slice(i, i + batchSize);
+    const gids = batch.map(id => `gid://shopify/ProductVariant/${id}`);
+
+    let retries = 0;
+    let success = false;
+
+    while (!success && retries <= MAX_RETRIES) {
+      if (retries > 0) {
+        const backoff = BASE_DELAY_MS * Math.pow(4, retries);
+        await new Promise(resolve => setTimeout(resolve, backoff));
+      }
+
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+        const response = await fetch(
+          `https://${shop.shopify_url}/admin/api/2024-01/graphql.json`,
+          {
+            method: 'POST',
+            headers: {
+              'X-Shopify-Access-Token': shop.shopify_token,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ query, variables: { ids: gids } }),
+            signal: controller.signal,
+          }
+        );
+        clearTimeout(timeoutId);
+
+        if (response.status === 429) {
+          retries++;
+          const throttleWait = Math.ceil((lastActualCost * 2) / lastRestoreRate * 1000);
+          if (retries <= MAX_RETRIES) {
+            send(`    ⏳ HTTP 429 batch ${batchNum}, attente ${(throttleWait / 1000).toFixed(1)}s (retry ${retries}/${MAX_RETRIES})...`, 'warning');
+            await new Promise(resolve => setTimeout(resolve, throttleWait));
+            continue;
+          }
+          send(`    ❌ Batch ${batchNum}: rate limit après ${MAX_RETRIES} retries`, 'error');
+          break;
+        }
+        if (!response.ok) {
+          send(`    ❌ Batch ${batchNum}: HTTP ${response.status}`, 'error');
+          break;
+        }
+
+        const data = await response.json();
+
+        if (data.extensions?.cost) {
+          const cost = data.extensions.cost;
+          lastActualCost = cost.actualQueryCost || lastActualCost;
+          lastRestoreRate = cost.throttleStatus?.restoreRate || lastRestoreRate;
+          const available = cost.throttleStatus?.currentlyAvailable ?? 1000;
+          if (available < lastActualCost * 1.2 && i + batchSize < variantShopifyIds.length) {
+            const deficit = lastActualCost * 1.2 - available;
+            const waitMs = Math.ceil((deficit / lastRestoreRate) * 1000) + 100;
+            if (waitMs > 200) {
+              await new Promise(resolve => setTimeout(resolve, waitMs));
+            }
+          }
+        }
+
+        if (data.errors) {
+          const throttled = data.errors.some((e: { message?: string }) => e.message?.includes('Throttled'));
+          const costExceeded = data.errors.some((e: { message?: string }) =>
+            e.message?.includes('cost') || e.message?.includes('exceeded')
+          );
+          if ((throttled || costExceeded) && retries < MAX_RETRIES) {
+            retries++;
+            const throttleWait = Math.ceil((lastActualCost * 2) / lastRestoreRate * 1000);
+            send(`    ⏳ ${costExceeded ? 'Coût dépassé' : 'Throttled'} batch ${batchNum}, attente ${(throttleWait / 1000).toFixed(1)}s (retry ${retries}/${MAX_RETRIES})...`, 'warning');
+            await new Promise(resolve => setTimeout(resolve, throttleWait));
+            continue;
+          }
+          send(`    ⚠️ Erreurs GraphQL batch ${batchNum}: ${data.errors[0]?.message}`, 'warning');
+        }
+
+        const nodes = data.data?.nodes || [];
+        for (const node of nodes) {
+          if (!node?.id) continue;
+          const shopifyId = String(node.id).replace('gid://shopify/ProductVariant/', '');
+          fetched.add(shopifyId);
+          result[shopifyId] = {};
+          for (let ci = 0; ci < configs.length; ci++) {
+            const mf = node[`mf${ci}`];
+            if (!mf?.value) continue;
+            const fullKeyLower = `${mf.namespace}.${mf.key}`.toLowerCase();
+            const cfg = configuredKeysMap.get(fullKeyLower);
+            if (cfg) {
+              const displayName = cfg.display_name || `${mf.namespace}.${mf.key}`;
+              result[shopifyId][displayName] = mf.value;
+            }
+          }
+        }
+        success = true;
+      } catch (fetchError: unknown) {
+        const errMsg = fetchError instanceof Error ? fetchError.message : String(fetchError);
+        const isTimeout = errMsg.includes('abort');
+        retries++;
+        if (retries <= MAX_RETRIES) {
+          send(`    ⚠️ Batch ${batchNum}: ${isTimeout ? 'timeout' : errMsg}, retry ${retries}/${MAX_RETRIES}...`, 'warning');
+        } else {
+          send(`    ❌ Batch ${batchNum}: échec après ${MAX_RETRIES} retries (${errMsg})`, 'error');
+        }
+      }
+    }
+
+    if (!success) failedBatches++;
+  }
+
+  return {
+    byShopifyId: result,
+    fetchedShopifyIds: fetched,
+    totalBatches,
+    failedBatches,
+  };
+}
+
 /**
  * Supprime les variantes locales dont les options (option1/option2/option3)
  * correspondent à une variante Shopify active du même produit.
