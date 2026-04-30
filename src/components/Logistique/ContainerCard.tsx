@@ -190,7 +190,13 @@ function distributeOrdered(
 
 export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color' }: Props) {
   const { type, fill, variants, products } = instance;
-  const isFilterMode = !!(instance.filter_product_type || instance.filter_size);
+  const filterTypes = instance.filter_product_type ?? [];
+  const filterSizes = instance.filter_size ?? [];
+  const isFilterMode = filterTypes.length > 0 || filterSizes.length > 0;
+  // On masque la dimension "taille" dans les labels uniquement quand on filtre
+  // sur UNE seule taille — sinon les variantes M/L/XL doivent rester
+  // distinguables visuellement.
+  const hideSizeInLabel = filterSizes.length === 1;
   const deleteMut = useDeleteContainer();
   const renameMut = useRenameContainer();
 
@@ -200,9 +206,9 @@ export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color'
   const columnsData = useMemo(
     () =>
       isFilterMode
-        ? distributeFlat(variants, cols, !!instance.filter_size)
+        ? distributeFlat(variants, cols, hideSizeInLabel)
         : distributeOrdered(variants, cols, sortMode),
-    [variants, cols, sortMode, isFilterMode, instance.filter_size],
+    [variants, cols, sortMode, isFilterMode, hideSizeInLabel],
   );
 
   const w = UNIT * type.ratio_w;
@@ -344,7 +350,7 @@ export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color'
                           //   filtrée pour ne pas répéter
                           // - bordure noire entre variantes consécutives
                           const labelParts = [v.product_title || ''];
-                          if (!instance.filter_size && v.size) labelParts.push(v.size);
+                          if (!hideSizeInLabel && v.size) labelParts.push(v.size);
                           if (v.color) labelParts.push(v.color);
                           const label = labelParts.filter(Boolean).join(' · ');
                           return (
@@ -399,9 +405,9 @@ export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color'
             Coût {formatEur(instance.value_cost)} · Vente {formatEur(instance.value_sale)}
           </span>
         )}
-        {(instance.filter_product_type || instance.filter_size) ? (
+        {isFilterMode ? (
           <span className={clsx(styles.products, styles.filter)}>
-            Filtre · {[instance.filter_product_type, instance.filter_size].filter(Boolean).join(' · ')}
+            Filtre · {[...filterTypes, ...filterSizes].join(' · ')}
           </span>
         ) : products.length > 0 ? (
           <span className={styles.products}>

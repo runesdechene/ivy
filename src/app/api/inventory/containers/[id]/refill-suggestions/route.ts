@@ -66,7 +66,13 @@ export async function GET(
   }
   const type = Array.isArray(container.type) ? container.type[0] : container.type;
   const containerName = container.name?.trim() || type.name;
-  const isFilterMode = !!(container.filter_product_type || container.filter_size);
+  const filterTypes: string[] = Array.isArray(container.filter_product_type)
+    ? container.filter_product_type.filter((s: unknown) => typeof s === 'string' && s.trim().length > 0)
+    : [];
+  const filterSizes: string[] = Array.isArray(container.filter_size)
+    ? container.filter_size.filter((s: unknown) => typeof s === 'string' && s.trim().length > 0)
+    : [];
+  const isFilterMode = filterTypes.length > 0 || filterSizes.length > 0;
 
   const { data: colorRules } = await supabase
     .from('color_rules')
@@ -88,8 +94,8 @@ export async function GET(
       .from('products')
       .select('id, title, status, option1_name, option2_name, option3_name')
       .eq('shop_id', container.shop_id);
-    if (container.filter_product_type) {
-      q = q.eq('product_type', container.filter_product_type);
+    if (filterTypes.length > 0) {
+      q = q.in('product_type', filterTypes);
     }
     const { data } = await q;
     products = data ?? [];
@@ -133,12 +139,12 @@ export async function GET(
   // la taille extraite ne matche pas — cohérent avec la card.
   const productById = new Map(products.map((p: any) => [p.id, p]));
   const allVariants = variantsRaw ?? [];
-  const variants = (isFilterMode && container.filter_size)
+  const variants = (isFilterMode && filterSizes.length > 0)
     ? allVariants.filter((v: any) => {
         const p: any = productById.get(v.product_id);
         if (!p) return false;
         const size = extractByOptionName(v, p, SIZE_OPTION_NAMES);
-        return size === container.filter_size;
+        return !!size && filterSizes.includes(size);
       })
     : allVariants;
   const variantIds = variants.map((v: any) => v.id);

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Modal, MultiSelect, Stack, Group, SegmentedControl, Select, Text } from '@mantine/core';
+import { Modal, MultiSelect, Stack, Group, SegmentedControl, Text } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import {
   type ContainerInstance,
@@ -30,23 +30,27 @@ export function AssignProductsModal({ opened, onClose, instance, shopId }: Props
 
   const [mode, setMode] = useState<Mode>('product');
   const [selected, setSelected] = useState<string[]>([]);
-  const [filterType, setFilterType] = useState<string | null>(null);
-  const [filterSize, setFilterSize] = useState<string | null>(null);
+  const [filterTypes, setFilterTypes] = useState<string[]>([]);
+  const [filterSizes, setFilterSizes] = useState<string[]>([]);
 
   useEffect(() => {
     if (!opened) return;
-    const isFilterMode = !!(instance.filter_product_type || instance.filter_size);
-    setMode(isFilterMode ? 'filter' : 'product');
+    const hasTypes = !!instance.filter_product_type && instance.filter_product_type.length > 0;
+    const hasSizes = !!instance.filter_size && instance.filter_size.length > 0;
+    setMode(hasTypes || hasSizes ? 'filter' : 'product');
     setSelected(instance.products.map((p) => p.id));
-    setFilterType(instance.filter_product_type ?? null);
-    setFilterSize(instance.filter_size ?? null);
+    setFilterTypes(instance.filter_product_type ?? []);
+    setFilterSizes(instance.filter_size ?? []);
   }, [opened, instance]);
 
   const submit = async () => {
     try {
       if (mode === 'product') {
         // Sortir du mode filtre si on était dedans, puis poser les produits
-        if (instance.filter_product_type || instance.filter_size) {
+        const wasFilter =
+          (instance.filter_product_type?.length ?? 0) > 0 ||
+          (instance.filter_size?.length ?? 0) > 0;
+        if (wasFilter) {
           await setFilters.mutateAsync({
             id: instance.id,
             filter_product_type: null,
@@ -55,7 +59,7 @@ export function AssignProductsModal({ opened, onClose, instance, shopId }: Props
         }
         await setProducts.mutateAsync({ id: instance.id, productIds: selected });
       } else {
-        if (!filterType && !filterSize) {
+        if (filterTypes.length === 0 && filterSizes.length === 0) {
           notifications.show({
             title: 'Filtre vide',
             message: 'Choisis au moins un type ou une taille.',
@@ -68,8 +72,8 @@ export function AssignProductsModal({ opened, onClose, instance, shopId }: Props
         await setProducts.mutateAsync({ id: instance.id, productIds: [] });
         await setFilters.mutateAsync({
           id: instance.id,
-          filter_product_type: filterType,
-          filter_size: filterSize,
+          filter_product_type: filterTypes.length > 0 ? filterTypes : null,
+          filter_size: filterSizes.length > 0 ? filterSizes : null,
         });
       }
       notifications.show({ title: 'Affectation mise à jour', message: '', color: 'moss' });
@@ -118,25 +122,26 @@ export function AssignProductsModal({ opened, onClose, instance, shopId }: Props
           <Stack gap="xs">
             <Text size="xs" c="dimmed">
               La caisse collectera automatiquement toutes les variantes qui matchent.
-              Au moins un des deux champs doit être renseigné.
+              Plusieurs valeurs sont combinées en OU. Au moins un des deux champs doit
+              être renseigné.
             </Text>
-            <Select
-              label="Type de produit"
+            <MultiSelect
+              label="Types de produit"
               placeholder={typesLoading ? 'Chargement…' : 'Tous les types'}
               data={types.map((t) => ({ value: t, label: t }))}
-              value={filterType}
-              onChange={setFilterType}
+              value={filterTypes}
+              onChange={setFilterTypes}
               searchable
               clearable
               nothingFoundMessage="Aucun type"
               styles={{ input: { backgroundColor: 'var(--cream)', borderColor: 'var(--divider)' } }}
             />
-            <Select
-              label="Taille"
+            <MultiSelect
+              label="Tailles"
               placeholder="Toutes les tailles"
               data={STANDARD_SIZES.map((s) => ({ value: s, label: s }))}
-              value={filterSize}
-              onChange={setFilterSize}
+              value={filterSizes}
+              onChange={setFilterSizes}
               clearable
               styles={{ input: { backgroundColor: 'var(--cream)', borderColor: 'var(--divider)' } }}
             />

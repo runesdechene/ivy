@@ -20,13 +20,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     updates.name = trimmed.length > 0 ? trimmed : null;
   }
   if (body.position !== undefined) updates.position = body.position;
+  const normaliseStringArray = (raw: unknown): string[] | null => {
+    if (raw === null || raw === undefined) return null;
+    const arr = Array.isArray(raw) ? raw : [raw];
+    const cleaned = arr
+      .filter((v): v is string => typeof v === 'string')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    return cleaned.length > 0 ? cleaned : null;
+  };
   if (body.filter_product_type !== undefined) {
-    const v = typeof body.filter_product_type === 'string' ? body.filter_product_type.trim() : null;
-    updates.filter_product_type = v && v.length > 0 ? v : null;
+    updates.filter_product_type = normaliseStringArray(body.filter_product_type);
   }
   if (body.filter_size !== undefined) {
-    const v = typeof body.filter_size === 'string' ? body.filter_size.trim() : null;
-    updates.filter_size = v && v.length > 0 ? v : null;
+    updates.filter_size = normaliseStringArray(body.filter_size);
   }
 
   if (Object.keys(updates).length === 0) {

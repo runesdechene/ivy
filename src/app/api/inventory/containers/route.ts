@@ -21,8 +21,8 @@ type ProductInfo = {
 type InstanceResp = {
   id: string;
   name: string | null;
-  filter_product_type: string | null;
-  filter_size: string | null;
+  filter_product_type: string[] | null;
+  filter_size: string[] | null;
   type: {
     id: string;
     name: string;
@@ -120,7 +120,13 @@ export async function GET(req: NextRequest) {
   const result: InstanceResp[] = [];
 
   for (const inst of (instances ?? []) as any[]) {
-    const isFilterMode = !!(inst.filter_product_type || inst.filter_size);
+    const filterTypes: string[] = Array.isArray(inst.filter_product_type)
+      ? inst.filter_product_type.filter((s: unknown) => typeof s === 'string' && s.trim().length > 0)
+      : [];
+    const filterSizes: string[] = Array.isArray(inst.filter_size)
+      ? inst.filter_size.filter((s: unknown) => typeof s === 'string' && s.trim().length > 0)
+      : [];
+    const isFilterMode = filterTypes.length > 0 || filterSizes.length > 0;
 
     // 1) Résoudre la liste des produits candidats selon le mode
     let resolvedProducts: any[] = [];
@@ -132,8 +138,8 @@ export async function GET(req: NextRequest) {
           option1_name, option2_name, option3_name
         `)
         .eq('shop_id', shopId);
-      if (inst.filter_product_type) {
-        q = q.eq('product_type', inst.filter_product_type);
+      if (filterTypes.length > 0) {
+        q = q.in('product_type', filterTypes);
       }
       const { data, error } = await q;
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -178,8 +184,8 @@ export async function GET(req: NextRequest) {
         if (!p) continue;
         const size = extractSize(v, p);
         // En mode filtre avec filter_size renseigné, on ne garde que les
-        // variants dont la taille extraite matche.
-        if (isFilterMode && inst.filter_size && size !== inst.filter_size) continue;
+        // variants dont la taille extraite matche une des valeurs.
+        if (isFilterMode && filterSizes.length > 0 && (!size || !filterSizes.includes(size))) continue;
 
         // Track ALL caisse variants (qty > 0 ou non) pour le calcul draft_qty :
         // une variante avec stock physique 0 mais des items en commande
@@ -237,8 +243,8 @@ export async function GET(req: NextRequest) {
     result.push({
       id: inst.id,
       name: inst.name ?? null,
-      filter_product_type: inst.filter_product_type ?? null,
-      filter_size: inst.filter_size ?? null,
+      filter_product_type: filterTypes.length > 0 ? filterTypes : null,
+      filter_size: filterSizes.length > 0 ? filterSizes : null,
       type: {
         id: type.id,
         name: type.name,

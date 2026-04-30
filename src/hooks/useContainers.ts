@@ -5,8 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 export type ContainerInstance = {
   id: string;
   name: string | null;
-  filter_product_type: string | null;
-  filter_size: string | null;
+  filter_product_type: string[] | null;
+  filter_size: string[] | null;
   type: {
     id: string;
     name: string;
@@ -128,8 +128,8 @@ export function useSetContainerFilters() {
       filter_size,
     }: {
       id: string;
-      filter_product_type: string | null;
-      filter_size: string | null;
+      filter_product_type: string[] | null;
+      filter_size: string[] | null;
     }) => {
       const r = await fetch(`/api/inventory/containers/${id}`, {
         method: 'PATCH',
