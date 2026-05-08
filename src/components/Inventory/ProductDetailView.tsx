@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Button, Text, Badge, Group, Stack, Table, Image, NumberInput, ActionIcon, Loader, Modal, Paper } from '@mantine/core';
+import { Button, Text, Badge, Group, Stack, Table, Image, NumberInput, ActionIcon, Loader, Modal, Paper, Checkbox } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconArrowLeft, IconPhoto, IconPlus, IconMinus, IconDeviceFloppy, IconTrash, IconRefresh, IconArchive, IconUpload } from '@tabler/icons-react';
+import { IconArrowLeft, IconPhoto, IconPlus, IconMinus, IconDeviceFloppy, IconTrash, IconRefresh, IconArchive, IconUpload, IconArrowsExchange } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useTerminalStream } from '@/hooks/useTerminalStream';
+import { useLocation } from '@/context/LocationContext';
 import { ProductData } from './ProductCard';
 import { SortOptionsBar } from './SortOptionsBar';
+import { TransferModal } from './TransferModal';
 import { StatusBadge } from '@/components/StatusBadge';
 import { MetaChip } from '@/components/MetaChip';
 import { getColorHex, isColorOption } from '@/utils/color-transformer';
@@ -54,6 +56,9 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
   const [archiving, setArchiving] = useState(false);
   const [pushing, setPushing] = useState(false);
   const [pushModalOpened, { open: openPushModal, close: closePushModal }] = useDisclosure(false);
+  const [selectedVariantIds, setSelectedVariantIds] = useState<Set<string>>(new Set());
+  const [transferModalOpened, { open: openTransferModal, close: closeTransferModal }] = useDisclosure(false);
+  const { currentLocation } = useLocation();
   const { streamFromUrl } = useTerminalStream();
 
   const isLocalProduct = product.status === 'LOCAL' || product.status === 'DRAFT';
@@ -508,6 +513,74 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
     });
   }, [product.variants, sortOrder]);
 
+  const allVariantsSelected =
+    sortedVariants.length > 0 && sortedVariants.every((v) => selectedVariantIds.has(v.id));
+  const someVariantsSelected =
+    selectedVariantIds.size > 0 && !allVariantsSelected;
+
+  const toggleVariantSelection = (variantId: string) => {
+    setSelectedVariantIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(variantId)) {
+        next.delete(variantId);
+      } else {
+        next.add(variantId);
+      }
+      return next;
+    });
+  };
+
+  const toggleAllVariants = () => {
+    setSelectedVariantIds((prev) => {
+      if (prev.size === sortedVariants.length) {
+        return new Set();
+      }
+      return new Set(sortedVariants.map((v) => v.id));
+    });
+  };
+
+  const handleTransferAllProduct = () => {
+    setSelectedVariantIds(new Set(sortedVariants.map((v) => v.id)));
+    openTransferModal();
+  };
+
+  const handleTransferSuccess = (
+    transferred: { variantId: string; quantity: number }[],
+  ) => {
+    if (!onProductUpdated || transferred.length === 0) return;
+
+    const transferMap = new Map(transferred.map((t) => [t.variantId, t.quantity]));
+    const updatedVariants = product.variants.map((v) => {
+      const delta = transferMap.get(v.id);
+      if (delta === undefined) return v;
+      return { ...v, quantity: Math.max(0, v.quantity - delta) };
+    });
+
+    setQuantities((prev) => {
+      const next = { ...prev };
+      for (const v of updatedVariants) {
+        next[v.id] = v.quantity;
+      }
+      return next;
+    });
+
+    onProductUpdated({
+      ...product,
+      variants: updatedVariants,
+      totalQuantity: updatedVariants.reduce((s, v) => s + Math.max(0, v.quantity), 0),
+      sizeBreakdown: updatedVariants.reduce((acc, v) => {
+        if (v.size) acc[v.size] = (acc[v.size] || 0) + Math.max(0, v.quantity);
+        return acc;
+      }, {} as Record<string, number>),
+    });
+
+    setSelectedVariantIds((prev) => {
+      const next = new Set(prev);
+      for (const id of transferMap.keys()) next.delete(id);
+      return next;
+    });
+  };
+
   return (
     <div className={styles.container}>
       {/* Header avec bouton retour */}
@@ -565,6 +638,37 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
               size="sm"
             >
               {pushing ? 'Push…' : 'Pousser vers Shopify'}
+            </Button>
+            {selectedVariantIds.size > 0 && (
+              <>
+                <Button
+                  color="moss.7"
+                  leftSection={<IconArrowsExchange size={16} />}
+                  onClick={openTransferModal}
+                  disabled={saving || syncing}
+                  size="sm"
+                >
+                  Transférer {selectedVariantIds.size} variante{selectedVariantIds.size > 1 ? 's' : ''} →
+                </Button>
+                <Button
+                  variant="subtle"
+                  color="slate"
+                  onClick={() => setSelectedVariantIds(new Set())}
+                  size="sm"
+                >
+                  Désélectionner
+                </Button>
+              </>
+            )}
+            <Button
+              variant="light"
+              color="moss"
+              leftSection={<IconArrowsExchange size={16} />}
+              onClick={handleTransferAllProduct}
+              disabled={saving || syncing || pushing || product.totalQuantity === 0}
+              size="sm"
+            >
+              Transférer le produit
             </Button>
             {isLocalProduct && (
               <Button
@@ -719,6 +823,14 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
           <Table striped highlightOnHover className={styles.variantsTable}>
             <Table.Thead>
               <Table.Tr>
+                <Table.Th style={{ width: 32 }}>
+                  <Checkbox
+                    checked={allVariantsSelected}
+                    indeterminate={someVariantsSelected}
+                    onChange={toggleAllVariants}
+                    aria-label="Sélectionner toutes les variantes"
+                  />
+                </Table.Th>
                 <Table.Th>Variante</Table.Th>
                 <Table.Th>SKU</Table.Th>
                 <Table.Th style={{ textAlign: 'center' }}>État</Table.Th>
@@ -731,6 +843,13 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
             <Table.Tbody>
               {sortedVariants.map((variant) => (
                 <Table.Tr key={variant.id}>
+                  <Table.Td>
+                    <Checkbox
+                      checked={selectedVariantIds.has(variant.id)}
+                      onChange={() => toggleVariantSelection(variant.id)}
+                      aria-label={`Sélectionner ${variant.title ?? 'la variante'}`}
+                    />
+                  </Table.Td>
                   <Table.Td className={styles.variantName}>
                     <span className={styles.variantNameContent}>
                       {getVariantDisplayParts(variant).map((part, idx, arr) => (
@@ -969,6 +1088,17 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
           </Group>
         </Stack>
       </Modal>
+
+      <TransferModal
+        opened={transferModalOpened}
+        onClose={closeTransferModal}
+        product={product}
+        selectedVariantIds={selectedVariantIds}
+        shopId={shopId}
+        sourceLocationId={locationId}
+        sourceLocationName={currentLocation?.name ?? locationName}
+        onSuccess={handleTransferSuccess}
+      />
     </div>
   );
 }
