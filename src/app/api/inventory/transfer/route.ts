@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
 
         const { data: variant, error: variantError } = await supabase
           .from('product_variants')
-          .select('id, inventory_item_id')
+          .select('id, inventory_item_id, shopify_active')
           .eq('id', resolvedVariantId)
           .single();
 
@@ -118,51 +118,78 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        if (variant.inventory_item_id) {
-          const adjustEndpoint = `https://${shop.shopify_url}/admin/api/2024-01/inventory_levels/adjust.json`;
-          const headers = {
-            'X-Shopify-Access-Token': shop.shopify_token,
-            'Content-Type': 'application/json',
+        // Skip Shopify pour les variantes purement locales :
+        // - Pas d'inventory_item_id (jamais existé sur Shopify)
+        // - shopify_active=false (existait mais a été supprimée côté Shopify, l'inventory_item_id stocké est stale)
+        if (variant.inventory_item_id && variant.shopify_active !== false) {
+          // Shopify a déprécié POST /inventory_levels/adjust.json en REST.
+          // On utilise la mutation GraphQL inventoryAdjustQuantities qui accepte
+          // les 2 changes (source -X, dest +X) en un seul appel atomique.
+          const graphqlEndpoint = `https://${shop.shopify_url}/admin/api/2026-01/graphql.json`;
+          const inventoryItemGid = `gid://shopify/InventoryItem/${variant.inventory_item_id}`;
+          const sourceLocationGid = `gid://shopify/Location/${sourceLocationShopifyId}`;
+          const destLocationGid = `gid://shopify/Location/${destLocationShopifyId}`;
+
+          const mutation = `
+            mutation inventoryAdjustQuantities($input: InventoryAdjustQuantitiesInput!) {
+              inventoryAdjustQuantities(input: $input) {
+                userErrors { field message }
+                inventoryAdjustmentGroup { id }
+              }
+            }
+          `;
+
+          const variables = {
+            input: {
+              reason: 'movement_created',
+              name: 'available',
+              referenceDocumentUri: `logistics://ivy/transfer/${shopId}/${today}`,
+              changes: [
+                {
+                  delta: -item.quantity,
+                  inventoryItemId: inventoryItemGid,
+                  locationId: sourceLocationGid,
+                },
+                {
+                  delta: item.quantity,
+                  inventoryItemId: inventoryItemGid,
+                  locationId: destLocationGid,
+                },
+              ],
+            },
           };
 
-          const sourceResponse = await fetch(adjustEndpoint, {
+          const shopifyResponse = await fetch(graphqlEndpoint, {
             method: 'POST',
-            headers,
-            body: JSON.stringify({
-              location_id: sourceLocationShopifyId,
-              inventory_item_id: variant.inventory_item_id,
-              available_adjustment: -item.quantity,
-            }),
+            headers: {
+              'X-Shopify-Access-Token': shop.shopify_token,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ query: mutation, variables }),
           });
 
-          if (!sourceResponse.ok) {
-            const err = await sourceResponse.json().catch(() => ({}));
-            console.error('Shopify source adjust failed:', err);
+          const shopifyData = await shopifyResponse.json().catch(() => null);
+
+          if (!shopifyResponse.ok || shopifyData?.errors) {
+            console.error('Shopify GraphQL adjust failed:', {
+              status: shopifyResponse.status,
+              errors: shopifyData?.errors,
+            });
             results.push({
               variantId: item.variantId,
               success: false,
-              error: `Shopify source sync failed: ${sourceResponse.status}`,
+              error: `Shopify sync failed: ${shopifyResponse.status} ${JSON.stringify(shopifyData?.errors ?? {})}`,
             });
             continue;
           }
 
-          const destResponse = await fetch(adjustEndpoint, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-              location_id: destLocationShopifyId,
-              inventory_item_id: variant.inventory_item_id,
-              available_adjustment: item.quantity,
-            }),
-          });
-
-          if (!destResponse.ok) {
-            const err = await destResponse.json().catch(() => ({}));
-            console.error('Shopify dest adjust failed:', err);
+          const userErrors = shopifyData?.data?.inventoryAdjustQuantities?.userErrors ?? [];
+          if (userErrors.length > 0) {
+            console.error('Shopify userErrors:', userErrors);
             results.push({
               variantId: item.variantId,
               success: false,
-              error: `Shopify dest sync failed (source already adjusted): ${destResponse.status}`,
+              error: `Shopify: ${userErrors.map((e: { message: string }) => e.message).join(' / ')}`,
             });
             continue;
           }
