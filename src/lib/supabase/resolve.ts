@@ -7,8 +7,20 @@ export function isUuid(value: string): boolean {
 }
 
 /**
- * Résout un identifiant de variante (UUID Supabase OU Shopify ID numérique en string)
- * vers son UUID Supabase. Retourne null si introuvable.
+ * Extrait l'ID numérique d'un GID Shopify (`gid://shopify/.../N` → `N`).
+ * Si l'entrée n'est pas un GID, retourne tel quel.
+ */
+function stripShopifyGid(value: string): string {
+  return value.startsWith('gid://') ? (value.split('/').pop() ?? value) : value;
+}
+
+/**
+ * Résout un identifiant de variante vers son UUID Supabase. Accepte :
+ * - UUID Supabase (retourné tel quel)
+ * - Shopify ID numérique en string (lookup `shopify_id`)
+ * - GID Shopify `gid://shopify/ProductVariant/N` (strip puis lookup `shopify_id`)
+ *
+ * Retourne null si introuvable.
  */
 export async function resolveVariantId(
   supabase: SupabaseClient,
@@ -16,10 +28,12 @@ export async function resolveVariantId(
 ): Promise<string | null> {
   if (isUuid(variantId)) return variantId;
 
+  const shopifyId = stripShopifyGid(variantId);
+
   const { data } = await supabase
     .from('product_variants')
     .select('id')
-    .eq('shopify_id', variantId)
+    .eq('shopify_id', shopifyId)
     .maybeSingle();
 
   return data?.id ?? null;
