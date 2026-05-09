@@ -1,0 +1,40 @@
+.modalTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.variantTable {
+  width: 100%;
+  border-collapse: collapse;
+
+  th {
+    text-align: left;
+    font-size: 0.8rem;
+    color: var(--mantine-color-slate-6);
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--divider);
+  }
+
+  td {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--divider-soft);
+    font-size: 0.85rem;
+    color: var(--mantine-color-slate-8);
+  }
+
+  td.qtyCell {
+    text-align: right;
+  }
+}
+
+.totalLine {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--mantine-color-slate-8);
+}

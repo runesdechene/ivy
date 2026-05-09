@@ -1,24 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { resolveVariantId, resolveLocationUuid, resolveLocationShopifyId, isUuid } from '@/lib/supabase/resolve';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
-
-// Resolve a variant ID that could be a Supabase UUID or a Shopify numeric ID
-async function resolveVariantId(variantId: string): Promise<string | null> {
-  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(variantId);
-  if (isUuid) return variantId;
-
-  const { data } = await supabase
-    .from('product_variants')
-    .select('id')
-    .eq('shopify_id', variantId)
-    .single();
-
-  return data?.id || null;
-}
 
 interface StockAdjustment {
   variantId: string;
@@ -51,17 +38,7 @@ export async function POST(request: NextRequest) {
     // inventory_levels.location_id stays Shopify ID — it's a different schema.
     let locationUuid: string | null = null;
     if (locationId) {
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(locationId);
-      if (isUuid) {
-        locationUuid = locationId;
-      } else {
-        const { data: loc } = await supabase
-          .from('locations')
-          .select('id')
-          .eq('shopify_id', locationId)
-          .maybeSingle();
-        locationUuid = loc?.id || null;
-      }
+      locationUuid = await resolveLocationUuid(supabase, locationId);
     }
 
     // Get shop for Shopify credentials
@@ -91,7 +68,7 @@ export async function POST(request: NextRequest) {
     for (const item of items) {
       try {
         // Resolve variant ID (could be Shopify ID)
-        const resolvedVariantId = await resolveVariantId(item.variantId);
+        const resolvedVariantId = await resolveVariantId(supabase, item.variantId);
         if (!resolvedVariantId) {
           results.push({ variantId: item.variantId, success: false, error: 'Variant not found' });
           continue;
@@ -143,15 +120,9 @@ export async function POST(request: NextRequest) {
 
         // Sync with Shopify
         if (variant.inventory_item_id && locationId) {
-          const isLocationUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(locationId);
           let shopifyLocationId = locationId;
-          if (isLocationUuid) {
-            const { data: location } = await supabase
-              .from('locations')
-              .select('shopify_id')
-              .eq('id', locationId)
-              .single();
-            shopifyLocationId = location?.shopify_id || locationId;
+          if (isUuid(locationId)) {
+            shopifyLocationId = (await resolveLocationShopifyId(supabase, locationId)) ?? locationId;
           }
 
           if (shopifyLocationId) {
