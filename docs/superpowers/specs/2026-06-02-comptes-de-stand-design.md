@@ -1,8 +1,18 @@
 # Comptes de stand (privé) — Design Spec
 
 **Date :** 2026-06-02
-**Statut :** en revue (brainstorming validé décision par décision)
-**Branche :** `feat/comptes-de-stand`
+**Statut :** implémenté & déployé (mergé dans `main`)
+**Branche :** `feat/comptes-de-stand` (mergée)
+
+## Évolutions post-implémentation (validées en test)
+
+Trois ajustements décidés pendant la mise au point, qui priment sur les descriptions plus bas :
+
+1. **Caisse = mouvements signés justifiés** (migrations 047/048). Plus de modèle « fond d'ouverture + sorties / sessions par festival ». À la place : table `hub_ledger_cash_movements` (montant **signé** : > 0 entrée, < 0 sortie ; `justification` libre ; `occurred_on`). **Solde = somme des mouvements**, affiché en temps réel. UI : solde géant + toggle Entrée/Sortie + historique.
+2. **Scope par emplacement** (migration 048). Dépenses ET caisse sont **propres à chaque emplacement** (`location_id` = id Shopify en TEXT, fourni par `LocationContext`). Le sélecteur d'emplacement d'IVY pilote la page (refetch automatique). Annule la note « location en post-MVP ».
+3. **Emplacement de la page** : section **Festivals** (`/ivy/stand/comptes`), entrée via icône cadenas discrète sur le tableau de bord Festivals (et non le Hub).
+
+Tables réellement en base : `hub_ledger_settings`, `hub_ledger_expenses`, `hub_ledger_cash_movements`. (Les `hub_ledger_cash_sessions` / `hub_ledger_cash_outflows` du modèle initial ont été supprimées.)
 
 ## Objectif
 
