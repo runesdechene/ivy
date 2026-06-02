@@ -13,21 +13,11 @@ export interface Expense {
   created_at: string;
 }
 
-export interface CashSession {
+export interface CashMovement {
   id: string;
   shop_id: string;
-  location_id: string | null;
-  study_zone_id: string | null;
-  opening_float: number;
-  opened_on: string;
-  total_outflows: number;
-  balance: number;
-}
-
-export interface CashOutflow {
-  id: string;
-  session_id: string;
-  spent_on: string;
-  description: string;
-  amount: number;
+  occurred_on: string;
+  amount: number; // signé : > 0 entrée, < 0 sortie
+  justification: string;
+  created_at: string;
 }

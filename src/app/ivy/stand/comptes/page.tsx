@@ -72,7 +72,7 @@ export default function ComptesPage() {
 
       {tab === 'depenses'
         ? <ExpensesTable shopId={shopId} zones={zones} revealed={revealed} />
-        : <CashTable shopId={shopId} zones={zones} revealed={revealed} />}
+        : <CashTable shopId={shopId} revealed={revealed} />}
     </div>
   );
 }

@@ -1,8 +1,9 @@
 'use client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { hubJson, hubFetch } from '../api-client';
-import type { Expense, CashSession, CashOutflow } from '../types';
+import type { Expense, CashMovement } from '../types';
 
+// ----- Dépenses -----
 export function useExpenses(shopId: string | undefined, studyZoneId?: string | null, enabled = true) {
   return useQuery({
     queryKey: ['hub-expenses', shopId, studyZoneId],
@@ -37,58 +38,32 @@ export function useExpenseMutations(shopId: string | undefined) {
   };
 }
 
-export function useCashSessions(shopId: string | undefined, enabled = true) {
+// ----- Caisse (caisse globale, mouvements signés justifiés) -----
+export function useCashLedger(shopId: string | undefined) {
   return useQuery({
-    queryKey: ['hub-cash-sessions', shopId],
-    enabled: !!shopId && enabled,
-    queryFn: () => hubJson<{ sessions: CashSession[] }>(`/api/hub/comptes/cash/sessions?shopId=${shopId}`).then((r) => r.sessions),
+    queryKey: ['hub-cash', shopId],
+    enabled: !!shopId,
+    queryFn: () => hubJson<{ balance: number; movements: CashMovement[] }>(`/api/hub/comptes/cash?shopId=${shopId}`),
   });
 }
 
-export function useCashSessionMutations(shopId: string | undefined) {
+export function useCashMutations(shopId: string | undefined) {
   const qc = useQueryClient();
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['hub-cash-sessions', shopId] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['hub-cash', shopId] });
   return {
     create: useMutation({
       mutationFn: (body: Record<string, unknown>) =>
-        hubJson<{ session: CashSession }>('/api/hub/comptes/cash/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, shopId }) }),
-      onSuccess: invalidate,
-    }),
-    update: useMutation({
-      mutationFn: (body: Record<string, unknown>) =>
-        hubJson<{ session: CashSession }>('/api/hub/comptes/cash/sessions', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, shopId }) }),
-      onSuccess: invalidate,
-    }),
-  };
-}
-
-export function useOutflows(sessionId: string | undefined) {
-  return useQuery({
-    queryKey: ['hub-outflows', sessionId],
-    enabled: !!sessionId,
-    queryFn: () => hubJson<{ outflows: CashOutflow[] }>(`/api/hub/comptes/cash/outflows?sessionId=${sessionId}`).then((r) => r.outflows),
-  });
-}
-
-export function useOutflowMutations(shopId: string | undefined, sessionId: string | undefined) {
-  const qc = useQueryClient();
-  const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ['hub-outflows', sessionId] });
-    qc.invalidateQueries({ queryKey: ['hub-cash-sessions', shopId] });
-  };
-  return {
-    create: useMutation({
-      mutationFn: (body: Record<string, unknown>) =>
-        hubJson<{ outflow: CashOutflow }>('/api/hub/comptes/cash/outflows', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, sessionId }) }),
+        hubJson<{ movement: CashMovement }>('/api/hub/comptes/cash', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, shopId }) }),
       onSuccess: invalidate,
     }),
     remove: useMutation({
-      mutationFn: (id: string) => hubJson<{ ok: true }>(`/api/hub/comptes/cash/outflows?id=${id}&sessionId=${sessionId}`, { method: 'DELETE' }),
+      mutationFn: (id: string) => hubJson<{ ok: true }>(`/api/hub/comptes/cash?id=${id}&shopId=${shopId}`, { method: 'DELETE' }),
       onSuccess: invalidate,
     }),
   };
 }
 
+// ----- Reçus -----
 export async function uploadReceipt(shopId: string, file: File): Promise<string> {
   const fd = new FormData();
   fd.set('file', file);

@@ -242,6 +242,92 @@
   }
 }
 
+/* ---------- Caisse : solde géant + mouvements ---------- */
+.balanceCard {
+  background: $cream-soft;
+  border: 1px solid $divider;
+  border-radius: $radius-xl;
+  padding: 28px 24px;
+  text-align: center;
+}
+
+.balanceLabel {
+  @include type-eyebrow;
+  margin-bottom: 10px;
+}
+
+.balanceValue {
+  font-family: $font-fraunces;
+  font-weight: 600;
+  font-size: 48px;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: $moss;
+}
+
+.balanceValueNeg {
+  color: $rust;
+}
+
+.dirToggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: $cream-warm;
+  border: 1px solid $divider;
+  border-radius: $radius-pill;
+}
+
+.dirItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: $font-inter;
+  font-size: 13px;
+  font-weight: 600;
+  color: $slate-soft;
+  padding: 7px 16px;
+  border-radius: $radius-pill;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dirItemIn {
+  background: $moss-bg;
+  color: $moss;
+  box-shadow: 0 1px 3px rgba(43, 52, 64, 0.08);
+}
+
+.dirItemOut {
+  background: $clay-bg;
+  color: $rust;
+  box-shadow: 0 1px 3px rgba(43, 52, 64, 0.08);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: $font-inter;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: $radius-pill;
+  padding: 2px 9px;
+  white-space: nowrap;
+}
+
+.chipIn {
+  background: $moss-bg;
+  color: $moss;
+}
+
+.chipOut {
+  background: $clay-bg;
+  color: $rust;
+}
+
 /* ---------- Total footer ---------- */
 .totalRow {
   display: flex;
