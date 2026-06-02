@@ -18,15 +18,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Missing shopId' }, { status: 400 });
   }
 
-  const emptyResult = {
-    totalItemsOut: 0,
-    totalItemsReturn: 0,
-    topProducts: [],
-    topVariants: [],
-    topNames: [],
-    zonesCount: 0,
-    locationsCount: 0,
-  };
+  const emptyResult = { ...aggregateMovements([]), zonesCount: 0, locationsCount: 0 };
 
   // 1. Toutes les zones du shop
   const { data: zones, error: zonesError } = await supabase
@@ -59,6 +51,7 @@ export async function GET(request: NextRequest) {
       const { data: locs } = await supabase
         .from('locations')
         .select('id')
+        .eq('shop_id', shopId)
         .in('shopify_id', toResolve);
       if (locs) resolvedLocationIds.push(...locs.map(l => l.id));
     }
