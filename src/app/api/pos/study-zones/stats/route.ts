@@ -151,18 +151,22 @@ export async function GET(request: NextRequest) {
     topOptionsByCategory.push({ category, options });
   }
 
-  // Top names (group products sharing first 5 chars — e.g. "Morri" groups all Morrigan products)
+  // Top names (group all garments/variants of the same fragment design — e.g. every
+  // "L'esprit du loup | …" row collapses into one "L'esprit du loup").
+  // Key on the design name (the part before the "|" / "—" separator), NOT a fixed-length
+  // prefix: a 5-char prefix collides whenever several designs share a leading collection
+  // name (e.g. "L'esprit de la loutre", "L'esprit du Hibou" and "L'esprit du loup" all
+  // begin with "l'esp"), which silently merged distinct fragments under a single name.
   const nameMap = new Map<string, { fullName: string; quantity: number }>();
   for (const m of allMovements) {
     if (m.quantity < 0) {
-      const prefix = m.product_title.slice(0, 5).toLowerCase();
-      const existing = nameMap.get(prefix);
+      const displayName = m.product_title.split('|')[0].split('—')[0].trim();
+      const key = displayName.toLowerCase();
+      const existing = nameMap.get(key);
       if (existing) {
         existing.quantity += Math.abs(m.quantity);
       } else {
-        // Use the product_title up to the first separator as display name
-        const displayName = m.product_title.split('|')[0].split('—')[0].trim();
-        nameMap.set(prefix, { fullName: displayName, quantity: Math.abs(m.quantity) });
+        nameMap.set(key, { fullName: displayName, quantity: Math.abs(m.quantity) });
       }
     }
   }
