@@ -16,8 +16,12 @@ export async function POST(request: NextRequest) {
   }
   if (file.size > 10 * 1024 * 1024) return NextResponse.json({ error: 'Fichier trop volumineux (max 10 Mo)' }, { status: 400 });
 
-  const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-  const path = `${shopId}/${crypto.randomUUID()}.${ext}`;
+  const rawExt = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const ALLOWED_EXT = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'pdf'];
+  if (!/^[a-z0-9]{1,5}$/.test(rawExt) || !ALLOWED_EXT.includes(rawExt)) {
+    return NextResponse.json({ error: 'Extension invalide (jpg, png, webp, heic, pdf)' }, { status: 400 });
+  }
+  const path = `${shopId}/${crypto.randomUUID()}.${rawExt}`;
   const bytes = new Uint8Array(await file.arrayBuffer());
 
   const { error } = await res.auth.svc.storage.from(BUCKET).upload(path, bytes, {
@@ -36,7 +40,9 @@ export async function GET(request: NextRequest) {
   const sp = new URL(request.url).searchParams;
   const path = sp.get('path');
   const shopId = sp.get('shopId');
-  if (!path || !shopId || !ownsShop(res.auth, shopId) || !path.startsWith(`${shopId}/`)) {
+  const segments = path ? path.split('/') : [];
+  const hasTraversal = segments.some((seg) => seg === '..' || seg === '.' || seg === '');
+  if (!path || !shopId || !ownsShop(res.auth, shopId) || !path.startsWith(`${shopId}/`) || hasTraversal) {
     return NextResponse.json({ error: 'Interdit' }, { status: 403 });
   }
 

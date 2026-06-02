@@ -56,6 +56,7 @@ export async function PATCH(request: NextRequest) {
   const b = await request.json().catch(() => null);
   if (!b?.id || !b?.shopId || !ownsShop(res.auth, b.shopId)) return NextResponse.json({ error: 'Interdit' }, { status: 403 });
 
+  if (b.openingFloat !== undefined && (typeof b.openingFloat !== 'number' || b.openingFloat < 0)) return NextResponse.json({ error: 'Fond de caisse invalide' }, { status: 400 });
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (b.openingFloat !== undefined) patch.opening_float = b.openingFloat;
   if (b.openedOn !== undefined) patch.opened_on = b.openedOn;

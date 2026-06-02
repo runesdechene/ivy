@@ -54,6 +54,7 @@ export async function PATCH(request: NextRequest) {
   const b = await request.json().catch(() => null);
   if (!b?.id || !b?.shopId || !ownsShop(res.auth, b.shopId)) return NextResponse.json({ error: 'Interdit' }, { status: 403 });
   if (b.status && !STATUSES.includes(b.status)) return NextResponse.json({ error: 'Statut invalide' }, { status: 400 });
+  if (b.amount !== undefined && (typeof b.amount !== 'number' || b.amount < 0)) return NextResponse.json({ error: 'Montant invalide' }, { status: 400 });
 
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   for (const k of ['description', 'amount', 'status', 'receipt_path', 'spent_on', 'location_id', 'study_zone_id'] as const) {
