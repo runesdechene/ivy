@@ -1,6 +1,8 @@
 'use client';
 import { useState } from 'react';
-import { Button, PinInput, Stack, Text, Title } from '@mantine/core';
+import { Button, PinInput } from '@mantine/core';
+import { IconLock } from '@tabler/icons-react';
+import styles from '../comptes.module.scss';
 
 export function PinGate({ onUnlock }: { onUnlock: (pin: string) => Promise<void> }) {
   const [pin, setPin] = useState('');
@@ -13,12 +15,17 @@ export function PinGate({ onUnlock }: { onUnlock: (pin: string) => Promise<void>
   };
 
   return (
-    <Stack align="center" gap="md" maw={320} mx="auto" mt="xl">
-      <Title order={3}>Accès protégé</Title>
-      <Text size="sm" c="dimmed">Saisis ton PIN pour afficher tes comptes.</Text>
-      <PinInput length={6} type="number" value={pin} onChange={setPin} onComplete={submit} disabled={busy} aria-label="PIN" />
-      {err && <Text c="red" size="sm">{err}</Text>}
-      <Button onClick={() => submit(pin)} loading={busy} disabled={pin.length < 6} fullWidth>Déverrouiller</Button>
-    </Stack>
+    <div className={styles.gateWrap}>
+      <div className={styles.gateCard}>
+        <div className={styles.gateIcon}><IconLock size={24} /></div>
+        <h1 className={styles.gateTitle}>Accès protégé</h1>
+        <p className={styles.gateText}>Saisis ton PIN pour afficher tes comptes.</p>
+        <div className={styles.gateInputs}>
+          <PinInput length={6} type="number" value={pin} onChange={setPin} onComplete={submit} disabled={busy} aria-label="PIN" />
+          {err && <p className={styles.gateError}>{err}</p>}
+          <Button onClick={() => submit(pin)} loading={busy} disabled={pin.length < 6} color="#6b7a55" fullWidth radius="md">Déverrouiller</Button>
+        </div>
+      </div>
+    </div>
   );
 }

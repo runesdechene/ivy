@@ -1,6 +1,8 @@
 'use client';
 import { useState } from 'react';
-import { Button, PinInput, Stack, Text, Title } from '@mantine/core';
+import { Button, PinInput } from '@mantine/core';
+import { IconLock } from '@tabler/icons-react';
+import styles from '../comptes.module.scss';
 
 export function PinSetup({ onSubmit }: { onSubmit: (pin: string) => Promise<void> }) {
   const [pin, setPin] = useState('');
@@ -16,13 +18,24 @@ export function PinSetup({ onSubmit }: { onSubmit: (pin: string) => Promise<void
   };
 
   return (
-    <Stack align="center" gap="md" maw={360} mx="auto" mt="xl">
-      <Title order={3}>Définir un code PIN</Title>
-      <Text size="sm" c="dimmed" ta="center">Ce code protège l&apos;accès à tes comptes de stand. Il n&apos;est stocké que sous forme chiffrée (irrécupérable).</Text>
-      <PinInput length={6} type="number" value={pin} onChange={setPin} aria-label="Nouveau PIN" />
-      <PinInput length={6} type="number" value={confirm} onChange={setConfirm} aria-label="Confirmer le PIN" />
-      {err && <Text c="red" size="sm">{err}</Text>}
-      <Button onClick={submit} loading={busy} fullWidth>Enregistrer le PIN</Button>
-    </Stack>
+    <div className={styles.gateWrap}>
+      <div className={styles.gateCard}>
+        <div className={styles.gateIcon}><IconLock size={24} /></div>
+        <h1 className={styles.gateTitle}>Définir un code PIN</h1>
+        <p className={styles.gateText}>Ce code protège l&apos;accès à tes comptes de stand. Il n&apos;est stocké que sous forme chiffrée — irrécupérable.</p>
+        <div className={styles.gateInputs}>
+          <div className={styles.gateField}>
+            <span className={styles.gateFieldLabel}>Nouveau PIN</span>
+            <PinInput length={6} type="number" value={pin} onChange={setPin} aria-label="Nouveau PIN" />
+          </div>
+          <div className={styles.gateField}>
+            <span className={styles.gateFieldLabel}>Confirmer</span>
+            <PinInput length={6} type="number" value={confirm} onChange={setConfirm} aria-label="Confirmer le PIN" />
+          </div>
+          {err && <p className={styles.gateError}>{err}</p>}
+          <Button onClick={submit} loading={busy} color="#6b7a55" fullWidth radius="md">Enregistrer le PIN</Button>
+        </div>
+      </div>
+    </div>
   );
 }

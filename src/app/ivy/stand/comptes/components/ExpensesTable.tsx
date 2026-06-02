@@ -1,16 +1,18 @@
 'use client';
-import { Anchor, Badge, Group, Select, Stack, Table, Text } from '@mantine/core';
+import { Menu } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { ExpenseForm } from './ExpenseForm';
 import { MaskedAmount } from './MaskedAmount';
 import { useExpenses, useExpenseMutations, uploadReceipt, getReceiptUrl } from '../hooks/useLedger';
 import type { ExpenseStatus } from '../types';
+import styles from '../comptes.module.scss';
 
-const STATUS_LABEL: Record<ExpenseStatus, { label: string; color: string }> = {
-  engage: { label: 'Engagé', color: 'gray' },
-  soumis: { label: 'Soumis', color: 'blue' },
-  rembourse: { label: 'Remboursé', color: 'green' },
+const STATUS_LABEL: Record<ExpenseStatus, string> = {
+  engage: 'Engagé',
+  soumis: 'Soumis',
+  rembourse: 'Remboursé',
 };
+const STATUSES: ExpenseStatus[] = ['engage', 'soumis', 'rembourse'];
 
 interface Zone { id: string; name: string; }
 
@@ -30,65 +32,75 @@ export function ExpensesTable({ shopId, zones, revealed }: { shopId: string; zon
     } catch (e) { notifications.show({ color: 'red', message: (e as Error).message }); }
   };
 
+  const openReceipt = async (path: string) => {
+    try {
+      const url = await getReceiptUrl(shopId, path);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (err) { notifications.show({ color: 'red', message: (err as Error).message }); }
+  };
+
+  const total = expenses.reduce((a, e) => a + Number(e.amount), 0);
+
   return (
-    <Stack>
+    <div className={styles.stack}>
       <ExpenseForm zones={zones} onSubmit={add} />
-      {isLoading ? <Text c="dimmed">Chargement…</Text> : (
-        <Table striped highlightOnHover withTableBorder>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Date</Table.Th><Table.Th>Description</Table.Th>
-              <Table.Th>Montant</Table.Th><Table.Th>Reçu</Table.Th><Table.Th>Statut</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {expenses.map((e) => (
-              <Table.Tr key={e.id}>
-                <Table.Td>{new Date(e.spent_on).toLocaleDateString('fr-FR')}</Table.Td>
-                <Table.Td>{e.description}</Table.Td>
-                <Table.Td><MaskedAmount value={Number(e.amount)} revealed={revealed} /></Table.Td>
-                <Table.Td>
-                  {e.receipt_path ? (
-                    <Anchor
-                      component="button"
-                      type="button"
-                      size="sm"
-                      onClick={async () => {
-                        try {
-                          const url = await getReceiptUrl(shopId, e.receipt_path!);
-                          window.open(url, '_blank', 'noopener,noreferrer');
-                        } catch (err) {
-                          notifications.show({ color: 'red', message: (err as Error).message });
-                        }
-                      }}
-                    >
-                      📎 voir
-                    </Anchor>
-                  ) : (
-                    <Badge color="orange" variant="light">manquant</Badge>
-                  )}
-                </Table.Td>
-                <Table.Td>
-                  <Select
-                    size="xs" variant="unstyled" allowDeselect={false}
-                    data={Object.entries(STATUS_LABEL).map(([v, { label }]) => ({ value: v, label }))}
-                    value={e.status}
-                    onChange={(v) => v && update.mutate({ id: e.id, status: v })}
-                    renderOption={({ option }) => <Badge color={STATUS_LABEL[option.value as ExpenseStatus].color} variant="light">{option.label}</Badge>}
-                  />
-                </Table.Td>
-              </Table.Tr>
-            ))}
-            {expenses.length === 0 && (
-              <Table.Tr><Table.Td colSpan={5}><Text c="dimmed" ta="center">Aucune dépense.</Text></Table.Td></Table.Tr>
-            )}
-          </Table.Tbody>
-        </Table>
-      )}
-      <Group justify="flex-end">
-        <Text size="sm" c="dimmed">Total :</Text>
-        <MaskedAmount value={expenses.reduce((a, e) => a + Number(e.amount), 0)} revealed={revealed} />
-      </Group>
-    </Stack>
+      <div className={styles.card}>
+        <span className={styles.cardLabel}>Dépenses engagées</span>
+        {isLoading ? (
+          <p className={styles.muted}>Chargement…</p>
+        ) : (
+          <div className={styles.tableWrap}>
+            <table className={styles.ledgerTable}>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Description</th>
+                  <th className={styles.colRight}>Montant</th>
+                  <th>Reçu</th>
+                  <th>Statut</th>
+                </tr>
+              </thead>
+              <tbody>
+                {expenses.map((e) => (
+                  <tr key={e.id}>
+                    <td className={styles.dateCell}>{new Date(e.spent_on).toLocaleDateString('fr-FR')}</td>
+                    <td>{e.description || <span className={styles.muted}>—</span>}</td>
+                    <td className={styles.colRight}><MaskedAmount value={Number(e.amount)} revealed={revealed} className={styles.amount} /></td>
+                    <td>
+                      {e.receipt_path ? (
+                        <button type="button" className={styles.receiptLink} onClick={() => openReceipt(e.receipt_path!)}>Voir le reçu</button>
+                      ) : (
+                        <span className={`${styles.badge} ${styles.badgeMissing}`}>manquant</span>
+                      )}
+                    </td>
+                    <td>
+                      <Menu position="bottom-start" withinPortal shadow="md">
+                        <Menu.Target>
+                          <button type="button" className={`${styles.badge} ${styles[`badge_${e.status}`]}`} style={{ cursor: 'pointer' }}>
+                            {STATUS_LABEL[e.status]}
+                          </button>
+                        </Menu.Target>
+                        <Menu.Dropdown>
+                          {STATUSES.map((s) => (
+                            <Menu.Item key={s} onClick={() => update.mutate({ id: e.id, status: s })}>{STATUS_LABEL[s]}</Menu.Item>
+                          ))}
+                        </Menu.Dropdown>
+                      </Menu>
+                    </td>
+                  </tr>
+                ))}
+                {expenses.length === 0 && (
+                  <tr><td colSpan={5} className={styles.emptyRow}>Aucune dépense pour le moment.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <div className={styles.totalRow}>
+          <span className={styles.totalLabel}>Total engagé</span>
+          <MaskedAmount value={total} revealed={revealed} className={styles.totalAmount} />
+        </div>
+      </div>
+    </div>
   );
 }

@@ -25,7 +25,7 @@ export function CashOutflowForm({ onSubmit }: {
       <NumberInput label="Sortie (€)" value={amount} onChange={setAmount} min={0} decimalScale={2} />
       <DateInput label="Date" value={spentOn} onChange={(v) => setSpentOn(v ?? '')} valueFormat="DD/MM/YYYY" />
       <TextInput label="Motif" value={description} onChange={(e) => setDescription(e.currentTarget.value)} />
-      <Button onClick={submit} loading={busy} disabled={typeof amount !== 'number'}>Ajouter</Button>
+      <Button onClick={submit} loading={busy} color="#6b7a55" disabled={typeof amount !== 'number'}>Ajouter</Button>
     </Group>
   );
 }
