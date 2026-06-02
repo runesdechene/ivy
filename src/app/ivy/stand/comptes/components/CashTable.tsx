@@ -1,9 +1,9 @@
 'use client';
 import { useState } from 'react';
 import { ActionIcon, Button, Group, NumberInput, TextInput } from '@mantine/core';
-import { DateInput } from '@mantine/dates';
+import { DatePickerInput } from '@mantine/dates';
 import { notifications } from '@mantine/notifications';
-import { IconTrash, IconArrowUp, IconArrowDown } from '@tabler/icons-react';
+import { IconTrash, IconArrowUp, IconArrowDown, IconCalendar } from '@tabler/icons-react';
 import { MaskedAmount } from './MaskedAmount';
 import { useCashLedger, useCashMutations } from '../hooks/useLedger';
 import styles from '../comptes.module.scss';
@@ -54,7 +54,7 @@ export function CashTable({ shopId, locationId, revealed }: { shopId: string; lo
           </div>
           <Group grow>
             <NumberInput label="Montant (€)" value={amount} onChange={setAmount} min={0} decimalScale={2} thousandSeparator=" " />
-            <DateInput label="Date" value={occurredOn} onChange={(v) => setOccurredOn(v ?? '')} valueFormat="DD/MM/YYYY" />
+            <DatePickerInput label="Date" value={occurredOn} onChange={(v) => setOccurredOn(v ?? '')} valueFormat="DD/MM/YYYY" leftSection={<IconCalendar size={16} />} leftSectionPointerEvents="none" popoverProps={{ withinPortal: true }} />
           </Group>
           <TextInput
             label="Justification"

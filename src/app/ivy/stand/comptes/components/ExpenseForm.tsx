@@ -1,7 +1,8 @@
 'use client';
 import { useState } from 'react';
 import { Button, FileButton, Group, NumberInput, Select, Stack, TextInput } from '@mantine/core';
-import { DateInput } from '@mantine/dates';
+import { DatePickerInput } from '@mantine/dates';
+import { IconCalendar } from '@tabler/icons-react';
 import styles from '../comptes.module.scss';
 
 interface Zone { id: string; name: string; }
@@ -32,7 +33,7 @@ export function ExpenseForm({ zones, onSubmit }: {
       <Stack gap="sm">
         <Group grow>
           <NumberInput label="Montant (€)" value={amount} onChange={setAmount} min={0} decimalScale={2} thousandSeparator=" " />
-          <DateInput label="Date" value={spentOn} onChange={(v) => setSpentOn(v ?? '')} valueFormat="DD/MM/YYYY" />
+          <DatePickerInput label="Date" value={spentOn} onChange={(v) => setSpentOn(v ?? '')} valueFormat="DD/MM/YYYY" leftSection={<IconCalendar size={16} />} leftSectionPointerEvents="none" popoverProps={{ withinPortal: true }} />
         </Group>
         <TextInput label="Description" value={description} onChange={(e) => setDescription(e.currentTarget.value)} />
         <Select label="Festival" data={zones.map((z) => ({ value: z.id, label: z.name }))} value={zoneId} onChange={setZoneId} clearable searchable />
