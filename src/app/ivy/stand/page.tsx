@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Loader, SimpleGrid } from '@mantine/core';
+import Link from 'next/link';
+import { ActionIcon, Loader, SimpleGrid, Tooltip } from '@mantine/core';
 import {
   IconArrowDown,
   IconArrowUp,
   IconCalendar,
+  IconLock,
   IconPackage,
   IconMapPin,
 } from '@tabler/icons-react';
@@ -113,6 +115,17 @@ export default function FestivalDashboardPage() {
 
   return (
     <div className={styles.container}>
+      <Tooltip label="Comptes (privé)" position="left">
+        <ActionIcon
+          component={Link}
+          href="/ivy/stand/comptes"
+          variant="subtle"
+          aria-label="Comptes"
+          style={{ position: 'absolute', top: 8, right: 8, zIndex: 20, opacity: 0.25 }}
+        >
+          <IconLock size={16} />
+        </ActionIcon>
+      </Tooltip>
       <div className={styles.pageHead}>
         <div className={styles.pageHeadLeft}>
           <div className={styles.eyebrow}>Festivals · {shopName}</div>
