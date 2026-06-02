@@ -21,3 +21,25 @@ test('verifyPin rejette le mauvais PIN', () => {
 test('deux hash du même PIN diffèrent (sel aléatoire)', () => {
   assert.notEqual(hashPin('1234'), hashPin('1234'));
 });
+
+test('verifyPin rejette un hash au segment vide (anti-bypass)', () => {
+  assert.equal(verifyPin('1234', 'scrypt$aabbcc$'), false);
+});
+
+test('verifyPin rejette un hash non-hexadécimal', () => {
+  assert.equal(verifyPin('1234', 'scrypt$aabb$ZZZZ'), false);
+});
+
+test('verifyPin rejette un format à mauvais nombre de segments', () => {
+  assert.equal(verifyPin('1234', 'scrypt$aabbcc'), false);
+});
+
+test('verifyPin rejette un mauvais préfixe d\'algorithme', () => {
+  assert.equal(verifyPin('1234', 'bcrypt$aabb$ccdd'), false);
+});
+
+test('verifyPin accepte toujours un hash légitime après le fix', () => {
+  const h = hashPin('9999');
+  assert.equal(verifyPin('9999', h), true);
+  assert.equal(verifyPin('8888', h), false);
+});
