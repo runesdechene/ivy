@@ -25,8 +25,8 @@ Ces deux menaces dictent les choix de la section **Sécurité**.
 ## Périmètre
 
 **In-scope :**
-- Nouveau module privé sous le Hub de stand : route `/ivy/hub/comptes`, **non listée dans la navigation principale**.
-- Point d'entrée discret depuis le Hub (icône cadenas discrète dans le header du Hub) qui ouvre le **gate PIN** ; pas de libellé « caisse / argent » visible.
+- Nouveau module privé sous la section **Festivals** : route `/ivy/stand/comptes`, **non listée dans la navigation principale**.
+- Point d'entrée discret sur le **tableau de bord Festivals** (icône cadenas discrète) qui ouvre le **gate PIN** ; pas de libellé « caisse / argent » visible. *(NB : les routes API restent sous `/api/hub/comptes/*`, chemin interne inchangé.)*
 - **Verrou d'accès double** :
   - Côté serveur/données : RLS par appartenance au shop (`user_shops`). Aujourd'hui un **seul compte** IVY → c'est lui, et lui seul. (Allowlist multi-comptes = post-MVP, voir out-of-scope.)
   - Côté affichage/stand : **gate PIN** (4–6 chiffres) à l'ouverture + **montants masqués par défaut** (`••••`), révélés après PIN, re-masqués automatiquement.
@@ -53,7 +53,7 @@ Ces deux menaces dictent les choix de la section **Sécurité**.
 | Décision | Choix retenu | Raison |
 |---|---|---|
 | Modèle de données | **3 tables dédiées** (vs 1 table `ledger` fourre-tout) | Champs propres par tableau, pas de colonnes nullables, requêtes simples. |
-| Emplacement de la page | **Page privée sous le Hub**, hors nav principale | Conforme au besoin « pas cliquable facilement au stand ». |
+| Emplacement de la page | **Page privée sous la section Festivals** (`/ivy/stand/comptes`), hors nav principale | Conforme au besoin « pas cliquable facilement au stand ». |
 | Verrou stand | **PIN + masquage visuel** (pas biométrie) | Indépendant de l'appareil, simple, couvre la menace 1. |
 | Sécurité DB | **RLS + `service_role` seul** (pas de chiffrement applicatif) | Suffisant contre exposition API ; le chiffrement casse les sommes SQL et ajoute une gestion de clé non justifiée pour le MVP. |
 | Nommage tables | Préfixe neutre `hub_ledger_*` | Discrétion de schéma (défense-en-profondeur mineure). **Non** présenté comme sécurité réelle ; aucune obfuscation destinée à entraver un audit légitime. Données sincères et intègres. |
@@ -130,11 +130,11 @@ Nouvelle migration `supabase/migrations/0XX_hub_ledger.sql` (numéro = suivant d
 ## Architecture applicative
 
 ### Route & layout
-- `src/app/ivy/hub/comptes/page.tsx` — page du module (client component).
+- `src/app/ivy/stand/comptes/page.tsx` — page du module (client component).
 - Gate PIN rendu avant le contenu : tant que non déverrouillé → composant `<PinGate />`, aucun appel de données.
-- Le Hub (`src/app/ivy/hub/...`) reçoit une **icône cadenas discrète** dans son header → `Link` vers `/ivy/hub/comptes`. Pas d'entrée dans `IvyLayout`/`TopNavbar`.
+- Le tableau de bord Festivals (`src/app/ivy/stand/page.tsx`) reçoit une **icône cadenas discrète** → `Link` vers `/ivy/stand/comptes`. Pas d'entrée dans `IvyLayout`/`TopNavbar`.
 
-### Composants (nouveaux, dossier `src/app/ivy/hub/comptes/components/`)
+### Composants (nouveaux, dossier `src/app/ivy/stand/comptes/components/`)
 - `PinSetup.tsx` — **écran de 1ère config** : affiché quand `pin_hash IS NULL`. Saisie + confirmation du PIN, envoi à la route de pose (qui hash côté serveur). Le PIN ne quitte pas l'appareil en clair au-delà de la requête HTTPS de pose.
 - `PinGate.tsx` — saisie PIN, déverrouillage (jeton à courte durée en `sessionStorage`), bouton verrouiller.
 - `MaskedAmount.tsx` — affiche `••••` par défaut, révèle au déverrouillage, re-masque sur `visibilitychange` / timeout d'inactivité.
@@ -163,7 +163,7 @@ Nouvelle migration `supabase/migrations/0XX_hub_ledger.sql` (numéro = suivant d
 ## User flow
 
 1. Le soir, en wifi, l'apprenti ouvre IVY → Hub de stand.
-2. Il tape l'icône cadenas discrète → `/ivy/hub/comptes`. **Au tout premier accès** (`pin_hash IS NULL`) : écran **PinSetup**, il définit son PIN lui-même. Ensuite : **PinGate**. Tout est masqué tant que le PIN n'est pas saisi.
+2. Il tape l'icône cadenas discrète (tableau de bord Festivals) → `/ivy/stand/comptes`. **Au tout premier accès** (`pin_hash IS NULL`) : écran **PinSetup**, il définit son PIN lui-même. Ensuite : **PinGate**. Tout est masqué tant que le PIN n'est pas saisi.
 3. PIN correct → jeton de déverrouillage court, la page se déverrouille, les montants se révèlent.
 4. **Onglet Dépenses** : il ajoute une dépense (montant, date, description), prend/joint la **photo du reçu**, choisit l'emplacement + le festival, statut `engagé`.
 5. **Onglet Caisse** : il sélectionne le festival, saisit (ou retrouve) le **fond de caisse d'ouverture**, ajoute ses **sorties** ; le **solde** s'affiche, déduit.
