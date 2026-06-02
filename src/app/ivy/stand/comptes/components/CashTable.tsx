@@ -8,9 +8,9 @@ import { MaskedAmount } from './MaskedAmount';
 import { useCashLedger, useCashMutations } from '../hooks/useLedger';
 import styles from '../comptes.module.scss';
 
-export function CashTable({ shopId, revealed }: { shopId: string; revealed: boolean }) {
-  const { data } = useCashLedger(shopId);
-  const { create, remove } = useCashMutations(shopId);
+export function CashTable({ shopId, locationId, revealed }: { shopId: string; locationId: string; revealed: boolean }) {
+  const { data } = useCashLedger(shopId, locationId);
+  const { create, remove } = useCashMutations(shopId, locationId);
   const balance = data?.balance ?? 0;
   const movements = data?.movements ?? [];
 

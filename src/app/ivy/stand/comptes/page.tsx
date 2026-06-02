@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { ActionIcon, Loader, Tooltip } from '@mantine/core';
 import { IconLock, IconReceipt, IconCash, IconEye, IconEyeOff } from '@tabler/icons-react';
 import { useShop } from '@/context/ShopContext';
+import { useLocation } from '@/context/LocationContext';
 import { hubJson } from './api-client';
 import { usePinLock } from './hooks/usePinLock';
 import { PinSetup } from './components/PinSetup';
@@ -16,7 +17,9 @@ type Tab = 'depenses' | 'caisse';
 
 export default function ComptesPage() {
   const { currentShop } = useShop();
+  const { currentLocation } = useLocation();
   const shopId = currentShop?.id;
+  const locationId = currentLocation?.id;
   const { state, setup, unlock, lock } = usePinLock(shopId);
   const [zones, setZones] = useState<Zone[]>([]);
   const [revealed, setRevealed] = useState(true);
@@ -37,7 +40,9 @@ export default function ComptesPage() {
         <div>
           <div className={styles.eyebrow}>Festivals · Runes de Chêne</div>
           <h1 className={styles.title}>Comptes de <em>stand</em></h1>
-          <div className={styles.sub}>Dépenses engagées &amp; suivi de la caisse cash</div>
+          <div className={styles.sub}>
+            Dépenses engagées &amp; suivi de caisse{currentLocation ? ` · ${currentLocation.name}` : ''}
+          </div>
         </div>
         <div className={styles.controls}>
           <Tooltip label={revealed ? 'Masquer les montants' : 'Afficher les montants'}>
@@ -70,9 +75,13 @@ export default function ComptesPage() {
         </button>
       </div>
 
-      {tab === 'depenses'
-        ? <ExpensesTable shopId={shopId} zones={zones} revealed={revealed} />
-        : <CashTable shopId={shopId} revealed={revealed} />}
+      {!locationId ? (
+        <div className={styles.card}><p className={styles.muted}>Sélectionne un emplacement (sélecteur en haut à gauche) pour voir ses comptes.</p></div>
+      ) : tab === 'depenses' ? (
+        <ExpensesTable shopId={shopId} locationId={locationId} zones={zones} revealed={revealed} />
+      ) : (
+        <CashTable shopId={shopId} locationId={locationId} revealed={revealed} />
+      )}
     </div>
   );
 }

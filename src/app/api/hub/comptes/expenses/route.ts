@@ -13,6 +13,8 @@ export async function GET(request: NextRequest) {
   if (!shopId || !ownsShop(res.auth, shopId)) return NextResponse.json({ error: 'Interdit' }, { status: 403 });
 
   let q = res.auth.svc.from('hub_ledger_expenses').select('*').eq('shop_id', shopId);
+  const locationId = sp.get('locationId');
+  if (locationId) q = q.eq('location_id', locationId);
   const studyZoneId = sp.get('studyZoneId');
   if (studyZoneId) q = q.eq('study_zone_id', studyZoneId);
   const { data, error } = await q.order('spent_on', { ascending: false });

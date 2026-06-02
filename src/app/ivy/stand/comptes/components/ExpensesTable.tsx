@@ -16,9 +16,9 @@ const STATUSES: ExpenseStatus[] = ['engage', 'soumis', 'rembourse'];
 
 interface Zone { id: string; name: string; }
 
-export function ExpensesTable({ shopId, zones, revealed }: { shopId: string; zones: Zone[]; revealed: boolean }) {
-  const { data: expenses = [], isLoading } = useExpenses(shopId);
-  const { create, update } = useExpenseMutations(shopId);
+export function ExpensesTable({ shopId, locationId, zones, revealed }: { shopId: string; locationId: string; zones: Zone[]; revealed: boolean }) {
+  const { data: expenses = [], isLoading } = useExpenses(shopId, locationId);
+  const { create, update } = useExpenseMutations(shopId, locationId);
 
   const add = async (d: { amount: number; spentOn: string; description: string; studyZoneId: string | null; file: File | null }) => {
     try {

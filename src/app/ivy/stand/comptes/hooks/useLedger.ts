@@ -3,27 +3,28 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { hubJson, hubFetch } from '../api-client';
 import type { Expense, CashMovement } from '../types';
 
-// ----- Dépenses -----
-export function useExpenses(shopId: string | undefined, studyZoneId?: string | null, enabled = true) {
+// ----- Dépenses (scopées par emplacement) -----
+export function useExpenses(shopId: string | undefined, locationId: string | undefined, studyZoneId?: string | null, enabled = true) {
   return useQuery({
-    queryKey: ['hub-expenses', shopId, studyZoneId],
-    enabled: !!shopId && enabled,
+    queryKey: ['hub-expenses', shopId, locationId, studyZoneId],
+    enabled: !!shopId && !!locationId && enabled,
     queryFn: () => {
       const u = new URL('/api/hub/comptes/expenses', window.location.origin);
       u.searchParams.set('shopId', shopId!);
+      u.searchParams.set('locationId', locationId!);
       if (studyZoneId) u.searchParams.set('studyZoneId', studyZoneId);
       return hubJson<{ expenses: Expense[] }>(u.pathname + u.search).then((r) => r.expenses);
     },
   });
 }
 
-export function useExpenseMutations(shopId: string | undefined) {
+export function useExpenseMutations(shopId: string | undefined, locationId: string | undefined) {
   const qc = useQueryClient();
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['hub-expenses', shopId] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['hub-expenses', shopId, locationId] });
   return {
     create: useMutation({
       mutationFn: (body: Record<string, unknown>) =>
-        hubJson<{ expense: Expense }>('/api/hub/comptes/expenses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, shopId }) }),
+        hubJson<{ expense: Expense }>('/api/hub/comptes/expenses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, shopId, locationId }) }),
       onSuccess: invalidate,
     }),
     update: useMutation({
@@ -38,22 +39,22 @@ export function useExpenseMutations(shopId: string | undefined) {
   };
 }
 
-// ----- Caisse (caisse globale, mouvements signés justifiés) -----
-export function useCashLedger(shopId: string | undefined) {
+// ----- Caisse (par emplacement, mouvements signés justifiés) -----
+export function useCashLedger(shopId: string | undefined, locationId: string | undefined) {
   return useQuery({
-    queryKey: ['hub-cash', shopId],
-    enabled: !!shopId,
-    queryFn: () => hubJson<{ balance: number; movements: CashMovement[] }>(`/api/hub/comptes/cash?shopId=${shopId}`),
+    queryKey: ['hub-cash', shopId, locationId],
+    enabled: !!shopId && !!locationId,
+    queryFn: () => hubJson<{ balance: number; movements: CashMovement[] }>(`/api/hub/comptes/cash?shopId=${shopId}&locationId=${locationId}`),
   });
 }
 
-export function useCashMutations(shopId: string | undefined) {
+export function useCashMutations(shopId: string | undefined, locationId: string | undefined) {
   const qc = useQueryClient();
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['hub-cash', shopId] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['hub-cash', shopId, locationId] });
   return {
     create: useMutation({
       mutationFn: (body: Record<string, unknown>) =>
-        hubJson<{ movement: CashMovement }>('/api/hub/comptes/cash', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, shopId }) }),
+        hubJson<{ movement: CashMovement }>('/api/hub/comptes/cash', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, shopId, locationId }) }),
       onSuccess: invalidate,
     }),
     remove: useMutation({

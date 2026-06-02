@@ -6,15 +6,14 @@ export async function GET(request: NextRequest) {
   if (!res.ok) return NextResponse.json({ error: res.error }, { status: res.status });
   if (!requireUnlock(request, res.auth.userId)) return NextResponse.json({ error: 'Verrouillé' }, { status: 403 });
 
-  const shopId = new URL(request.url).searchParams.get('shopId');
+  const sp = new URL(request.url).searchParams;
+  const shopId = sp.get('shopId');
+  const locationId = sp.get('locationId');
   if (!shopId || !ownsShop(res.auth, shopId)) return NextResponse.json({ error: 'Interdit' }, { status: 403 });
 
-  const { data, error } = await res.auth.svc
-    .from('hub_ledger_cash_movements')
-    .select('*')
-    .eq('shop_id', shopId)
-    .order('occurred_on', { ascending: false })
-    .order('created_at', { ascending: false });
+  let q = res.auth.svc.from('hub_ledger_cash_movements').select('*').eq('shop_id', shopId);
+  if (locationId) q = q.eq('location_id', locationId);
+  const { data, error } = await q.order('occurred_on', { ascending: false }).order('created_at', { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const movements = data ?? [];
@@ -35,6 +34,7 @@ export async function POST(request: NextRequest) {
 
   const { data, error } = await res.auth.svc.from('hub_ledger_cash_movements').insert({
     shop_id: b.shopId,
+    location_id: b.locationId ?? null,
     occurred_on: b.occurredOn,
     amount: b.amount,
     justification: b.justification ?? '',
