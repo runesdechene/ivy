@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { aggregateMovements } from '../_lib/aggregate';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -61,38 +62,9 @@ export async function GET(request: NextRequest) {
 
   const allMovements = movements || [];
 
-  // Total items out / return
-  const totalItemsOut = allMovements
-    .filter(m => m.quantity < 0)
-    .reduce((sum, m) => sum + Math.abs(m.quantity), 0);
-  const totalItemsReturn = allMovements
-    .filter(m => m.quantity > 0)
-    .reduce((sum, m) => sum + m.quantity, 0);
-
-  // Top products (by quantity out)
-  const productMap = new Map<string, number>();
-  for (const m of allMovements) {
-    if (m.quantity < 0) {
-      const key = m.product_title;
-      productMap.set(key, (productMap.get(key) || 0) + Math.abs(m.quantity));
-    }
-  }
-  const topProducts = Array.from(productMap.entries())
-    .map(([name, quantity]) => ({ name, quantity }))
-    .sort((a, b) => b.quantity - a.quantity);
-
-  // Top variants (by quantity out)
-  const variantMap = new Map<string, number>();
-  for (const m of allMovements) {
-    if (m.quantity < 0) {
-      const key = `${m.product_title} — ${m.variant_title || 'Default'}`;
-      variantMap.set(key, (variantMap.get(key) || 0) + Math.abs(m.quantity));
-    }
-  }
-  const topVariants = Array.from(variantMap.entries())
-    .map(([name, quantity]) => ({ name, quantity }))
-    .sort((a, b) => b.quantity - a.quantity)
-    .slice(0, 20);
+  // Totals + top products / variants / names (logique partagée)
+  const { totalItemsOut, totalItemsReturn, topProducts, topVariants, topNames } =
+    aggregateMovements(allMovements as import('../_lib/aggregate').MovementRow[]);
 
   // Top options grouped by option name (Couleur, Taille, etc.)
   // First, get product option names for all variants involved
@@ -150,28 +122,6 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => b.quantity - a.quantity);
     topOptionsByCategory.push({ category, options });
   }
-
-  // Top names (group all garments/variants of the same fragment design — e.g. every
-  // "L'esprit du loup | …" row collapses into one "L'esprit du loup").
-  // Key on the design name (the part before the "|" / "—" separator), NOT a fixed-length
-  // prefix: a 5-char prefix collides whenever several designs share a leading collection
-  // name (e.g. "L'esprit de la loutre", "L'esprit du Hibou" and "L'esprit du loup" all
-  // begin with "l'esp"), which silently merged distinct fragments under a single name.
-  const nameMap = new Map<string, { fullName: string; quantity: number }>();
-  for (const m of allMovements) {
-    if (m.quantity < 0) {
-      const displayName = m.product_title.split('|')[0].split('—')[0].trim();
-      const key = displayName.toLowerCase();
-      const existing = nameMap.get(key);
-      if (existing) {
-        existing.quantity += Math.abs(m.quantity);
-      } else {
-        nameMap.set(key, { fullName: displayName, quantity: Math.abs(m.quantity) });
-      }
-    }
-  }
-  const topNames = Array.from(nameMap.values())
-    .sort((a, b) => b.quantity - a.quantity);
 
   // Movements by day
   const dayMap = new Map<string, { itemsOut: number; itemsReturn: number }>();
