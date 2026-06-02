@@ -28,8 +28,9 @@ Ces deux menaces dictent les choix de la section **Sécurité**.
 - Nouveau module privé sous le Hub de stand : route `/ivy/hub/comptes`, **non listée dans la navigation principale**.
 - Point d'entrée discret depuis le Hub (icône cadenas discrète dans le header du Hub) qui ouvre le **gate PIN** ; pas de libellé « caisse / argent » visible.
 - **Verrou d'accès double** :
-  - Côté serveur/données : RLS + **allowlist explicite** (seuls les comptes que l'owner autorise voient quoi que ce soit).
+  - Côté serveur/données : RLS par appartenance au shop (`user_shops`). Aujourd'hui un **seul compte** IVY → c'est lui, et lui seul. (Allowlist multi-comptes = post-MVP, voir out-of-scope.)
   - Côté affichage/stand : **gate PIN** (4–6 chiffres) à l'ouverture + **montants masqués par défaut** (`••••`), révélés après PIN, re-masqués automatiquement.
+- **PIN défini par l'utilisateur** via un **écran de première configuration** (le PIN ne transite ni par un tiers ni par un fichier). Stocké en **hash salé** (bcrypt/argon2id), jamais en clair, jamais réversible.
 - **Tableau A — Dépenses engagées remboursables** : montant, date, description, photo du reçu, statut (`engagé` → `soumis` → `remboursé`), rattachement emplacement + festival.
 - **Tableau B — Suivi de caisse cash** : fond de caisse d'ouverture par festival + sorties piochées (montant, date, description). **Solde = ouverture − Σ sorties**, déduit. Aucun prix de vente / encaissement enregistré.
 - Upload **photo du reçu** depuis le téléphone → Supabase Storage (bucket privé), URL signée à la demande.
@@ -42,6 +43,7 @@ Ces deux menaces dictent les choix de la section **Sécurité**.
 - Enregistrement des **ventes / encaissements** (hors périmètre NF525 — jamais dans IVY).
 - Chiffrement applicatif des champs (décision : RLS + `service_role` suffisent ; arbitrage tracé plus bas).
 - Biométrie / WebAuthn (PIN suffit pour le MVP).
+- **Allowlist multi-comptes** (`hub_ledger_authorized_users`) : reportée jusqu'à ce que l'apprenti ait son propre compte IVY. Aujourd'hui compte unique → l'accès données = appartenance shop.
 - Export PDF/CSV de note de frais, relances de remboursement, multi-devises.
 - Offline-first / synchronisation conflictuelle.
 - Rapprochement automatique caisse ↔ ventes POS d'IVY.
@@ -55,19 +57,24 @@ Ces deux menaces dictent les choix de la section **Sécurité**.
 | Verrou stand | **PIN + masquage visuel** (pas biométrie) | Indépendant de l'appareil, simple, couvre la menace 1. |
 | Sécurité DB | **RLS + `service_role` seul** (pas de chiffrement applicatif) | Suffisant contre exposition API ; le chiffrement casse les sommes SQL et ajoute une gestion de clé non justifiée pour le MVP. |
 | Nommage tables | Préfixe neutre `hub_ledger_*` | Discrétion de schéma (défense-en-profondeur mineure). **Non** présenté comme sécurité réelle ; aucune obfuscation destinée à entraver un audit légitime. Données sincères et intègres. |
-| Allowlist | Table explicite `hub_ledger_authorized_users` | Implémente « bloquer tout le monde sauf qui j'autorise ». |
+| Accès données | Appartenance shop (`user_shops`), **compte unique** aujourd'hui | YAGNI : pas d'allowlist tant qu'il n'y a qu'un compte. |
+| Stockage PIN | **Hash salé** (bcrypt/argon2id), pas de chiffrement réversible | Un dump de base ne révèle jamais le PIN. |
+| Pose du PIN | **Écran de 1ère config**, défini par l'utilisateur | Le PIN ne transite par aucun tiers ni fichier ni chat. |
 
 ## Modèle de données
 
 Nouvelle migration `supabase/migrations/0XX_hub_ledger.sql` (numéro = suivant disponible, à figer à l'implémentation).
 
-### `hub_ledger_authorized_users` — allowlist d'accès
+### `hub_ledger_settings` — réglages du module (1 ligne par shop)
 | Colonne | Type | Notes |
 |---|---|---|
 | `id` | UUID PK | `gen_random_uuid()` |
-| `shop_id` | UUID FK → `shops(id)` | tenant |
-| `user_id` | UUID | `auth.uid()` autorisé (owner, apprenti) |
-| `created_at` | TIMESTAMPTZ | |
+| `shop_id` | UUID FK → `shops(id)` UNIQUE | tenant |
+| `pin_hash` | TEXT nullable | hash salé du PIN (bcrypt/argon2id). `NULL` = PIN pas encore défini → déclenche l'écran de 1ère config. |
+| `pin_set_at` | TIMESTAMPTZ nullable | |
+| `created_at` / `updated_at` | TIMESTAMPTZ | |
+
+> Le PIN n'est **jamais** stocké ni transmis en clair. La route `unlock` reçoit le PIN saisi, le compare au hash côté serveur, et renvoie un jeton de déverrouillage à courte durée. La pose initiale passe par l'écran de 1ère config (`POST` qui hash et stocke).
 
 ### `hub_ledger_expenses` — Tableau A (dépenses remboursables)
 | Colonne | Type | Notes |
@@ -111,10 +118,10 @@ Nouvelle migration `supabase/migrations/0XX_hub_ledger.sql` (numéro = suivant d
 
 ### RLS (toutes les tables `hub_ledger_*`)
 - `ENABLE ROW LEVEL SECURITY`.
-- Policy SELECT/INSERT/UPDATE/DELETE conditionnée à :
-  `EXISTS (SELECT 1 FROM hub_ledger_authorized_users a WHERE a.shop_id = <row>.shop_id AND a.user_id = auth.uid())`.
-- C.-à-d. : membre autorisé du shop uniquement. (Plus strict que la simple appartenance `user_shops` utilisée ailleurs dans IVY.)
-- Les routes serveur passent en `service_role` (RLS bypassée côté API) mais **vérifient l'allowlist applicativement** avant toute lecture/écriture.
+- Policy SELECT/INSERT/UPDATE/DELETE conditionnée à l'appartenance au shop, pattern IVY existant :
+  `EXISTS (SELECT 1 FROM user_shops us WHERE us.shop_id = <row>.shop_id AND us.user_id = auth.uid())`.
+- Compte unique aujourd'hui → seul ce compte accède. (Si un 2e compte arrive, restreindre via l'allowlist post-MVP.)
+- Les routes serveur passent en `service_role` (RLS bypassée côté API) mais **revérifient l'appartenance shop applicativement** avant toute lecture/écriture, et exigent un **jeton de déverrouillage PIN valide** pour servir des montants.
 
 ### Storage
 - Bucket privé `hub-receipts` (non public).
@@ -128,7 +135,8 @@ Nouvelle migration `supabase/migrations/0XX_hub_ledger.sql` (numéro = suivant d
 - Le Hub (`src/app/ivy/hub/...`) reçoit une **icône cadenas discrète** dans son header → `Link` vers `/ivy/hub/comptes`. Pas d'entrée dans `IvyLayout`/`TopNavbar`.
 
 ### Composants (nouveaux, dossier `src/app/ivy/hub/comptes/components/`)
-- `PinGate.tsx` — saisie PIN, déverrouillage (état en mémoire + `sessionStorage`, expiration courte), bouton verrouiller.
+- `PinSetup.tsx` — **écran de 1ère config** : affiché quand `pin_hash IS NULL`. Saisie + confirmation du PIN, envoi à la route de pose (qui hash côté serveur). Le PIN ne quitte pas l'appareil en clair au-delà de la requête HTTPS de pose.
+- `PinGate.tsx` — saisie PIN, déverrouillage (jeton à courte durée en `sessionStorage`), bouton verrouiller.
 - `MaskedAmount.tsx` — affiche `••••` par défaut, révèle au déverrouillage, re-masque sur `visibilitychange` / timeout d'inactivité.
 - `ExpensesTable.tsx` — Tableau A : liste, ajout/édition, upload reçu, changement de statut.
 - `CashTable.tsx` — Tableau B : sélection festival, fond de caisse, liste des sorties, solde déduit.
@@ -143,7 +151,8 @@ Nouvelle migration `supabase/migrations/0XX_hub_ledger.sql` (numéro = suivant d
 - `cash/sessions/route.ts` — GET/POST/PATCH (fond de caisse).
 - `cash/outflows/route.ts` — GET/POST/DELETE.
 - `receipts/route.ts` — POST upload (vers bucket privé), GET URL signée.
-- Chaque route : auth Supabase → vérif allowlist → opération `service_role`. Refus 403 si non autorisé.
+- `pin/route.ts` — `POST` pose initiale (hash + stocke si `pin_hash IS NULL`), `POST unlock` (compare hash, renvoie jeton court). Anti-bruteforce : délai/limitation des tentatives.
+- Chaque route données : auth Supabase → vérif appartenance shop → **jeton PIN valide requis** → opération `service_role`. Refus 403 si non autorisé.
 
 ### Réutilisation existante
 - `LocationContext` / `LocationSelector` pour l'emplacement courant.
@@ -154,23 +163,23 @@ Nouvelle migration `supabase/migrations/0XX_hub_ledger.sql` (numéro = suivant d
 ## User flow
 
 1. Le soir, en wifi, l'apprenti ouvre IVY → Hub de stand.
-2. Il tape l'icône cadenas discrète → `/ivy/hub/comptes` → **PinGate**. Tout est masqué tant que le PIN n'est pas saisi.
-3. PIN correct → la page se déverrouille, les montants se révèlent.
+2. Il tape l'icône cadenas discrète → `/ivy/hub/comptes`. **Au tout premier accès** (`pin_hash IS NULL`) : écran **PinSetup**, il définit son PIN lui-même. Ensuite : **PinGate**. Tout est masqué tant que le PIN n'est pas saisi.
+3. PIN correct → jeton de déverrouillage court, la page se déverrouille, les montants se révèlent.
 4. **Onglet Dépenses** : il ajoute une dépense (montant, date, description), prend/joint la **photo du reçu**, choisit l'emplacement + le festival, statut `engagé`.
 5. **Onglet Caisse** : il sélectionne le festival, saisit (ou retrouve) le **fond de caisse d'ouverture**, ajoute ses **sorties** ; le **solde** s'affiche, déduit.
 6. Inactivité / changement d'onglet → montants **re-masqués** automatiquement ; un bouton « verrouiller » re-arme le PIN.
 7. Côté owner : même page (compte autorisé), il fait passer les dépenses `soumis` → `remboursé` pour suivre ce qu'il doit encore.
 
 ## Gestion d'erreurs
-- Accès non autorisé (hors allowlist) : route serveur renvoie **403**, l'UI affiche un écran neutre « accès restreint », aucune donnée.
-- PIN erroné : message générique, pas de fuite (pas de compteur exposant la donnée).
+- Accès non autorisé (compte hors shop / sans jeton PIN) : route serveur renvoie **403**, l'UI affiche un écran neutre « accès restreint », aucune donnée.
+- PIN erroné : message générique + limitation des tentatives (anti-bruteforce), pas de fuite.
 - Upload reçu échoué : la dépense est enregistrée sans reçu, badge « reçu manquant », réessai possible.
 - Montant invalide / négatif : validation côté formulaire + garde-fou serveur.
 - Solde caisse négatif : autorisé mais signalé visuellement (alerte) — l'apprenti a pioché plus que le fond.
 
 ## Tests / vérification
 - Pas de framework de tests dans IVY → **vérification manuelle via dev server** (`pnpm dev`), conforme aux conventions.
-- Checklist manuelle : RLS (un compte hors allowlist ne voit rien, même requête directe via API), gate PIN bloque le rendu, masquage/re-masquage, upload + URL signée, calcul du solde, statuts de remboursement, rendu mobile.
+- Checklist manuelle : RLS (un compte hors shop ne voit rien, même requête directe via API), 1ère config pose le PIN (hash en base, jamais en clair), gate PIN bloque le rendu sans jeton valide, masquage/re-masquage, upload + URL signée, calcul du solde, statuts de remboursement, rendu mobile.
 
 ## Notes de conformité
 - **NF525** : non concerné. Aucune vente / encaissement / prix de vente / remise n'est enregistré. Le suivi de caisse ne traque que le fond d'ouverture et les sorties (outil de gestion de fond de caisse), conformément à la règle d'or IVY « Ivy n'est PAS une caisse ».
