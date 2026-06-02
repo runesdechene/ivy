@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ActionIcon, Loader, SimpleGrid, Tooltip } from '@mantine/core';
+import { ActionIcon, Button, Checkbox, Group, Loader, Paper, SimpleGrid, Table, Text, Tooltip } from '@mantine/core';
 import {
   IconArrowDown,
   IconArrowUp,
@@ -28,11 +28,24 @@ interface DashboardStats {
   monthItemsOut: number;
 }
 
+interface AggregateStats {
+  totalItemsOut: number;
+  totalItemsReturn: number;
+  topProducts: Array<{ name: string; quantity: number }>;
+  topVariants: Array<{ name: string; quantity: number }>;
+  topNames: Array<{ fullName: string; quantity: number }>;
+  zonesCount: number;
+  locationsCount: number;
+}
+
 export default function FestivalDashboardPage() {
   const { currentShop } = useShop();
-  const { currentLocation } = useLocation();
+  const { currentLocation, locations } = useLocation();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
+  const [aggStats, setAggStats] = useState<AggregateStats | null>(null);
+  const [aggLoading, setAggLoading] = useState(false);
 
   useEffect(() => {
     if (!currentShop?.id) return;
@@ -90,6 +103,34 @@ export default function FestivalDashboardPage() {
 
     loadStats();
   }, [currentShop?.id, currentLocation?.id]);
+
+  // Init : tous les emplacements cochés dès qu'ils sont chargés
+  useEffect(() => {
+    setSelectedLocationIds(locations.map(l => l.id));
+  }, [locations]);
+
+  // Charge l'agrégat cross-zones à chaque changement de sélection
+  useEffect(() => {
+    if (!currentShop?.id || locations.length === 0) return;
+    if (selectedLocationIds.length === 0) { setAggStats(null); return; }
+
+    const loadAgg = async () => {
+      setAggLoading(true);
+      try {
+        const params = new URLSearchParams({
+          shopId: currentShop.id,
+          locationIds: selectedLocationIds.join(','),
+        });
+        const res = await fetch(`/api/pos/study-zones/aggregate-stats?${params}`);
+        setAggStats(res.ok ? await res.json() : null);
+      } catch {
+        setAggStats(null);
+      } finally {
+        setAggLoading(false);
+      }
+    };
+    loadAgg();
+  }, [currentShop?.id, selectedLocationIds, locations.length]);
 
   const shopName = currentShop?.name || 'Runes de Chêne';
 
@@ -208,6 +249,136 @@ export default function FestivalDashboardPage() {
           </div>
         </div>
       </SimpleGrid>
+
+        <section className={styles.aggSection}>
+          <div className={styles.pageHead}>
+            <div className={styles.pageHeadLeft}>
+              <h2 className={styles.title}>
+                Tous les <em>festivals</em>
+              </h2>
+              <div className={styles.sub}>
+                <span>Cumul de toutes les zones d&apos;étude</span>
+              </div>
+            </div>
+          </div>
+
+          <Paper withBorder p="md" radius="md" mb="md">
+            <Group justify="space-between" mb="xs">
+              <Text fw={600} size="sm">Emplacements</Text>
+              <Group gap="xs">
+                <Button size="xs" variant="subtle"
+                  onClick={() => setSelectedLocationIds(locations.map(l => l.id))}>
+                  Tout
+                </Button>
+                <Button size="xs" variant="subtle"
+                  onClick={() => setSelectedLocationIds([])}>
+                  Aucun
+                </Button>
+              </Group>
+            </Group>
+            <Checkbox.Group value={selectedLocationIds} onChange={setSelectedLocationIds}>
+              <Group gap="md">
+                {locations.map(loc => (
+                  <Checkbox key={loc.id} value={loc.id} label={loc.name} />
+                ))}
+              </Group>
+            </Checkbox.Group>
+          </Paper>
+
+          {selectedLocationIds.length === 0 ? (
+            <div className={styles.errorWrap}>Sélectionnez au moins un emplacement.</div>
+          ) : aggLoading ? (
+            <div className={styles.loadingWrap}><Loader color="moss" /></div>
+          ) : !aggStats || aggStats.zonesCount === 0 ? (
+            <div className={styles.errorWrap}>Aucune zone d&apos;étude définie.</div>
+          ) : (
+            <>
+              <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md" className={styles.metricsGrid}>
+                <div className={styles.metricCard}>
+                  <div className={styles.metricBody}>
+                    <div className={styles.metricLabel}>Sorties (toutes zones)</div>
+                    <div className={styles.metricValue}>
+                      {aggStats.totalItemsOut.toLocaleString('fr-FR')}
+                    </div>
+                    <span className={styles.metricUnit}>
+                      article{aggStats.totalItemsOut > 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <div className={`${styles.metricIcon} ${styles.metricIcon_clay}`}>
+                    <IconArrowDown size={20} />
+                  </div>
+                </div>
+                <div className={styles.metricCard}>
+                  <div className={styles.metricBody}>
+                    <div className={styles.metricLabel}>Retours (toutes zones)</div>
+                    <div className={`${styles.metricValue} ${styles.metricValueNeutral}`}>
+                      {aggStats.totalItemsReturn.toLocaleString('fr-FR')}
+                    </div>
+                    <span className={styles.metricUnit}>
+                      article{aggStats.totalItemsReturn > 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <div className={`${styles.metricIcon} ${styles.metricIcon_slate}`}>
+                    <IconArrowUp size={20} />
+                  </div>
+                </div>
+              </SimpleGrid>
+
+              <SimpleGrid cols={{ base: 1, lg: 3 }} spacing="md" mt="md">
+                <Paper withBorder p="md" radius="md">
+                  <Text fw={600} mb="sm">Fragments les plus sortis</Text>
+                  <Table>
+                    <Table.Thead>
+                      <Table.Tr><Table.Th>Nom</Table.Th><Table.Th ta="right">Qté</Table.Th></Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {aggStats.topNames.slice(0, 15).map((n, i) => (
+                        <Table.Tr key={i}>
+                          <Table.Td>{n.fullName}</Table.Td>
+                          <Table.Td ta="right">{n.quantity}</Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                </Paper>
+
+                <Paper withBorder p="md" radius="md">
+                  <Text fw={600} mb="sm">Produits les plus sortis</Text>
+                  <Table>
+                    <Table.Thead>
+                      <Table.Tr><Table.Th>Produit</Table.Th><Table.Th ta="right">Qté</Table.Th></Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {aggStats.topProducts.slice(0, 15).map((p, i) => (
+                        <Table.Tr key={i}>
+                          <Table.Td>{p.name}</Table.Td>
+                          <Table.Td ta="right">{p.quantity}</Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                </Paper>
+
+                <Paper withBorder p="md" radius="md">
+                  <Text fw={600} mb="sm">Variantes les plus sorties</Text>
+                  <Table>
+                    <Table.Thead>
+                      <Table.Tr><Table.Th>Variante</Table.Th><Table.Th ta="right">Qté</Table.Th></Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {aggStats.topVariants.slice(0, 15).map((v, i) => (
+                        <Table.Tr key={i}>
+                          <Table.Td>{v.name}</Table.Td>
+                          <Table.Td ta="right">{v.quantity}</Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                </Paper>
+              </SimpleGrid>
+            </>
+          )}
+        </section>
     </div>
   );
 }
