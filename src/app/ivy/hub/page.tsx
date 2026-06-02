@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { notifications } from '@mantine/notifications';
-import { Checkbox } from '@mantine/core';
+import { ActionIcon, Checkbox, Tooltip } from '@mantine/core';
+import { IconLock } from '@tabler/icons-react';
 import { useShop } from '@/context/ShopContext';
 import { useLocation } from '@/context/LocationContext';
 import { loadColorMappingsFromSupabase } from '@/utils/color-transformer';
@@ -124,6 +126,17 @@ export default function CaissePage() {
 
   return (
     <div className={styles.caisseContainer}>
+      <Tooltip label="Comptes (privé)" position="left">
+        <ActionIcon
+          component={Link}
+          href="/ivy/hub/comptes"
+          variant="subtle"
+          aria-label="Comptes"
+          style={{ position: 'absolute', top: 8, right: 8, zIndex: 20, opacity: 0.25 }}
+        >
+          <IconLock size={16} />
+        </ActionIcon>
+      </Tooltip>
       {/* Column visibility checkboxes */}
       {optionColumnKeys.length > 0 && (
         <div className={styles.columnToggles}>

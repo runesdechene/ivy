@@ -1,0 +1,6 @@
+.page { max-width: 900px; margin: 0 auto; padding: 1rem; position: relative; }
+.lockBtn {
+  position: absolute; top: 0.75rem; right: 0.75rem; z-index: 10;
+  opacity: 0.35; transition: opacity 0.2s;
+}
+.lockBtn:hover { opacity: 1; }
