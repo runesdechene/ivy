@@ -104,16 +104,24 @@ export default function FestivalDashboardPage() {
     loadStats();
   }, [currentShop?.id, currentLocation?.id]);
 
-  // Init : tous les emplacements cochés dès qu'ils sont chargés
-  useEffect(() => {
-    setSelectedLocationIds(locations.map(l => l.id));
-  }, [locations]);
+  // Signature stable de l'ensemble des emplacements (insensible à la ré-référence
+  // du tableau `locations` par le contexte) — sert de dépendance d'effet.
+  const locationsSig = locations.map(l => l.id).join(',');
 
-  // Charge l'agrégat cross-zones à chaque changement de sélection
+  // Init : tous les emplacements cochés. Ne se déclenche QUE quand l'ensemble
+  // d'IDs change réellement (premier chargement / changement de shop), donc ne
+  // ré-écrase pas une dé-sélection manuelle de l'utilisateur.
+  useEffect(() => {
+    setSelectedLocationIds(locationsSig ? locationsSig.split(',') : []);
+  }, [locationsSig]);
+
+  // Charge l'agrégat cross-zones à chaque changement de sélection.
+  // AbortController : évite qu'une réponse lente écrase une sélection plus récente.
   useEffect(() => {
     if (!currentShop?.id || locations.length === 0) return;
     if (selectedLocationIds.length === 0) { setAggStats(null); return; }
 
+    const controller = new AbortController();
     const loadAgg = async () => {
       setAggLoading(true);
       try {
@@ -121,15 +129,21 @@ export default function FestivalDashboardPage() {
           shopId: currentShop.id,
           locationIds: selectedLocationIds.join(','),
         });
-        const res = await fetch(`/api/pos/study-zones/aggregate-stats?${params}`);
-        setAggStats(res.ok ? await res.json() : null);
-      } catch {
-        setAggStats(null);
+        const res = await fetch(`/api/pos/study-zones/aggregate-stats?${params}`, {
+          signal: controller.signal,
+        });
+        const data = res.ok ? await res.json() : null;
+        if (!controller.signal.aborted) setAggStats(data);
+      } catch (err) {
+        if (!(err instanceof DOMException && err.name === 'AbortError')) {
+          setAggStats(null);
+        }
       } finally {
-        setAggLoading(false);
+        if (!controller.signal.aborted) setAggLoading(false);
       }
     };
     loadAgg();
+    return () => controller.abort();
   }, [currentShop?.id, selectedLocationIds, locations.length]);
 
   const shopName = currentShop?.name || 'Runes de Chêne';
