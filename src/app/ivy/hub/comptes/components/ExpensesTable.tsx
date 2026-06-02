@@ -1,9 +1,9 @@
 'use client';
-import { Badge, Group, Select, Stack, Table, Text } from '@mantine/core';
+import { Anchor, Badge, Group, Select, Stack, Table, Text } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { ExpenseForm } from './ExpenseForm';
 import { MaskedAmount } from './MaskedAmount';
-import { useExpenses, useExpenseMutations, uploadReceipt } from '../hooks/useLedger';
+import { useExpenses, useExpenseMutations, uploadReceipt, getReceiptUrl } from '../hooks/useLedger';
 import type { ExpenseStatus } from '../types';
 
 const STATUS_LABEL: Record<ExpenseStatus, { label: string; color: string }> = {
@@ -47,7 +47,27 @@ export function ExpensesTable({ shopId, zones, revealed }: { shopId: string; zon
                 <Table.Td>{new Date(e.spent_on).toLocaleDateString('fr-FR')}</Table.Td>
                 <Table.Td>{e.description}</Table.Td>
                 <Table.Td><MaskedAmount value={Number(e.amount)} revealed={revealed} /></Table.Td>
-                <Table.Td>{e.receipt_path ? '📎' : <Badge color="orange" variant="light">manquant</Badge>}</Table.Td>
+                <Table.Td>
+                  {e.receipt_path ? (
+                    <Anchor
+                      component="button"
+                      type="button"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          const url = await getReceiptUrl(shopId, e.receipt_path!);
+                          window.open(url, '_blank', 'noopener,noreferrer');
+                        } catch (err) {
+                          notifications.show({ color: 'red', message: (err as Error).message });
+                        }
+                      }}
+                    >
+                      📎 voir
+                    </Anchor>
+                  ) : (
+                    <Badge color="orange" variant="light">manquant</Badge>
+                  )}
+                </Table.Td>
                 <Table.Td>
                   <Select
                     size="xs" variant="unstyled" allowDeselect={false}
