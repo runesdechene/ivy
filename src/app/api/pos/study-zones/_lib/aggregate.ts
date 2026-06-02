@@ -16,7 +16,7 @@ export interface AggregateResult {
 
 /**
  * Agrège une liste de mouvements de stock (sorties = quantity < 0).
- * - topProducts : par product_title exact.
+ * - topProducts : par product_title exact (liste complète, non bornée).
  * - topVariants : par "product_title — variant_title" (top 20).
  * - topNames (« Fragments ») : par NOM DE DESIGN = partie avant le séparateur
  *   "|" / "—". Surtout PAS de préfixe de longueur fixe (collisionne entre designs

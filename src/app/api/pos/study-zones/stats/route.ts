@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { aggregateMovements } from '../_lib/aggregate';
+import { aggregateMovements, type MovementRow } from '../_lib/aggregate';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
 
   // Totals + top products / variants / names (logique partagée)
   const { totalItemsOut, totalItemsReturn, topProducts, topVariants, topNames } =
-    aggregateMovements(allMovements as import('../_lib/aggregate').MovementRow[]);
+    aggregateMovements(allMovements as MovementRow[]);
 
   // Top options grouped by option name (Couleur, Taille, etc.)
   // First, get product option names for all variants involved
