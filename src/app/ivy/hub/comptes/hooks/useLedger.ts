@@ -22,16 +22,16 @@ export function useExpenseMutations(shopId: string | undefined) {
   return {
     create: useMutation({
       mutationFn: (body: Record<string, unknown>) =>
-        hubJson('/api/hub/comptes/expenses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, shopId }) }),
+        hubJson<{ expense: Expense }>('/api/hub/comptes/expenses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, shopId }) }),
       onSuccess: invalidate,
     }),
     update: useMutation({
       mutationFn: (body: Record<string, unknown>) =>
-        hubJson('/api/hub/comptes/expenses', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, shopId }) }),
+        hubJson<{ expense: Expense }>('/api/hub/comptes/expenses', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, shopId }) }),
       onSuccess: invalidate,
     }),
     remove: useMutation({
-      mutationFn: (id: string) => hubJson(`/api/hub/comptes/expenses?id=${id}&shopId=${shopId}`, { method: 'DELETE' }),
+      mutationFn: (id: string) => hubJson<{ ok: true }>(`/api/hub/comptes/expenses?id=${id}&shopId=${shopId}`, { method: 'DELETE' }),
       onSuccess: invalidate,
     }),
   };
@@ -51,12 +51,12 @@ export function useCashSessionMutations(shopId: string | undefined) {
   return {
     create: useMutation({
       mutationFn: (body: Record<string, unknown>) =>
-        hubJson('/api/hub/comptes/cash/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, shopId }) }),
+        hubJson<{ session: CashSession }>('/api/hub/comptes/cash/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, shopId }) }),
       onSuccess: invalidate,
     }),
     update: useMutation({
       mutationFn: (body: Record<string, unknown>) =>
-        hubJson('/api/hub/comptes/cash/sessions', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, shopId }) }),
+        hubJson<{ session: CashSession }>('/api/hub/comptes/cash/sessions', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, shopId }) }),
       onSuccess: invalidate,
     }),
   };
@@ -79,11 +79,11 @@ export function useOutflowMutations(shopId: string | undefined, sessionId: strin
   return {
     create: useMutation({
       mutationFn: (body: Record<string, unknown>) =>
-        hubJson('/api/hub/comptes/cash/outflows', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, sessionId }) }),
+        hubJson<{ outflow: CashOutflow }>('/api/hub/comptes/cash/outflows', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, sessionId }) }),
       onSuccess: invalidate,
     }),
     remove: useMutation({
-      mutationFn: (id: string) => hubJson(`/api/hub/comptes/cash/outflows?id=${id}&sessionId=${sessionId}`, { method: 'DELETE' }),
+      mutationFn: (id: string) => hubJson<{ ok: true }>(`/api/hub/comptes/cash/outflows?id=${id}&sessionId=${sessionId}`, { method: 'DELETE' }),
       onSuccess: invalidate,
     }),
   };

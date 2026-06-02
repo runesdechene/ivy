@@ -18,7 +18,7 @@ export function PinGate({ onUnlock }: { onUnlock: (pin: string) => Promise<void>
       <Text size="sm" c="dimmed">Saisis ton PIN pour afficher tes comptes.</Text>
       <PinInput length={6} type="number" value={pin} onChange={setPin} onComplete={submit} disabled={busy} aria-label="PIN" />
       {err && <Text c="red" size="sm">{err}</Text>}
-      <Button onClick={() => submit(pin)} loading={busy} disabled={pin.length < 4} fullWidth>Déverrouiller</Button>
+      <Button onClick={() => submit(pin)} loading={busy} disabled={pin.length < 6} fullWidth>Déverrouiller</Button>
     </Stack>
   );
 }

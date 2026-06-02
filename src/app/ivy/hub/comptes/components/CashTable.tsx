@@ -25,7 +25,7 @@ export function CashTable({ shopId, zones, revealed }: { shopId: string; zones: 
   const openSession = async () => {
     if (typeof newFloat !== 'number' || !newDate) return;
     try {
-      const r = await createSession.mutateAsync({ openingFloat: newFloat, openedOn: newDate, studyZoneId: newZone }) as { session: { id: string } };
+      const r = await createSession.mutateAsync({ openingFloat: newFloat, openedOn: newDate, studyZoneId: newZone });
       setSelectedId(r.session.id); setNewFloat('');
       notifications.show({ color: 'green', message: 'Caisse ouverte.' });
     } catch (e) { notifications.show({ color: 'red', message: (e as Error).message }); }

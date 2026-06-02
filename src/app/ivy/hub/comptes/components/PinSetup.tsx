@@ -9,7 +9,7 @@ export function PinSetup({ onSubmit }: { onSubmit: (pin: string) => Promise<void
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
-    if (pin.length < 4) return setErr('Le PIN doit faire au moins 4 chiffres.');
+    if (pin.length < 6) return setErr('Le PIN doit faire 6 chiffres.');
     if (pin !== confirm) return setErr('Les deux PIN ne correspondent pas.');
     setBusy(true); setErr('');
     try { await onSubmit(pin); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
