@@ -32,7 +32,7 @@ interface AggregateStats {
   totalItemsOut: number;
   totalItemsReturn: number;
   topProducts: Array<{ name: string; quantity: number }>;
-  topVariants: Array<{ name: string; quantity: number }>;
+  topColors: Array<{ name: string; quantity: number }>;
   topNames: Array<{ fullName: string; quantity: number }>;
   zonesCount: number;
   locationsCount: number;
@@ -374,16 +374,16 @@ export default function FestivalDashboardPage() {
                 </Paper>
 
                 <Paper withBorder p="md" radius="md">
-                  <Text fw={600} mb="sm">Variantes les plus sorties</Text>
+                  <Text fw={600} mb="sm">Couleurs les plus sorties</Text>
                   <Table>
                     <Table.Thead>
-                      <Table.Tr><Table.Th>Variante</Table.Th><Table.Th ta="right">Qté</Table.Th></Table.Tr>
+                      <Table.Tr><Table.Th>Couleur</Table.Th><Table.Th ta="right">Qté</Table.Th></Table.Tr>
                     </Table.Thead>
                     <Table.Tbody>
-                      {aggStats.topVariants.slice(0, 15).map((v, i) => (
+                      {aggStats.topColors.slice(0, 15).map((c, i) => (
                         <Table.Tr key={i}>
-                          <Table.Td>{v.name}</Table.Td>
-                          <Table.Td ta="right">{v.quantity}</Table.Td>
+                          <Table.Td>{c.name}</Table.Td>
+                          <Table.Td ta="right">{c.quantity}</Table.Td>
                         </Table.Tr>
                       ))}
                     </Table.Tbody>

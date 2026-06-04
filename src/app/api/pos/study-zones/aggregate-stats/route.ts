@@ -80,11 +80,53 @@ export async function GET(request: NextRequest) {
     ranges.some(r => m.moved_on >= r.from && m.moved_on <= r.to)
   );
 
-  // 6. Agrégation
+  // 6. Agrégation (totaux + top produits / fragments)
   const aggregate = aggregateMovements(filtered);
 
+  // 7. Top couleurs — option nommée "Couleur" (position option1/2/3 variable selon
+  // le produit). Nécessite un join product_variants -> products, d'où le calcul ici
+  // (et non dans le helper pur).
+  const outMovements = filtered.filter(m => m.quantity < 0);
+  const variantIds = [...new Set(
+    outMovements.map(m => m.variant_id).filter((id): id is string => !!id)
+  )];
+  const colorMap = new Map<string, number>();
+
+  for (let i = 0; i < variantIds.length; i += 100) {
+    const chunk = variantIds.slice(i, i + 100);
+    const { data: variants } = await supabase
+      .from('product_variants')
+      .select('id, option1, option2, option3, product:products(option1_name, option2_name, option3_name)')
+      .in('id', chunk);
+    if (!variants) continue;
+
+    const colorByVariant = new Map<string, string>();
+    for (const v of variants) {
+      const product = Array.isArray(v.product) ? v.product[0] : v.product;
+      const names = [product?.option1_name, product?.option2_name, product?.option3_name];
+      const values = [v.option1, v.option2, v.option3];
+      const idx = names.findIndex(n => (n ?? '').toLowerCase() === 'couleur');
+      const colorValue = idx !== -1 ? values[idx] : null;
+      if (colorValue) colorByVariant.set(v.id, colorValue);
+    }
+
+    for (const m of outMovements) {
+      if (!m.variant_id) continue;
+      const color = colorByVariant.get(m.variant_id);
+      if (color) colorMap.set(color, (colorMap.get(color) || 0) + Math.abs(m.quantity));
+    }
+  }
+
+  const topColors = Array.from(colorMap.entries())
+    .map(([name, quantity]) => ({ name, quantity }))
+    .sort((a, b) => b.quantity - a.quantity);
+
   return NextResponse.json({
-    ...aggregate,
+    totalItemsOut: aggregate.totalItemsOut,
+    totalItemsReturn: aggregate.totalItemsReturn,
+    topProducts: aggregate.topProducts,
+    topNames: aggregate.topNames,
+    topColors,
     zonesCount: zones.length,
     locationsCount: resolvedLocationIds.length,
   });
