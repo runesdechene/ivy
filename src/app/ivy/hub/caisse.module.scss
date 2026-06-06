@@ -4,7 +4,7 @@
 .caisseLayout {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: $cream;
 }
@@ -532,4 +532,254 @@
   justify-content: center;
   font-size: 0.8rem;
   font-weight: 600;
+}
+
+// ============================================================
+// Mobile hub (drill-down) — téléphone portrait < 768px
+// ============================================================
+.mobileHub {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  background: $cream;
+}
+
+.mobileLoading {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobileHead {
+  padding: 56px $space-base 8px; // espace pour le header flottant (retour + LocationSelector)
+}
+
+.mobileStepRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.mobileStepTitle {
+  font-family: $font-fraunces;
+  font-size: 22px;
+  color: $slate;
+}
+
+.mobileStepCount {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: $slate-muted;
+  background: $cream-soft;
+  border: 1px solid $divider;
+  border-radius: $radius-pill;
+  padding: 4px 11px;
+  white-space: nowrap;
+}
+
+.mobileCrumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.mobileCrumbWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mobileCrumb {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: $radius-pill;
+  background: $moss-bg;
+  color: $moss;
+  border: none;
+  cursor: pointer;
+  font-family: $font-inter;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobileCrumbTodo {
+  background: transparent;
+  color: $slate-muted;
+  border: 1px dashed $divider-strong;
+  font-weight: 500;
+  cursor: default;
+}
+
+.mobileCrumbSep {
+  color: $slate-muted;
+  font-size: 12px;
+}
+
+.mobileProgress {
+  height: 4px;
+  background: $cream-warm;
+  border-radius: $radius-pill;
+  margin-top: 12px;
+  overflow: hidden;
+
+  i {
+    display: block;
+    height: 100%;
+    background: $moss;
+    border-radius: $radius-pill;
+    transition: width 0.2s ease;
+  }
+}
+
+.mobileOptions {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px $space-base $space-base;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-height: 0;
+}
+
+.mobileEmpty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: $slate-muted;
+  padding: 2rem;
+}
+
+.mobileOpt {
+  min-height: 54px;
+  padding: 0 $space-base;
+  border: 2px solid transparent;
+  border-radius: $radius-md;
+  background: $cream-soft;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  font-size: 16px;
+  color: $slate;
+  text-align: left;
+  box-shadow: 0 1px 2px rgba(26, 31, 42, 0.04);
+  font-family: $font-inter;
+
+  &:active {
+    background: $cream-warm;
+  }
+}
+
+.mobileOptOos {
+  background: $clay-bg;
+  opacity: 0.75;
+
+  .mobileOptStock {
+    color: $clay;
+    font-weight: 600;
+  }
+}
+
+.mobileOptLabel {
+  flex: 1;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobileOptStock {
+  font-size: 13px;
+  color: $slate-muted;
+  font-family: $font-jetbrains;
+}
+
+.mobileSwatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid $divider-strong;
+  flex-shrink: 0;
+}
+
+.mobileBar {
+  border-top: 1px solid $divider;
+  background: $cream-soft;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mobileCartChip {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  border-radius: $radius-md;
+  background: $cream;
+  border: 1px solid $divider;
+  font-weight: 600;
+  color: $slate;
+  cursor: pointer;
+}
+
+.mobileCount {
+  background: $slate;
+  color: $cream;
+  border-radius: $radius-pill;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mobileRetour {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 12px;
+  border-radius: $radius-md;
+  background: $cream;
+  border: 1px solid $divider;
+  font-size: 13px;
+  font-weight: 600;
+  color: $slate-soft;
+  cursor: pointer;
+  font-family: $font-inter;
+  white-space: nowrap;
+}
+
+.mobileRetourOn {
+  background: $clay-bg;
+  border-color: $clay;
+  color: $clay;
+}
+
+.mobileValid {
+  flex: 1;
+}
+
+// StockZone réutilisé dans le drawer panier : pleine largeur sur mobile
+@media (max-width: 767px) {
+  .cartZone {
+    width: 100%;
+    min-width: 0;
+    border-left: none;
+    height: 100%;
+  }
 }
