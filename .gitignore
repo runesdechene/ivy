@@ -57,3 +57,5 @@ __pycache__/
 
 # Obsidian vault dédié (mémoire Ivy — voir ~/ivy-vault junction et CLAUDE.md)
 /IVY - Obsidian
+# Local Netlify folder
+.netlify
