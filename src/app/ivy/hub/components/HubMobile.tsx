@@ -7,13 +7,9 @@ import { StockMovement, VariantOption, SelectedProduct } from '../types';
 import { ColumnKey, ColumnValue } from '../hooks/useProductSelection';
 import { useAutoAddMovement } from '../hooks/useAutoAddMovement';
 import { getColorHex } from '@/utils/color-transformer';
+import { isColorColumn } from '../colorColumn';
 import { StockZone } from './StockZone';
 import styles from '../caisse.module.scss';
-
-function isColorColumn(label: string): boolean {
-  const lower = label.toLowerCase();
-  return lower.includes('couleur') || lower.includes('color');
-}
 
 interface HubMobileProps {
   // Sélection
@@ -36,7 +32,7 @@ interface HubMobileProps {
   onUndo: (variantId: string) => void;
   onClear: () => void;
   onToggleReturnMode: (enabled: boolean) => void;
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
   processing: boolean;
 }
 
@@ -100,30 +96,31 @@ export function HubMobile({
         </div>
 
         <div className={styles.mobileCrumbs}>
-          {columns.map((key, i) => {
-            const isFilled = stepIndex === -1 || i < stepIndex;
-            const isCurrent = i === stepIndex;
-            if (isCurrent) return null; // colonne courante = titre, pas dans le fil
-            const notLast = i < columns.length - 1;
-            return (
-              <span key={key} className={styles.mobileCrumbWrap}>
-                {isFilled ? (
-                  <button
-                    type="button"
-                    className={styles.mobileCrumb}
-                    onClick={() => reopenStep(i)}
-                  >
-                    {(crumbLabel(key) || getColumnLabel(key)) + ' ✕'}
-                  </button>
-                ) : (
-                  <span className={`${styles.mobileCrumb} ${styles.mobileCrumbTodo}`}>
-                    {getColumnLabel(key)}
-                  </span>
-                )}
-                {notLast && <span className={styles.mobileCrumbSep}>›</span>}
-              </span>
-            );
-          })}
+          {columns
+            .map((key, i) => ({ key, i }))
+            .filter(({ i }) => i !== stepIndex) // la colonne courante = titre, pas dans le fil
+            .map(({ key, i }, idx, rendered) => {
+              const isFilled = stepIndex === -1 || i < stepIndex;
+              const notLast = idx < rendered.length - 1;
+              return (
+                <span key={key} className={styles.mobileCrumbWrap}>
+                  {isFilled ? (
+                    <button
+                      type="button"
+                      className={styles.mobileCrumb}
+                      onClick={() => reopenStep(i)}
+                    >
+                      {(crumbLabel(key) || getColumnLabel(key)) + ' ✕'}
+                    </button>
+                  ) : (
+                    <span className={`${styles.mobileCrumb} ${styles.mobileCrumbTodo}`}>
+                      {getColumnLabel(key)}
+                    </span>
+                  )}
+                  {notLast && <span className={styles.mobileCrumbSep}>›</span>}
+                </span>
+              );
+            })}
         </div>
 
         <div className={styles.mobileProgress}>
@@ -200,7 +197,7 @@ export function HubMobile({
           onUndo={onUndo}
           onClear={onClear}
           onToggleReturnMode={onToggleReturnMode}
-          onConfirm={() => { onConfirm(); cart.close(); }}
+          onConfirm={async () => { await onConfirm(); cart.close(); }}
           processing={processing}
         />
       </Drawer>

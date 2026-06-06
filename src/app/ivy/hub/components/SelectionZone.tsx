@@ -5,12 +5,8 @@ import { Loader } from '@mantine/core';
 import { StockMovement, VariantOption, SelectedProduct } from '../types';
 import { ColumnKey, ColumnValue } from '../hooks/useProductSelection';
 import { getColorHex } from '@/utils/color-transformer';
+import { isColorColumn } from '../colorColumn';
 import styles from '../caisse.module.scss';
-
-function isColorColumn(label: string): boolean {
-  const lower = label.toLowerCase();
-  return lower.includes('couleur') || lower.includes('color');
-}
 
 interface SelectionZoneProps {
   loading: boolean;
