@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useAutoAddMovement } from '../hooks/useAutoAddMovement';
 import { Loader } from '@mantine/core';
-import { StockMovement, VariantOption } from '../types';
+import { StockMovement, VariantOption, SelectedProduct } from '../types';
 import { ColumnKey, ColumnValue } from '../hooks/useProductSelection';
 import { getColorHex } from '@/utils/color-transformer';
 import styles from '../caisse.module.scss';
@@ -22,7 +22,7 @@ interface SelectionZoneProps {
   getValuesForColumn: (key: ColumnKey) => ColumnValue[];
   getColumnLabel: (key: ColumnKey) => string;
   selectedVariant: VariantOption | null;
-  selectedProduct: { id: string; title: string; productType: string } | null;
+  selectedProduct: SelectedProduct | null;
   onAddMovement: (item: Omit<StockMovement, 'quantity'>) => void;
 }
 
@@ -39,27 +39,7 @@ export function SelectionZone({
   selectedProduct,
   onAddMovement,
 }: SelectionZoneProps) {
-  // Auto-add movement when variant is fully selected
-  useEffect(() => {
-    if (selectedVariant && selectedProduct) {
-      const optionParts: string[] = [];
-      for (const key of columnOrder) {
-        if (key.startsWith('opt') && selections[key]) {
-          optionParts.push(selections[key]!);
-        }
-      }
-
-      onAddMovement({
-        variantId: selectedVariant.variantId!,
-        productId: selectedProduct.id,
-        productTitle: selectedProduct.title,
-        productType: selectedProduct.productType,
-        variantTitle: optionParts.join(' / '),
-        options: {},
-        stock: selectedVariant.stock,
-      });
-    }
-  }, [selectedVariant]);
+  useAutoAddMovement(selectedVariant, selectedProduct, columnOrder, selections, onAddMovement);
 
   // Move column left/right in the full columnOrder
   const moveColumn = (colKey: ColumnKey, direction: 'left' | 'right') => {
