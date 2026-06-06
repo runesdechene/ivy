@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { notifications } from '@mantine/notifications';
 import { Checkbox } from '@mantine/core';
+import { useMediaQuery } from '@mantine/hooks';
+import { HubMobile } from './components/HubMobile';
 import { useShop } from '@/context/ShopContext';
 import { useLocation } from '@/context/LocationContext';
 import { loadColorMappingsFromSupabase } from '@/utils/color-transformer';
@@ -17,6 +19,7 @@ export default function CaissePage() {
   const { currentShop } = useShop();
   const { currentLocation } = useLocation();
   const [processing, setProcessing] = useState(false);
+  const isMobile = useMediaQuery('(max-width: 767px)');
 
   const tracker = useStockTracker();
   const ps = useProductSelection(currentShop?.id, currentLocation?.id);
@@ -121,6 +124,35 @@ export default function CaissePage() {
       setProcessing(false);
     }
   };
+
+  if (isMobile) {
+    return (
+      <div className={styles.caisseContainer}>
+        <HubMobile
+          loading={ps.loading}
+          columns={visibleColumns}
+          columnOrder={ps.columnOrder}
+          selections={ps.selections}
+          selectColumn={ps.selectColumn}
+          resetSelection={ps.resetSelection}
+          getValuesForColumn={ps.getValuesForColumn}
+          getColumnLabel={ps.getColumnLabel}
+          selectedVariant={ps.selectedVariant}
+          selectedProduct={ps.selectedProduct}
+          onAddMovement={handleAddMovement}
+          movements={tracker.movements}
+          totalOut={tracker.totalOut}
+          totalReturn={tracker.totalReturn}
+          isReturnMode={tracker.isReturnMode}
+          onUndo={tracker.undoMovement}
+          onClear={tracker.clearMovements}
+          onToggleReturnMode={tracker.setReturnMode}
+          onConfirm={handleConfirm}
+          processing={processing}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className={styles.caisseContainer}>
