@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HUB de stand — maquette mobile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cream:#f4f0e8; --cream-soft:#faf7ef; --cream-warm:#ede5d3; --sand-soft:#f0e6cc;
+    --ink:#1a1f2a; --slate:#2b3440; --slate-soft:#556070; --slate-muted:#8b95a3;
+    --divider:rgba(43,52,64,.10); --divider-strong:rgba(43,52,64,.18);
+    --moss:#6b7a55; --moss-soft:#8a9a73; --moss-bg:#eaeee0;
+    --clay:#b38566; --clay-bg:#f2e1d3; --rust:#a04b3d; --plum:#7a5b72; --plum-bg:#ede2e9; --sand:#d4c5a9;
+    --font-inter:'Inter',system-ui,sans-serif; --font-fraunces:'Fraunces',serif; --font-mono:'JetBrains Mono',monospace;
+    --r-xs:4px; --r-sm:6px; --r-md:8px; --r-lg:10px; --r-xl:14px; --r-pill:999px;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  body{
+    font-family:var(--font-inter); background:#e7e2d6; color:var(--slate);
+    padding:40px 24px 64px; -webkit-font-smoothing:antialiased;
+  }
+  .pageTitle{font-family:var(--font-fraunces); font-size:30px; color:var(--slate); margin-bottom:6px}
+  .pageTitle em{font-style:italic; color:var(--moss)}
+  .pageSub{font-size:14px; color:var(--slate-muted); margin-bottom:36px; max-width:640px; line-height:1.5}
+
+  .frames{display:flex; gap:40px; flex-wrap:wrap; align-items:flex-start}
+  .frameWrap{display:flex; flex-direction:column; align-items:center; gap:14px}
+  .frameLabel{font-size:12px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--slate-muted)}
+  .frameLabel span{color:var(--moss)}
+
+  /* Phone frame */
+  .phone{
+    width:340px; height:720px; background:var(--cream); border-radius:36px;
+    box-shadow:0 0 0 10px #1a1f2a, 0 24px 48px rgba(26,31,42,.28);
+    position:relative; overflow:hidden; display:flex; flex-direction:column;
+  }
+  .notch{position:absolute; top:0; left:50%; transform:translateX(-50%); width:130px; height:26px; background:#1a1f2a; border-radius:0 0 16px 16px; z-index:50}
+
+  /* Top header */
+  .top{
+    display:flex; align-items:center; gap:10px; padding:34px 16px 12px;
+  }
+  .iconBtn{
+    width:38px; height:38px; min-width:38px; border-radius:var(--r-md); border:1px solid var(--divider);
+    background:var(--cream-soft); display:flex; align-items:center; justify-content:center; color:var(--slate-soft); font-size:18px;
+  }
+  .locChip{
+    flex:1; background:var(--cream-soft); border:1px solid var(--divider); border-radius:var(--r-md);
+    padding:9px 12px; display:flex; align-items:center; gap:7px; font-size:13px; font-weight:600; color:var(--slate); min-width:0;
+  }
+  .locChip .pin{color:var(--moss)}
+  .locChip .chev{margin-left:auto; color:var(--slate-muted)}
+
+  /* Step indicator + breadcrumb */
+  .stepBar{padding:4px 16px 12px}
+  .stepRow{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px}
+  .stepNow{font-family:var(--font-fraunces); font-size:22px; color:var(--slate)}
+  .stepCount{font-size:12px; font-weight:600; letter-spacing:.06em; color:var(--slate-muted); background:var(--cream-soft); border:1px solid var(--divider); border-radius:var(--r-pill); padding:4px 11px}
+  .crumbs{display:flex; align-items:center; gap:6px; flex-wrap:wrap}
+  .crumb{font-size:12px; padding:4px 10px; border-radius:var(--r-pill); background:var(--moss-bg); color:var(--moss); font-weight:600; display:inline-flex; align-items:center; gap:5px}
+  .crumb.todo{background:transparent; color:var(--slate-muted); border:1px dashed var(--divider-strong); font-weight:500}
+  .crumbSep{color:var(--slate-muted); font-size:12px}
+  .progress{height:4px; background:var(--cream-warm); border-radius:var(--r-pill); margin-top:12px; overflow:hidden}
+  .progress > i{display:block; height:100%; background:var(--moss); border-radius:var(--r-pill)}
+
+  /* Options list */
+  .options{flex:1; overflow-y:auto; padding:4px 16px 16px; display:flex; flex-direction:column; gap:9px}
+  .opt{
+    min-height:54px; padding:0 16px; border:2px solid transparent; border-radius:var(--r-md);
+    background:var(--cream-soft); display:flex; align-items:center; gap:12px; cursor:pointer;
+    font-size:16px; color:var(--slate); text-align:left; box-shadow:0 1px 2px rgba(26,31,42,.04);
+  }
+  .opt .lab{flex:1; font-weight:500}
+  .opt .stock{font-size:13px; color:var(--slate-muted); font-family:var(--font-mono)}
+  .opt .go{color:var(--slate-muted); font-size:18px}
+  .opt.selected{background:var(--moss-bg); border-color:var(--moss-soft); color:var(--moss)}
+  .opt.selected .lab{font-weight:700}
+  .opt.oos{background:var(--clay-bg); opacity:.75}
+  .opt.oos .stock{color:var(--clay); font-weight:600}
+  .swatch{width:22px; height:22px; border-radius:50%; border:1px solid var(--divider-strong); flex-shrink:0}
+
+  /* Bottom bar */
+  .bottomBar{
+    border-top:1px solid var(--divider); background:var(--cream-soft); padding:12px 14px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .cartChip{
+    display:flex; align-items:center; gap:9px; padding:10px 12px; border-radius:var(--r-md);
+    background:var(--cream); border:1px solid var(--divider); font-weight:600; color:var(--slate); cursor:pointer;
+  }
+  .cartChip .ic{font-size:18px}
+  .countBadge{background:var(--slate); color:var(--cream); border-radius:var(--r-pill); min-width:22px; height:22px; padding:0 6px; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700}
+  .retourToggle{
+    display:flex; align-items:center; gap:7px; padding:10px 12px; border-radius:var(--r-md);
+    background:var(--cream); border:1px solid var(--divider); font-size:13px; font-weight:600; color:var(--slate-soft); cursor:pointer;
+  }
+  .retourToggle .dot{width:8px; height:8px; border-radius:50%; background:var(--divider-strong)}
+  .retourToggle.on{background:var(--clay-bg); border-color:var(--clay); color:var(--clay)}
+  .retourToggle.on .dot{background:var(--clay)}
+  .validBtn{
+    flex:1; height:46px; border:none; border-radius:var(--r-md); background:var(--moss); color:#fff;
+    font-family:var(--font-inter); font-size:15px; font-weight:700; cursor:pointer; letter-spacing:.01em;
+  }
+  .validBtn:disabled{opacity:.4}
+
+  /* Cart sheet (drawer) */
+  .scrim{position:absolute; inset:0; background:rgba(26,31,42,.34); z-index:60}
+  .sheet{
+    position:absolute; left:0; right:0; bottom:0; z-index:70; background:var(--cream);
+    border-radius:18px 18px 0 0; max-height:78%; display:flex; flex-direction:column;
+    box-shadow:0 -10px 30px rgba(26,31,42,.2);
+  }
+  .grab{width:42px; height:5px; border-radius:var(--r-pill); background:var(--divider-strong); margin:10px auto 4px}
+  .sheetHead{display:flex; align-items:center; gap:9px; padding:8px 18px 12px; border-bottom:1px solid var(--divider)}
+  .sheetHead .ic{color:var(--slate)}
+  .sheetTitle{font-family:var(--font-fraunces); font-size:19px; color:var(--slate)}
+  .sheetHead .clear{margin-left:auto; color:var(--slate-muted); font-size:18px; background:none; border:none; cursor:pointer}
+  .sheetItems{flex:1; overflow-y:auto; padding:12px 14px; display:flex; flex-direction:column; gap:9px}
+  .ci{padding:12px 14px; border-radius:var(--r-md); background:var(--cream-soft); border:1px solid var(--divider); display:flex; align-items:center; gap:12px}
+  .ci.ret{background:var(--plum-bg); border-color:var(--plum)}
+  .ciBody{flex:1; min-width:0}
+  .ciName{font-size:14px; font-weight:600; color:var(--slate)}
+  .ciVar{font-size:12px; color:var(--slate-muted); margin-top:2px}
+  .ciQty{font-family:var(--font-mono); font-weight:700; font-size:22px}
+  .ciQty.out{color:var(--rust)} .ciQty.in{color:var(--moss)}
+  .ciUndo{width:34px; height:34px; border-radius:var(--r-sm); border:1px solid var(--divider); background:var(--cream); color:var(--slate-muted); font-size:16px; cursor:pointer}
+  .sheetFoot{padding:14px; border-top:1px solid var(--divider); display:flex; flex-direction:column; gap:11px; background:var(--cream-soft)}
+  .totalRow{display:flex; justify-content:space-between; font-size:14px; color:var(--slate-soft)}
+  .totalRow b{color:var(--slate)}
+  .retourFull{
+    display:flex; align-items:center; gap:9px; padding:12px 14px; border-radius:var(--r-md);
+    background:var(--clay-bg); border:1px solid var(--clay); color:var(--clay); font-weight:600; font-size:14px; cursor:pointer;
+  }
+  .retourFull .dot{width:8px; height:8px; border-radius:50%; background:var(--clay); margin-left:auto}
+  .validBtnFull{height:52px; border:none; border-radius:var(--r-md); background:var(--moss); color:#fff; font-size:16px; font-weight:700; cursor:pointer}
+
+  .legend{margin-top:48px; max-width:760px; font-size:13px; color:var(--slate-soft); line-height:1.7}
+  .legend h3{font-family:var(--font-fraunces); font-size:18px; color:var(--slate); margin-bottom:10px}
+  .legend b{color:var(--slate)}
+  .legend code{font-family:var(--font-mono); background:var(--cream-soft); padding:1px 6px; border-radius:4px; font-size:12px}
+</style>
+</head>
+<body>
+  <div class="pageTitle">HUB de stand — <em>mobile</em></div>
+  <div class="pageSub">Maquette du parcours téléphone (portrait). Drill-down une étape à la fois, panier en barre collante + drawer. Le desktop reste inchangé. Couleurs, polices et composants fidèles au thème Ivy.</div>
+
+  <div class="frames">
+
+    <!-- SCREEN A : étape 1 -->
+    <div class="frameWrap">
+      <div class="frameLabel">1 · <span>Type</span> (panier vide)</div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="top">
+          <div class="iconBtn">‹</div>
+          <div class="locChip"><span class="pin">📍</span> Festival d'Avignon <span class="chev">▾</span></div>
+        </div>
+        <div class="stepBar">
+          <div class="stepRow"><div class="stepNow">Type</div><div class="stepCount">Étape 1 / 4</div></div>
+          <div class="crumbs">
+            <span class="crumb todo">Type</span><span class="crumbSep">›</span>
+            <span class="crumb todo">Produit</span><span class="crumbSep">›</span>
+            <span class="crumb todo">Couleur</span><span class="crumbSep">›</span>
+            <span class="crumb todo">Taille</span>
+          </div>
+          <div class="progress"><i style="width:8%"></i></div>
+        </div>
+        <div class="options">
+          <button class="opt"><span class="lab">Bagues</span><span class="go">›</span></button>
+          <button class="opt"><span class="lab">Colliers</span><span class="go">›</span></button>
+          <button class="opt"><span class="lab">Bracelets</span><span class="go">›</span></button>
+          <button class="opt"><span class="lab">Boucles d'oreilles</span><span class="go">›</span></button>
+          <button class="opt"><span class="lab">Pendentifs</span><span class="go">›</span></button>
+        </div>
+        <div class="bottomBar">
+          <div class="cartChip"><span class="ic">🛒</span><span class="countBadge">0</span></div>
+          <div class="retourToggle"><span class="dot"></span>Sortie</div>
+          <button class="validBtn" disabled>Valider</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN B : étape 3 couleur -->
+    <div class="frameWrap">
+      <div class="frameLabel">2 · <span>Couleur</span> (swatches)</div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="top">
+          <div class="iconBtn">‹</div>
+          <div class="locChip"><span class="pin">📍</span> Festival d'Avignon <span class="chev">▾</span></div>
+        </div>
+        <div class="stepBar">
+          <div class="stepRow"><div class="stepNow">Couleur</div><div class="stepCount">Étape 3 / 4</div></div>
+          <div class="crumbs">
+            <span class="crumb">Bagues ✕</span><span class="crumbSep">›</span>
+            <span class="crumb">Rune d'argent ✕</span><span class="crumbSep">›</span>
+            <span class="crumb todo">Couleur</span>
+          </div>
+          <div class="progress"><i style="width:62%"></i></div>
+        </div>
+        <div class="options">
+          <button class="opt"><span class="swatch" style="background:#c9b27e"></span><span class="lab">Or vieilli</span><span class="stock">12</span></button>
+          <button class="opt selected"><span class="swatch" style="background:#b8c0c8"></span><span class="lab">Argent</span><span class="stock">7</span></button>
+          <button class="opt"><span class="swatch" style="background:#7a5b72"></span><span class="lab">Améthyste</span><span class="stock">4</span></button>
+          <button class="opt oos"><span class="swatch" style="background:#a04b3d"></span><span class="lab">Cuivre</span><span class="stock">0</span></button>
+          <button class="opt"><span class="swatch" style="background:#6b7a55"></span><span class="lab">Mousse</span><span class="stock">9</span></button>
+        </div>
+        <div class="bottomBar">
+          <div class="cartChip"><span class="ic">🛒</span><span class="countBadge">3</span></div>
+          <div class="retourToggle"><span class="dot"></span>Sortie</div>
+          <button class="validBtn">Valider</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN C : mode retour actif -->
+    <div class="frameWrap">
+      <div class="frameLabel">3 · Mode <span>retour</span> actif</div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="top">
+          <div class="iconBtn">‹</div>
+          <div class="locChip"><span class="pin">📍</span> Festival d'Avignon <span class="chev">▾</span></div>
+        </div>
+        <div class="stepBar">
+          <div class="stepRow"><div class="stepNow">Produit</div><div class="stepCount">Étape 2 / 4</div></div>
+          <div class="crumbs">
+            <span class="crumb">Colliers ✕</span><span class="crumbSep">›</span>
+            <span class="crumb todo">Produit</span>
+          </div>
+          <div class="progress"><i style="width:34%"></i></div>
+        </div>
+        <div class="options">
+          <button class="opt"><span class="lab">Lune sylvestre</span><span class="stock">5</span><span class="go">›</span></button>
+          <button class="opt"><span class="lab">Racine d'if</span><span class="stock">11</span><span class="go">›</span></button>
+          <button class="opt"><span class="lab">Sève d'ambre</span><span class="stock">2</span><span class="go">›</span></button>
+        </div>
+        <div class="bottomBar">
+          <div class="cartChip"><span class="ic">🛒</span><span class="countBadge">2</span></div>
+          <div class="retourToggle on"><span class="dot"></span>Retour</div>
+          <button class="validBtn">Valider</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN D : drawer panier ouvert -->
+    <div class="frameWrap">
+      <div class="frameLabel">4 · <span>Panier</span> (drawer ouvert)</div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="top">
+          <div class="iconBtn">‹</div>
+          <div class="locChip"><span class="pin">📍</span> Festival d'Avignon <span class="chev">▾</span></div>
+        </div>
+        <div class="stepBar">
+          <div class="stepRow"><div class="stepNow">Couleur</div><div class="stepCount">Étape 3 / 4</div></div>
+          <div class="crumbs"><span class="crumb">Bagues ✕</span><span class="crumbSep">›</span><span class="crumb">Rune d'argent ✕</span></div>
+          <div class="progress"><i style="width:62%"></i></div>
+        </div>
+        <div class="options" style="opacity:.35">
+          <button class="opt"><span class="swatch" style="background:#c9b27e"></span><span class="lab">Or vieilli</span><span class="stock">12</span></button>
+          <button class="opt"><span class="swatch" style="background:#b8c0c8"></span><span class="lab">Argent</span><span class="stock">7</span></button>
+        </div>
+
+        <div class="scrim"></div>
+        <div class="sheet">
+          <div class="grab"></div>
+          <div class="sheetHead">
+            <span class="ic">📦</span>
+            <span class="sheetTitle">Sorties</span>
+            <span class="countBadge" style="margin-left:8px">3</span>
+            <button class="clear">🗑</button>
+          </div>
+          <div class="sheetItems">
+            <div class="ci">
+              <div class="ciBody"><div class="ciName">Bague · Rune d'argent</div><div class="ciVar">Argent / 54</div></div>
+              <div class="ciQty out">-2</div>
+              <button class="ciUndo">↶</button>
+            </div>
+            <div class="ci">
+              <div class="ciBody"><div class="ciName">Collier · Lune sylvestre</div><div class="ciVar">Or vieilli</div></div>
+              <div class="ciQty out">-1</div>
+              <button class="ciUndo">↶</button>
+            </div>
+            <div class="ci ret">
+              <div class="ciBody"><div class="ciName">Bracelet · Racine d'if</div><div class="ciVar">Cuivre / M</div></div>
+              <div class="ciQty in">+1</div>
+              <button class="ciUndo">↶</button>
+            </div>
+          </div>
+          <div class="sheetFoot">
+            <div class="totalRow"><span>Sorties</span><b>3 articles</b></div>
+            <button class="retourFull">⟳ Mode retour <span class="dot"></span></button>
+            <button class="validBtnFull">Valider les mouvements</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="legend">
+    <h3>Repères de lecture</h3>
+    <p>
+      • <b>Drill-down</b> : une seule colonne plein écran à la fois. Le fil d'Ariane en haut montre les choix faits (cliquables pour corriger via le <code>✕</code>) et ce qui reste. Taper une option fait avancer ; quand la variante est complète, le mouvement est <b>auto-ajouté</b> au panier et on revient à l'étape 1 (comportement actuel conservé).<br>
+      • <b>Barre du bas</b> : <code>🛒 N</code> ouvre le panier · le toggle <b>Sortie/Retour</b> est sur la barre pour ajouter/retirer vite · <b>Valider</b> écrit les mouvements.<br>
+      • <b>Drawer panier</b> : liste des mouvements, <code>↶</code> annule une unité, 🗑 vide, et le bouton <b>Valider les mouvements</b> confirme. Les retours apparaissent en violet (plum).<br>
+      • <b>Rupture</b> : option en argile (clay), stock à 0 — non bloquant (cf. comportement actuel).<br>
+      • Cibles tactiles ≥ 54px, sélecteur d'emplacement gardé en tête (besoin stand multi-emplacements).
+    </p>
+  </div>
+</body>
+</html>
