@@ -102,6 +102,27 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
     }));
   }, [product.variants]);
 
+  // Nombre de variantes par taille (total de la fiche) — pour vérification
+  const variantCountBySize = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const v of product.variants) {
+      const sizeOpt = v.options?.find(o =>
+        o.name.toLowerCase().includes('taille') || o.name.toLowerCase().includes('size')
+      );
+      const size = sizeOpt?.value;
+      if (!size) continue;
+      counts[size] = (counts[size] || 0) + 1;
+    }
+    return Object.entries(counts).sort(([a], [b]) => {
+      const ai = SIZE_ORDER.indexOf(a);
+      const bi = SIZE_ORDER.indexOf(b);
+      if (ai !== -1 && bi !== -1) return ai - bi;
+      if (ai !== -1) return -1;
+      if (bi !== -1) return 1;
+      return a.localeCompare(b, 'fr');
+    });
+  }, [product.variants]);
+
   // Supprimer un groupe de variantes locales
   const handleDeleteVariants = async () => {
     if (!deleteGroup || !shopId) return;
@@ -833,7 +854,7 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
 
         {/* Tableau des variantes */}
         <div className={styles.variantsSection}>
-          <Group justify="space-between" align="center" mb="md">
+          <Group justify="space-between" align="center" mb={variantCountBySize.length > 0 ? 4 : 'md'}>
             <Text size="sm" fw={600} className={styles.variantsTitle}>
               Détail des variantes ({sortedVariants.length})
             </Text>
@@ -842,6 +863,11 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
               onReorder={setSortOrder}
             />
           </Group>
+          {variantCountBySize.length > 0 && (
+            <Text size="xs" c="slate.5" mb="md">
+              Variantes par taille : {variantCountBySize.map(([size, n]) => `${n} ${size}`).join(' · ')}
+            </Text>
+          )}
 
           <Table striped highlightOnHover className={styles.variantsTable}>
             <Table.Thead>
