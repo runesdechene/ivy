@@ -764,6 +764,13 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
               </Badge>
             </div>
 
+            {/* Nombre de variantes par taille (total fiche) — pour vérification */}
+            {variantCountBySize.length > 0 && (
+              <Text size="xs" c="slate.5" mt={4}>
+                Variantes par taille : {variantCountBySize.map(([size, n]) => `${n} ${size}`).join(' · ')}
+              </Text>
+            )}
+
             {/* Répartition par taille */}
             {Object.keys(product.sizeBreakdown).length > 0 && (
               <div className={styles.sizeBreakdown}>
@@ -854,7 +861,7 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
 
         {/* Tableau des variantes */}
         <div className={styles.variantsSection}>
-          <Group justify="space-between" align="center" mb={variantCountBySize.length > 0 ? 4 : 'md'}>
+          <Group justify="space-between" align="center" mb="md">
             <Text size="sm" fw={600} className={styles.variantsTitle}>
               Détail des variantes ({sortedVariants.length})
             </Text>
@@ -863,11 +870,6 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
               onReorder={setSortOrder}
             />
           </Group>
-          {variantCountBySize.length > 0 && (
-            <Text size="xs" c="slate.5" mb="md">
-              Variantes par taille : {variantCountBySize.map(([size, n]) => `${n} ${size}`).join(' · ')}
-            </Text>
-          )}
 
           <Table striped highlightOnHover className={styles.variantsTable}>
             <Table.Thead>
