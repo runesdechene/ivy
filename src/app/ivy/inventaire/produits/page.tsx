@@ -30,6 +30,13 @@ export default function InventoryPage() {
   const scrollPositionRef = useRef<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Persistance de la vue dans l'URL (survit au reload + bouton Retour navigateur)
+  const [urlHydrated, setUrlHydrated] = useState(false);
+  const pendingProductKeyRef = useRef<string | null>(null);
+  const productsRef = useRef<ProductData[]>([]);
+  productsRef.current = products;
+  const productKey = (p: ProductData) => p.supabaseId || p.handle;
+
   const fetchProducts = useCallback(async () => {
     if (!currentShop) return;
 
@@ -185,6 +192,10 @@ export default function InventoryPage() {
     if (contentElement) {
       scrollPositionRef.current = contentElement.scrollTop;
     }
+    // Nouvelle entrée d'historique → le bouton Retour du navigateur revient à la liste
+    const sp = new URLSearchParams(window.location.search);
+    sp.set('produit', product.supabaseId || product.handle);
+    window.history.pushState(window.history.state, '', `${window.location.pathname}?${sp.toString()}`);
     setSelectedProduct(product);
     requestAnimationFrame(() => {
       const el = containerRef.current?.closest('[class*="content"]');
@@ -203,6 +214,65 @@ export default function InventoryPage() {
       }
     });
   }, []);
+
+  // 1. Restaure l'état depuis l'URL au montage + suit le bouton Retour/Avancer du navigateur
+  useEffect(() => {
+    const applyProductFromUrl = () => {
+      const produit = new URLSearchParams(window.location.search).get('produit');
+      if (produit) {
+        const found = productsRef.current.find(p => productKey(p) === produit);
+        if (found) {
+          setSelectedProduct(found);
+          pendingProductKeyRef.current = null;
+        } else {
+          pendingProductKeyRef.current = produit; // produits pas encore chargés → restauré plus tard
+        }
+      } else {
+        setSelectedProduct(null);
+        pendingProductKeyRef.current = null;
+      }
+    };
+
+    const sp = new URLSearchParams(window.location.search);
+    const q = sp.get('q');
+    const type = sp.get('type');
+    const tri = sp.get('tri');
+    if (q) setSearchQuery(q);
+    if (type) setProductTypeFilter(type);
+    if (tri === 'recent') setSortMode('recent');
+    applyProductFromUrl();
+
+    setUrlHydrated(true);
+    window.addEventListener('popstate', applyProductFromUrl);
+    return () => window.removeEventListener('popstate', applyProductFromUrl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 2. Une fois les produits chargés, ouvre la fiche demandée par l'URL (reload direct sur un produit)
+  useEffect(() => {
+    if (!urlHydrated || products.length === 0) return;
+    const key = pendingProductKeyRef.current;
+    if (!key) return;
+    const found = products.find(p => productKey(p) === key);
+    if (found) setSelectedProduct(found);
+    pendingProductKeyRef.current = null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlHydrated, products]);
+
+  // 3. Reflète l'état (produit ouvert + recherche/filtre/tri) dans l'URL
+  useEffect(() => {
+    if (!urlHydrated) return;
+    const sp = new URLSearchParams();
+    if (searchQuery) sp.set('q', searchQuery);
+    if (productTypeFilter) sp.set('type', productTypeFilter);
+    if (sortMode !== 'alpha') sp.set('tri', sortMode);
+    const pid = selectedProduct ? productKey(selectedProduct) : pendingProductKeyRef.current;
+    if (pid) sp.set('produit', pid);
+    const qs = sp.toString();
+    const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+    window.history.replaceState(window.history.state, '', url);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlHydrated, searchQuery, productTypeFilter, sortMode, selectedProduct]);
 
   const shopName = currentShop?.name || 'Runes de Chêne';
 
