@@ -15,6 +15,9 @@ import { MetaChip } from '@/components/MetaChip';
 import { getColorHex, isColorOption } from '@/utils/color-transformer';
 import styles from './ProductDetailView.module.scss';
 
+// Ordre des tailles (XXXS à 5XL) — module-level pour être utilisable dès les useMemo
+const SIZE_ORDER = ['XXXS', 'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', '3XL', '4XL', '5XL'];
+
 interface ProductDetailViewProps {
   product: ProductData;
   onBack: () => void;
@@ -82,9 +85,20 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
       variants,
       totalQuantity: variants.reduce((sum, v) => sum + Math.max(0, v.quantity), 0),
       subabaseIds: variants.map(v => v.supabaseId).filter(Boolean) as string[],
-      subValues: variants
-        .map(v => v.options?.slice(1).map(o => o.value).join(' / ') || '')
-        .filter(Boolean),
+      // Répartition par taille (sous-options après la 1ère) : { size, quantity }
+      sizeBreakdown: variants
+        .map(v => ({
+          size: v.options?.slice(1).map(o => o.value).join(' / ') || v.size || '—',
+          quantity: Math.max(0, v.quantity),
+        }))
+        .sort((a, b) => {
+          const ai = SIZE_ORDER.indexOf(a.size);
+          const bi = SIZE_ORDER.indexOf(b.size);
+          if (ai !== -1 && bi !== -1) return ai - bi;
+          if (ai !== -1) return -1;
+          if (bi !== -1) return 1;
+          return a.size.localeCompare(b.size, 'fr');
+        }),
     }));
   }, [product.variants]);
 
@@ -452,7 +466,7 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
   };
 
   // Ordre des tailles (XXXS à 5XL)
-  const sizeOrder = ['XXXS', 'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', '3XL', '4XL', '5XL'];
+  const sizeOrder = SIZE_ORDER;
 
   // Extraire la valeur d'une option par son nom
   const getOptionValue = (variant: typeof product.variants[0], optionName: string) => {
@@ -787,10 +801,19 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
                     <StatusBadge variant="slate">
                       {group.totalQuantity}/{group.variants.length}
                     </StatusBadge>
-                    {group.subValues.length > 0 && (
-                      <Text size="xs" c="slate.5" truncate>
-                        {group.subValues.join(', ')}
-                      </Text>
+                    {group.sizeBreakdown.length > 0 && (
+                      <Group gap={4} wrap="wrap" style={{ minWidth: 0 }}>
+                        {group.sizeBreakdown.map((s, idx) => (
+                          <Badge
+                            key={`${s.size}-${idx}`}
+                            variant="outline"
+                            color={s.quantity > 0 ? 'slate' : 'rust'}
+                            className={styles.sizeBadge}
+                          >
+                            {s.size}: {s.quantity}
+                          </Badge>
+                        ))}
+                      </Group>
                     )}
                   </Group>
                   <ActionIcon
