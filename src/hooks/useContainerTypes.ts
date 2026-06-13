@@ -11,6 +11,7 @@ export type ContainerType = {
   ratio_w: number;
   ratio_h: number;
   columns: number;
+  separate_motifs: boolean;
   created_at: string;
 };
 

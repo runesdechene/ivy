@@ -15,6 +15,7 @@ export type ContainerInstance = {
     ratio_w: number;
     ratio_h: number;
     columns: number;
+    separate_motifs: boolean;
   };
   products: { id: string; title: string; image_url: string | null; illustration_url: string | null }[];
   fill: { units: number; pct: number; weight_g: number | null };

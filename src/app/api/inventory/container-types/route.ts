@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { shop_id, name, max_capacity, empty_weight_g, ratio_w, ratio_h, columns } = body;
+  const { shop_id, name, max_capacity, empty_weight_g, ratio_w, ratio_h, columns, separate_motifs } = body;
   if (!shop_id || !name || !max_capacity) {
     return NextResponse.json({ error: 'shop_id, name, max_capacity required' }, { status: 400 });
   }
@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
       ratio_w: ratio_w ?? 1,
       ratio_h: ratio_h ?? 1,
       columns: columns ?? 1,
+      separate_motifs: separate_motifs ?? true,
     })
     .select()
     .single();

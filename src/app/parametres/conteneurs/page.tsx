@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Stack, TextInput, NumberInput, Group, Modal, Loader } from '@mantine/core';
+import { Stack, TextInput, NumberInput, Group, Modal, Loader, Checkbox } from '@mantine/core';
 import { IconPlus, IconTrash, IconEdit } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useDisclosure } from '@mantine/hooks';
@@ -22,9 +22,10 @@ type FormState = {
   ratio_w: number;
   ratio_h: number;
   columns: number;
+  separate_motifs: boolean;
 };
 
-const EMPTY: FormState = { name: '', max_capacity: 70, empty_weight_g: null, ratio_w: 1, ratio_h: 1, columns: 1 };
+const EMPTY: FormState = { name: '', max_capacity: 70, empty_weight_g: null, ratio_w: 1, ratio_h: 1, columns: 1, separate_motifs: true };
 
 export default function ConteneursPage() {
   const { currentShop } = useShop();
@@ -54,6 +55,7 @@ export default function ConteneursPage() {
       ratio_w: t.ratio_w,
       ratio_h: t.ratio_h,
       columns: t.columns ?? 1,
+      separate_motifs: t.separate_motifs ?? true,
     });
     openModal();
   };
@@ -235,6 +237,13 @@ export default function ConteneursPage() {
               styles={{ input: { backgroundColor: 'var(--cream)', borderColor: 'var(--divider)' } }}
             />
           </Group>
+          <Checkbox
+            label="Séparer les motifs par compartiment"
+            description="Un motif (produit) par colonne au lieu d'un remplissage équilibré. Si plus de motifs que de compartiments, on regroupe sans jamais couper un motif."
+            checked={form.separate_motifs}
+            onChange={(e) => setForm({ ...form, separate_motifs: e.currentTarget.checked })}
+            color="moss"
+          />
           <Group justify="flex-end" mt="md">
             <button className={styles.ghostButton} onClick={closeModal}>Annuler</button>
             <button

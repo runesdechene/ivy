@@ -34,6 +34,7 @@ type InstanceResp = {
     ratio_w: number;
     ratio_h: number;
     columns: number;
+    separate_motifs: boolean;
   };
   products: ProductInfo[];
   fill: { units: number; pct: number; weight_g: number | null };
@@ -100,7 +101,7 @@ export async function GET(req: NextRequest) {
       name,
       filter_product_type,
       filter_size,
-      type:container_types(id, name, max_capacity, empty_weight_g, ratio_w, ratio_h, columns),
+      type:container_types(id, name, max_capacity, empty_weight_g, ratio_w, ratio_h, columns, separate_motifs),
       affectations:container_instance_products(
         product:products(id, title, image_url, illustration_url, product_type, option1_name, option2_name, option3_name)
       )
@@ -266,6 +267,7 @@ export async function GET(req: NextRequest) {
         ratio_w: type.ratio_w,
         ratio_h: type.ratio_h,
         columns: type.columns ?? 1,
+        separate_motifs: type.separate_motifs ?? true,
       },
       products: productsToShow.map((p: any) => ({
         id: p.id,

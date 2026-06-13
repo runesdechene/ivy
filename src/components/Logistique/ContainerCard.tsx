@@ -193,6 +193,129 @@ function distributeOrdered(
   return buckets;
 }
 
+/**
+ * Distribution "par motif" : un motif (= product_id) par compartiment.
+ * - motifs >= colonnes : on packe des motifs ENTIERS, équilibré par quantité,
+ *   sans jamais couper un motif (plusieurs motifs entiers peuvent partager une colonne).
+ * - motifs < colonnes : chaque motif occupe >= 1 colonne ; les colonnes restantes
+ *   vont aux plus gros motifs, qui s'étalent (split du même motif autorisé) pour remplir.
+ * Tri secondaire interne à un motif : taille/couleur selon sortMode.
+ */
+function distributeByMotif(
+  variants: Variant[],
+  cols: number,
+  sortMode: 'color' | 'size',
+): Column[] {
+  const buckets: Column[] = Array.from({ length: cols }, () => ({
+    sections: [],
+    total: 0,
+    sortKey: '',
+  }));
+  if (variants.length === 0) return buckets;
+
+  const sortItems = (items: Variant[]) =>
+    [...items].sort((a, b) => {
+      if (sortMode === 'size') {
+        const c = compareSizes(a.size, b.size);
+        return c !== 0 ? c : (a.color || '').localeCompare(b.color || '');
+      }
+      const c = (a.color || '').localeCompare(b.color || '');
+      return c !== 0 ? c : compareSizes(a.size, b.size);
+    });
+
+  // Grouper par motif (product_id), motifs ordonnés product_type → titre
+  const motifMap = new Map<string, Variant[]>();
+  for (const v of variants) {
+    const k = v.product_id || v.product_title || '_';
+    if (!motifMap.has(k)) motifMap.set(k, []);
+    motifMap.get(k)!.push(v);
+  }
+  const motifs = Array.from(motifMap.entries())
+    .map(([key, items]) => ({ key, items, total: items.reduce((s, v) => s + v.qty, 0) }))
+    .sort((a, b) => {
+      const typeCmp = (a.items[0].product_type || '').localeCompare(b.items[0].product_type || '');
+      if (typeCmp !== 0) return typeCmp;
+      return (a.items[0].product_title || '').localeCompare(b.items[0].product_title || '');
+    });
+
+  if (motifs.length >= cols) {
+    // Packer des motifs entiers, équilibré par quantité, sans couper
+    const totalQty = motifs.reduce((s, m) => s + m.total, 0);
+    const targetPerCol = totalQty > 0 ? totalQty / cols : 0;
+    let colIdx = 0;
+    let colTotal = 0;
+    for (const m of motifs) {
+      if (colIdx < cols - 1 && colTotal > 0 && colTotal >= targetPerCol) {
+        colIdx += 1;
+        colTotal = 0;
+      }
+      buckets[colIdx].sections.push({ key: m.key, items: sortItems(m.items), total: m.total });
+      buckets[colIdx].total += m.total;
+      colTotal += m.total;
+    }
+  } else {
+    // Moins de motifs que de colonnes : 1 colonne min/motif, le reste aux plus gros
+    const alloc = motifs.map(() => 1);
+    const order = motifs
+      .map((m, i) => ({ i, total: m.total }))
+      .sort((a, b) => b.total - a.total);
+    let remaining = cols - motifs.length;
+    let oi = 0;
+    while (remaining > 0) {
+      alloc[order[oi % motifs.length].i] += 1;
+      oi += 1;
+      remaining -= 1;
+    }
+
+    let colIdx = 0;
+    for (let mi = 0; mi < motifs.length; mi++) {
+      const m = motifs[mi];
+      const items = sortItems(m.items);
+      const nCols = alloc[mi];
+      const colEnd = colIdx + nCols;
+      if (nCols === 1) {
+        buckets[colIdx].sections.push({ key: m.key, items, total: m.total });
+        buckets[colIdx].total += m.total;
+      } else {
+        // Étaler le motif sur ses colonnes (split du même motif autorisé)
+        const targetPerCol = m.total / nCols;
+        let curTotal = 0;
+        for (const v of items) {
+          let rem = v.qty;
+          while (rem > 0) {
+            const isLast = colIdx === colEnd - 1;
+            const cap = Math.max(0, targetPerCol - curTotal);
+            if (!isLast && cap < 0.5) {
+              colIdx += 1;
+              curTotal = 0;
+              continue;
+            }
+            const take = isLast ? rem : Math.min(rem, Math.max(1, Math.round(cap)));
+            buckets[colIdx].sections.push({
+              key: `${v.id}-c${colIdx}`,
+              items: [{ ...v, qty: take }],
+              total: take,
+            });
+            buckets[colIdx].total += take;
+            curTotal += take;
+            rem -= take;
+            if (!isLast && curTotal >= targetPerCol) {
+              colIdx += 1;
+              curTotal = 0;
+            }
+          }
+        }
+      }
+      colIdx = colEnd; // le motif suivant démarre sur ses propres colonnes
+    }
+  }
+
+  buckets.forEach((b) => {
+    b.sortKey = b.sections[0]?.key ?? '';
+  });
+  return buckets;
+}
+
 export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color' }: Props) {
   const { type, fill, variants, products } = instance;
   const filterTypes = instance.filter_product_type ?? [];
@@ -207,6 +330,7 @@ export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color'
 
   const cols = Math.max(1, type.columns ?? 1);
   const colCapacity = type.max_capacity / cols;
+  const separateMotifs = type.separate_motifs ?? true;
 
   // Filtre visuel : cliquer sur une vignette de produit en haut isole ce
   // produit dans le rendu de la caisse. Multi-sélection possible. Set vide
@@ -232,10 +356,12 @@ export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color'
 
   const columnsData = useMemo(
     () =>
-      isFilterMode
-        ? distributeFlat(filteredVariants, cols, hideSizeInLabel)
-        : distributeOrdered(filteredVariants, cols, sortMode),
-    [filteredVariants, cols, sortMode, isFilterMode, hideSizeInLabel],
+      separateMotifs
+        ? distributeByMotif(filteredVariants, cols, sortMode)
+        : isFilterMode
+          ? distributeFlat(filteredVariants, cols, hideSizeInLabel)
+          : distributeOrdered(filteredVariants, cols, sortMode),
+    [filteredVariants, cols, sortMode, isFilterMode, hideSizeInLabel, separateMotifs],
   );
 
   const w = UNIT * type.ratio_w;

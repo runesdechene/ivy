@@ -13,6 +13,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (body.ratio_w !== undefined) updates.ratio_w = body.ratio_w;
   if (body.ratio_h !== undefined) updates.ratio_h = body.ratio_h;
   if (body.columns !== undefined) updates.columns = body.columns;
+  if (body.separate_motifs !== undefined) updates.separate_motifs = body.separate_motifs;
 
   const { data, error } = await supabase
     .from('container_types')

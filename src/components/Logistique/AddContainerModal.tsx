@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Modal, Tabs, Stack, Select, TextInput, NumberInput, Group } from '@mantine/core';
+import { Modal, Tabs, Stack, Select, TextInput, NumberInput, Group, Checkbox } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import {
   type ContainerType,
@@ -34,11 +34,12 @@ export function AddContainerModal({ opened, onClose, shopId, locationId, existin
     ratio_w: 1,
     ratio_h: 1,
     columns: 1,
+    separate_motifs: true,
   });
 
   const reset = () => {
     setSelectedTypeId(null);
-    setForm({ name: '', max_capacity: 70, empty_weight_g: null, ratio_w: 1, ratio_h: 1, columns: 1 });
+    setForm({ name: '', max_capacity: 70, empty_weight_g: null, ratio_w: 1, ratio_h: 1, columns: 1, separate_motifs: true });
     setTab('existing');
   };
 
@@ -196,6 +197,13 @@ export function AddContainerModal({ opened, onClose, shopId, locationId, existin
                 styles={inputStyles}
               />
             </Group>
+            <Checkbox
+              label="Séparer les motifs par compartiment"
+              description="Un motif (produit) par colonne au lieu d'un remplissage équilibré. Si plus de motifs que de compartiments, on regroupe sans jamais couper un motif."
+              checked={form.separate_motifs}
+              onChange={(e) => setForm({ ...form, separate_motifs: e.currentTarget.checked })}
+              color="moss"
+            />
             <Group justify="flex-end" mt="xs">
               <button
                 type="button"
