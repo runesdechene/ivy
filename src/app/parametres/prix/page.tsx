@@ -747,18 +747,16 @@ export default function PriceRulesPage() {
               disabled={applyingAllStock || applyingAllShopify || applyingAllIvy || applyingAllLocal}
             >
               {applyingAllStock ? <Loader size={14} /> : <IconPlayerPlay size={14} />}
+              Batch
+            </button>
+            <button
+              className={styles.ghostButton}
+              onClick={applyAllIvy}
+              disabled={applyingAllIvy || applyingAllLocal || applyingAllShopify || applyingAllStock}
+            >
+              {applyingAllIvy ? <Loader size={14} /> : <IconPlayerPlay size={14} />}
               Stock
             </button>
-            {rules.some(r => r.is_active && r.local_only) && (
-              <button
-                className={styles.ghostButton}
-                onClick={applyAllIvy}
-                disabled={applyingAllIvy || applyingAllLocal || applyingAllShopify}
-              >
-                {applyingAllIvy ? <Loader size={14} /> : <IconPlayerPlay size={14} />}
-                Stocks locaux
-              </button>
-            )}
             <button
               className={styles.mossButton}
               onClick={applyAllShopify}
@@ -952,25 +950,23 @@ export default function PriceRulesPage() {
                                   </button>
                                 </Tooltip>
                               )}
-                              {rule.local_only && (
-                                <Tooltip label="Met à jour les coûts des variantes locales dans Supabase">
-                                  <button
-                                    className={styles.ghostButton}
-                                    onClick={() => applyRuleIvy(rule)}
-                                    disabled={applyingIvy === rule.id || !rule.is_active}
-                                  >
-                                    {applyingIvy === rule.id ? <Loader size={14} /> : <IconPlayerPlay size={14} />}
-                                    Stocks locaux
-                                  </button>
-                                </Tooltip>
-                              )}
-                              <Tooltip label="Met à jour les coûts dans les commandes de stock (batch)">
+                              <Tooltip label="Met à jour les coûts dans les commandes de stock fournisseur (batch)">
                                 <button
                                   className={styles.ghostButton}
                                   onClick={() => applyRuleStock(rule)}
                                   disabled={applyingStock === rule.id || !rule.is_active}
                                 >
                                   {applyingStock === rule.id ? <Loader size={14} /> : <IconPlayerPlay size={14} />}
+                                  Batch
+                                </button>
+                              </Tooltip>
+                              <Tooltip label="Met à jour le coût des variantes dans l'inventaire Ivy (Supabase)">
+                                <button
+                                  className={styles.ghostButton}
+                                  onClick={() => applyRuleIvy(rule)}
+                                  disabled={applyingIvy === rule.id || !rule.is_active}
+                                >
+                                  {applyingIvy === rule.id ? <Loader size={14} /> : <IconPlayerPlay size={14} />}
                                   Stock
                                 </button>
                               </Tooltip>
