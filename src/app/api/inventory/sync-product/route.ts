@@ -260,33 +260,41 @@ export async function GET(request: NextRequest) {
         await deduplicateLocalVariants(supabase, [productUuid], send);
 
         // 5. Récupérer les coûts
+        // Shopify plafonne inventory_items.json à 250 résultats/page (50 par défaut).
+        // Sans chunk + limit, les variantes aux inventory_item_id les plus élevés
+        // (souvent les couleurs ajoutées en dernier) étaient silencieusement omises.
         send('Récupération des coûts...', 'info');
         if (inventoryItemIds.length > 0) {
-          const costResponse = await fetch(
-            `https://${shop.shopify_url}/admin/api/2024-01/inventory_items.json?ids=${inventoryItemIds.join(',')}`,
-            {
-              headers: {
-                'X-Shopify-Access-Token': shop.shopify_token,
-                'Content-Type': 'application/json',
-              },
-            }
-          );
+          let costUpdated = 0;
+          for (let i = 0; i < inventoryItemIds.length; i += 250) {
+            const batch = inventoryItemIds.slice(i, i + 250);
+            const costResponse = await fetch(
+              `https://${shop.shopify_url}/admin/api/2024-01/inventory_items.json?ids=${batch.join(',')}&limit=250`,
+              {
+                headers: {
+                  'X-Shopify-Access-Token': shop.shopify_token,
+                  'Content-Type': 'application/json',
+                },
+              }
+            );
 
-          if (costResponse.ok) {
-            const costData = await costResponse.json();
-            for (const item of costData.inventory_items || []) {
-              const cost = item.cost ? parseFloat(item.cost) : 0;
-              const variantShopifyId = inventoryItemToVariantShopifyId[item.id.toString()];
-              if (variantShopifyId) {
-                await supabase
-                  .from('product_variants')
-                  .update({ cost })
-                  .eq('product_id', productUuid)
-                  .eq('shopify_id', variantShopifyId);
+            if (costResponse.ok) {
+              const costData = await costResponse.json();
+              for (const item of costData.inventory_items || []) {
+                const cost = item.cost ? parseFloat(item.cost) : 0;
+                const variantShopifyId = inventoryItemToVariantShopifyId[item.id.toString()];
+                if (variantShopifyId) {
+                  await supabase
+                    .from('product_variants')
+                    .update({ cost })
+                    .eq('product_id', productUuid)
+                    .eq('shopify_id', variantShopifyId);
+                  costUpdated++;
+                }
               }
             }
-            send('✓ Coûts mis à jour', 'success');
           }
+          send(`✓ Coûts mis à jour (${costUpdated})`, 'success');
         }
 
         // 6. Récupérer les inventory levels

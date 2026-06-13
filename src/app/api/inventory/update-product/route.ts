@@ -8,6 +8,17 @@ interface VariantChange {
   price?: number;
 }
 
+// Pousse le coût d'achat (unitCost) vers l'inventory_item Shopify.
+// NB : seul le cost est poussé — jamais le prix de vente (cf. NF525, Ivy n'est pas une caisse).
+const UPDATE_INVENTORY_COST_MUTATION = `
+  mutation inventoryItemUpdate($id: ID!, $input: InventoryItemInput!) {
+    inventoryItemUpdate(id: $id, input: $input) {
+      inventoryItem { id unitCost { amount } }
+      userErrors { field message }
+    }
+  }
+`;
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -112,7 +123,52 @@ export async function POST(request: Request) {
             onConflict: 'variant_id,location_id',
           });
 
-        // Mettre à jour cost/price si fournis
+        // Pousser le cost vers Shopify (inventory_item) si la variante est live
+        if (
+          change.cost !== undefined &&
+          variant.shopify_active !== false &&
+          variant.inventory_item_id
+        ) {
+          const shopifyUrl = shop.shopify_url.replace(/\/$/, '');
+          const costResponse = await fetch(
+            `https://${shopifyUrl}/admin/api/2024-01/graphql.json`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Shopify-Access-Token': shop.shopify_token,
+              },
+              body: JSON.stringify({
+                query: UPDATE_INVENTORY_COST_MUTATION,
+                variables: {
+                  id: `gid://shopify/InventoryItem/${variant.inventory_item_id}`,
+                  input: { cost: change.cost.toString() },
+                },
+              }),
+            }
+          );
+
+          const costData = await costResponse.json().catch(() => null);
+          const userErrors = costData?.data?.inventoryItemUpdate?.userErrors;
+          if (
+            !costResponse.ok ||
+            costData?.errors ||
+            (userErrors && userErrors.length > 0)
+          ) {
+            const errMsg =
+              userErrors?.[0]?.message ||
+              costData?.errors?.[0]?.message ||
+              'Shopify cost update error';
+            results.push({
+              variantId: change.variantId,
+              success: false,
+              error: errMsg,
+            });
+            continue;
+          }
+        }
+
+        // Mettre à jour cost/price si fournis (cache Supabase)
         if (change.cost !== undefined || change.price !== undefined) {
           const updates: Record<string, number> = {};
           if (change.cost !== undefined) updates.cost = change.cost;
