@@ -83,13 +83,13 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
     return Object.entries(groups).map(([label, variants]) => ({
       label,
       variants,
-      totalQuantity: variants.reduce((sum, v) => sum + Math.max(0, v.quantity), 0),
+      totalQuantity: variants.reduce((sum, v) => sum + v.quantity, 0),
       subabaseIds: variants.map(v => v.supabaseId).filter(Boolean) as string[],
-      // Répartition par taille (sous-options après la 1ère) : { size, quantity }
+      // Répartition par taille (sous-options après la 1ère) : { size, quantity } — brut, négatifs inclus
       sizeBreakdown: variants
         .map(v => ({
           size: v.options?.slice(1).map(o => o.value).join(' / ') || v.size || '—',
-          quantity: Math.max(0, v.quantity),
+          quantity: v.quantity,
         }))
         .sort((a, b) => {
           const ai = SIZE_ORDER.indexOf(a.size);
@@ -370,6 +370,17 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
   const newTotalQuantity = useMemo(() => {
     return Object.values(quantities).reduce((sum, qty) => sum + qty, 0);
   }, [quantities]);
+
+  // Répartition (clé = v.size = option1) recalculée en direct depuis les quantités éditées,
+  // en BRUT (négatifs inclus) pour rester cohérente avec newTotalQuantity.
+  const liveSizeBreakdown = useMemo(() => {
+    const acc: Record<string, number> = {};
+    for (const v of product.variants) {
+      if (!v.size) continue;
+      acc[v.size] = (acc[v.size] || 0) + (quantities[v.id] ?? v.quantity);
+    }
+    return acc;
+  }, [product.variants, quantities]);
 
   // Modifier la quantité d'une variante
   const handleQuantityChange = (variantId: string, value: number) => {
@@ -771,11 +782,11 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
               </Text>
             )}
 
-            {/* Répartition par taille */}
-            {Object.keys(product.sizeBreakdown).length > 0 && (
+            {/* Répartition par couleur (brut, négatifs en rouge) */}
+            {Object.keys(liveSizeBreakdown).length > 0 && (
               <div className={styles.sizeBreakdown}>
                 <Group gap={6} className={styles.sizeBreakdownBadges}>
-                  {Object.entries(product.sizeBreakdown).map(([size, qty]) => (
+                  {Object.entries(liveSizeBreakdown).map(([size, qty]) => (
                     <Badge
                       key={size}
                       variant="outline"
