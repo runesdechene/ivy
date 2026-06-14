@@ -7,6 +7,9 @@ export async function GET(request: Request) {
     const shopId = searchParams.get('shopId');
     const locationId = searchParams.get('locationId');
     const search = searchParams.get('search');
+    // Clé d'un produit unique (= clé d'URL `produit` : id Supabase ou handle). Permet de
+    // charger UNE fiche directement au reload, sans rapatrier tout le catalogue.
+    const productId = searchParams.get('productId');
 
     if (!shopId) {
       return NextResponse.json(
@@ -37,8 +40,85 @@ export async function GET(request: Request) {
       .eq('shop_id', shopId)
       .then((r) => r);
 
+    // Select produits (variantes + compte métachamps). Niveaux de stock embarqués seulement
+    // si aucun emplacement (fallback "somme tous emplacements") ; sinon attachés via requête
+    // plate filtrée par emplacement. withMfCount = agrégat variant_metafields(count).
+    const buildSelect = (withMfCount: boolean) => `
+          id,
+          shopify_id,
+          title,
+          handle,
+          image_url,
+          status,
+          product_type,
+          synced_at,
+          created_at,
+          variants:product_variants(
+            id,
+            shopify_id,
+            title,
+            sku,
+            option1,
+            option2,
+            option3,
+            cost,
+            price,
+            shopify_active${locationId ? '' : `,
+            inventory_levels(quantity, location_id)`}${withMfCount ? `,
+            variant_metafields(count)` : ''}
+          )
+        `;
+
+    const runProducts = (withMfCount: boolean) =>
+      supabase
+        .from('products')
+        .select(buildSelect(withMfCount))
+        .eq('shop_id', shopId)
+        .in('status', ['active', 'local', 'draft'])
+        .order('title');
+
+    // Rattache les niveaux de stock de l'emplacement demandé à un lot de produits, en
+    // reconstruisant la forme attendue par le transform (inventory_levels: [{quantity, location_id}]).
+    const attachLevels = async (products: any[]) => {
+      if (!locationId || products.length === 0) return;
+      const variantIds: string[] = [];
+      for (const p of products) for (const v of p.variants || []) variantIds.push(v.id);
+      if (variantIds.length === 0) return;
+      let query = supabase
+        .from('inventory_levels')
+        .select('variant_id, quantity')
+        .eq('location_id', locationId);
+      // Petit lot (une fiche) → filtrer par variantes (requête minuscule). Catalogue complet
+      // (milliers de variantes) → un IN ferait exploser l'URL : on prend tout l'emplacement.
+      if (variantIds.length <= 200) query = query.in('variant_id', variantIds);
+      const { data: levels } = await query;
+      const levelByVariant = new Map<string, number>();
+      for (const l of (levels as any[]) || []) levelByVariant.set(l.variant_id, l.quantity);
+      for (const p of products) {
+        for (const v of p.variants || []) {
+          const q = levelByVariant.get(v.id);
+          v.inventory_levels = q === undefined ? [] : [{ quantity: q, location_id: locationId }];
+        }
+      }
+    };
+
     // Si recherche spécifiée, filtrer par titre et SKU
-    if (search && search.length >= 3) {
+    if (productId) {
+      // UNE fiche : on charge uniquement ce produit (id Supabase ou handle).
+      const isUuid = /^[0-9a-fA-F-]{36}$/.test(productId);
+      const singleQuery = (withMfCount: boolean) => {
+        const q = supabase.from('products').select(buildSelect(withMfCount)).eq('shop_id', shopId);
+        return isUuid ? q.eq('id', productId) : q.eq('handle', productId);
+      };
+      let res = await singleQuery(true);
+      if (res.error) {
+        console.warn('metafields(count) indisponible (single), fallback:', res.error.message);
+        res = await singleQuery(false);
+      }
+      const product = (res.data as any[])?.[0];
+      if (product) await attachLevels([product]);
+      productsByTitle = product ? [product] : [];
+    } else if (search && search.length >= 3) {
       const searchPattern = `%${search}%`;
       
       // Chercher les produits par titre
@@ -107,80 +187,16 @@ export async function GET(request: Request) {
       
       variantsBySku = skuResults || [];
     } else {
-      // Page inventaire : tout le catalogue. On filtre les niveaux de stock sur l'emplacement
-      // demandé via une requête PLATE indexée (sinon on rapatrie les niveaux des 3 emplacements
-      // pour 5651 variantes = ~11000 lignes inutiles). L'embed n'est conservé que si aucun
-      // emplacement n'est fourni (fallback "somme tous emplacements", inchangé).
-      // Plus de valeurs de métachamps ici (13477 lignes lourdes) : la liste n'a besoin que
-      // d'un COMPTE par variante (badge). Les valeurs sont chargées à l'ouverture d'une fiche
-      // via /api/products/metafields. Le compte se fait via l'agrégat imbriqué
-      // variant_metafields(count) (résultat sur 95 lignes top-level, pas de plafond max-rows).
-      const buildSelect = (withMfCount: boolean) => `
-          id,
-          shopify_id,
-          title,
-          handle,
-          image_url,
-          status,
-          product_type,
-          synced_at,
-          created_at,
-          variants:product_variants(
-            id,
-            shopify_id,
-            title,
-            sku,
-            option1,
-            option2,
-            option3,
-            cost,
-            price,
-            shopify_active${locationId ? '' : `,
-            inventory_levels(quantity, location_id)`}${withMfCount ? `,
-            variant_metafields(count)` : ''}
-          )
-        `;
-
-      const runProducts = (withMfCount: boolean) =>
-        supabase
-          .from('products')
-          .select(buildSelect(withMfCount))
-          .eq('shop_id', shopId)
-          .in('status', ['active', 'local', 'draft'])
-          .order('title');
-
-      let [productsRes, levelsRes] = await Promise.all([
-        runProducts(true),
-        locationId
-          ? supabase
-              .from('inventory_levels')
-              .select('variant_id, quantity')
-              .eq('location_id', locationId)
-          : Promise.resolve({ data: null, error: null }),
-      ]);
-
-      // Fallback si les fonctions d'agrégat sont désactivées sur le projet : on recharge
-      // sans le compte (la page fonctionne, seuls les badges métachamps sont absents).
+      // Page inventaire : tout le catalogue. Niveaux filtrés par emplacement (attachLevels)
+      // et compte de métachamps via agrégat imbriqué (cf. buildSelect). Fallback sans compte
+      // si les agrégats sont désactivés (la page charge, seuls les badges métachamps manquent).
+      let productsRes = await runProducts(true);
       if (productsRes.error) {
         console.warn('metafields(count) indisponible, fallback sans compte:', productsRes.error.message);
         productsRes = await runProducts(false);
       }
-
       const allProducts = (productsRes.data as any[]) || [];
-
-      // Rattacher les niveaux du seul emplacement demandé, en reconstruisant la forme attendue
-      // par le transform (inventory_levels: [{ quantity, location_id }]).
-      if (locationId && levelsRes.data) {
-        const levelByVariant = new Map<string, number>();
-        for (const l of levelsRes.data as any[]) levelByVariant.set(l.variant_id, l.quantity);
-        for (const p of allProducts) {
-          for (const v of p.variants || []) {
-            const q = levelByVariant.get(v.id);
-            v.inventory_levels = q === undefined ? [] : [{ quantity: q, location_id: locationId }];
-          }
-        }
-      }
-
+      await attachLevels(allProducts);
       productsByTitle = allProducts;
     }
 

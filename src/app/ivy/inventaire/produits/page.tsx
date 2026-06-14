@@ -87,6 +87,24 @@ export default function InventoryPage() {
     fetchProducts();
   }, [fetchProducts]);
 
+  // Fast-path : au reload direct sur une fiche (URL ?produit=), charger CE produit seul
+  // d'abord pour afficher la fiche tout de suite, sans attendre tout le catalogue. La liste
+  // complète se charge en parallèle (fetchProducts) pour que le bouton Retour reste instantané.
+  const fastLoadedRef = useRef(false);
+  useEffect(() => {
+    if (fastLoadedRef.current || !shopId || !locationId) return;
+    const key = new URLSearchParams(window.location.search).get('produit');
+    if (!key) return;
+    fastLoadedRef.current = true;
+    fetch(`/api/products?shopId=${shopId}&locationId=${locationId}&productId=${encodeURIComponent(key)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const p = d?.products?.[0];
+        if (p) setSelectedProduct((prev) => prev ?? p);
+      })
+      .catch(() => {});
+  }, [shopId, locationId]);
+
   // Quand les produits sont re-fetchés (changement d'emplacement, refresh…), re-synchronise
   // la fiche ouverte. Sans ça, selectedProduct reste figé sur d'anciennes données — d'où le
   // cas "je change d'emplacement mais la fiche affiche toujours le même total".
@@ -296,7 +314,7 @@ export default function InventoryPage() {
   const shopName = currentShop?.name || 'Runes de Chêne';
 
   // Affichage si besoin de sync initial
-  if (!loading && needsSync && products.length === 0) {
+  if (!loading && needsSync && products.length === 0 && !selectedProduct) {
     return (
       <div className={styles.container}>
         <div className={styles.pageHead}>
@@ -330,9 +348,9 @@ export default function InventoryPage() {
     );
   }
 
-  // Loader plein écran uniquement au tout premier chargement. Sur un refetch (changement
-  // d'emplacement, sync), on garde la liste/fiche affichée pour éviter le flash.
-  if (loading && products.length === 0) {
+  // Loader plein écran uniquement au tout premier chargement, et SANS fiche déjà chargée
+  // (fast-path : au reload sur une fiche, on l'affiche dès qu'elle est prête sans attendre la liste).
+  if (loading && products.length === 0 && !selectedProduct) {
     return (
       <div className={styles.container}>
         <div className={styles.loadingWrap}>
