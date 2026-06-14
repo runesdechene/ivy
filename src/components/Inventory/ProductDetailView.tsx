@@ -51,6 +51,35 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
     });
     return initial;
   });
+  // Ré-aligne l'état local sur les données serveur quand elles changent (changement
+  // d'emplacement, refresh liste, sync). L'init paresseux des useState ci-dessus ne
+  // s'exécute qu'au montage : sans ce ré-alignement, la fiche garde les quantités de
+  // l'emplacement PRÉCÉDENT (« stocks mélangés ») et — pire — la sauvegarde pousse ces
+  // valeurs vers le MAUVAIS emplacement via inventory_levels/set.json.
+  // Signature sur le contenu (et non la référence) : pas de reset pendant la saisie
+  // (les props ne bougent pas), reset uniquement quand le serveur renvoie d'autres chiffres.
+  const serverSignature = useMemo(
+    () =>
+      product.variants
+        .map(v => `${v.id}:${v.quantity}:${v.cost ?? 0}:${v.price ?? 0}`)
+        .join('|'),
+    [product.variants],
+  );
+  useEffect(() => {
+    const q: Record<string, number> = {};
+    const c: Record<string, number> = {};
+    const p: Record<string, number> = {};
+    product.variants.forEach(v => {
+      q[v.id] = v.quantity;
+      c[v.id] = v.cost || 0;
+      p[v.id] = v.price || 0;
+    });
+    setQuantities(q);
+    setCosts(c);
+    setPrices(p);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverSignature]);
+
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [resetModalOpened, { open: openResetModal, close: closeResetModal }] = useDisclosure(false);
