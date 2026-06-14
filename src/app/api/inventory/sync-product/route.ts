@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
               // Construire le produit mis à jour pour le frontend
               const { data: dbVariants } = await supabase
                 .from('product_variants')
-                .select('id, shopify_id, title, sku, option1, option2, option3, cost, shopify_active, inventory_levels(quantity, location_id)')
+                .select('id, shopify_id, title, sku, option1, option2, option3, cost, price, shopify_active, inventory_levels(quantity, location_id)')
                 .eq('product_id', dbProd.id);
 
               const variants = (dbVariants || []).map((variant: any) => {
@@ -108,6 +108,7 @@ export async function GET(request: NextRequest) {
                   quantity,
                   size,
                   cost: variant.cost || 0,
+                  price: variant.price || 0,
                   shopifyActive: variant.shopify_active ?? true,
                   options: [
                     variant.option1 && { name: dbProd.option1_name || 'Option 1', value: variant.option1 },
@@ -366,7 +367,7 @@ export async function GET(request: NextRequest) {
 
         const { data: updatedVariants } = await supabase
           .from('product_variants')
-          .select('id, shopify_id, title, sku, option1, option2, option3, cost, shopify_active, inventory_levels(quantity, location_id), variant_metafields(namespace, key, value)')
+          .select('id, shopify_id, title, sku, option1, option2, option3, cost, price, shopify_active, inventory_levels(quantity, location_id), variant_metafields(namespace, key, value)')
           .eq('product_id', productUuid);
 
         const variants = (updatedVariants || []).map((variant: any) => {
@@ -389,6 +390,7 @@ export async function GET(request: NextRequest) {
             quantity,
             size,
             cost: variant.cost || 0,
+            price: variant.price || 0,
             shopifyActive: variant.shopify_active ?? true,
             options: [
               variant.option1 && { name: optionNames.option1_name || 'Option 1', value: variant.option1 },
