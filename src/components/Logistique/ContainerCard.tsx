@@ -46,7 +46,7 @@ type Variant = ContainerInstance['variants'][number];
  * On avance à la colonne suivante dès qu'on a atteint ~ totalQty / cols pour
  * équilibrer approximativement les hauteurs sans casser l'ordre.
  */
-type Section = { key: string; items: Variant[]; total: number };
+type Section = { key: string; label?: string; items: Variant[]; total: number };
 type Column = { sections: Section[]; total: number; sortKey: string };
 
 /**
@@ -223,6 +223,26 @@ function distributeByMotif(
       return c !== 0 ? c : compareSizes(a.size, b.size);
     });
 
+  // Sous-découpe un motif en sections par couleur (ou taille selon sortMode) : le LABEL de
+  // chaque compartiment reste ainsi une couleur lisible, et pas un product_id (UUID).
+  const groupKeyOf = (v: Variant) => (sortMode === 'color' ? v.color || '_' : v.size || '_');
+  const splitMotif = (items: Variant[], motifKey: string): Section[] => {
+    const map = new Map<string, Variant[]>();
+    const order: string[] = [];
+    for (const v of sortItems(items)) {
+      const gk = groupKeyOf(v);
+      if (!map.has(gk)) {
+        map.set(gk, []);
+        order.push(gk);
+      }
+      map.get(gk)!.push(v);
+    }
+    return order.map((gk) => {
+      const its = map.get(gk)!;
+      return { key: `${motifKey}::${gk}`, label: gk, items: its, total: its.reduce((s, v) => s + v.qty, 0) };
+    });
+  };
+
   // Grouper par motif (product_id), motifs ordonnés product_type → titre
   const motifMap = new Map<string, Variant[]>();
   for (const v of variants) {
@@ -249,7 +269,7 @@ function distributeByMotif(
         colIdx += 1;
         colTotal = 0;
       }
-      buckets[colIdx].sections.push({ key: m.key, items: sortItems(m.items), total: m.total });
+      buckets[colIdx].sections.push(...splitMotif(m.items, m.key));
       buckets[colIdx].total += m.total;
       colTotal += m.total;
     }
@@ -274,7 +294,7 @@ function distributeByMotif(
       const nCols = alloc[mi];
       const colEnd = colIdx + nCols;
       if (nCols === 1) {
-        buckets[colIdx].sections.push({ key: m.key, items, total: m.total });
+        buckets[colIdx].sections.push(...splitMotif(m.items, m.key));
         buckets[colIdx].total += m.total;
       } else {
         // Étaler le motif sur ses colonnes (split du même motif autorisé)
@@ -293,6 +313,7 @@ function distributeByMotif(
             const take = isLast ? rem : Math.min(rem, Math.max(1, Math.round(cap)));
             buckets[colIdx].sections.push({
               key: `${v.id}-c${colIdx}`,
+              label: groupKeyOf(v),
               items: [{ ...v, qty: take }],
               total: take,
             });
@@ -509,10 +530,10 @@ export function ContainerCard({ instance, onAssign, onRefill, sortMode = 'color'
                     className={styles.section}
                     style={{ flexGrow: sec.total }}
                   >
-                    {!isFilterMode && sec.key !== '_' && (
+                    {!isFilterMode && (sec.label ?? sec.key) !== '_' && (sec.label ?? sec.key) !== '' && (
                       <span className={styles.sectionLabel}>
                         <span className={styles.sectionCount}>{sec.total}</span>{' '}
-                        {sec.key}
+                        {sec.label ?? sec.key}
                       </span>
                     )}
                     <div className={styles.sectionStripes}>
