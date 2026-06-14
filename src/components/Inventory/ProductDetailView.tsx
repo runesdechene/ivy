@@ -102,21 +102,22 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
     }));
   }, [product.variants]);
 
-  // Nombre de variantes EN STOCK par taille (celles qu'on possède réellement, qty > 0).
-  // On se base sur les quantités live (édition en cours incluse).
-  const variantCountBySize = useMemo(() => {
-    const counts: Record<string, number> = {};
+  // Unités (pièces) EN STOCK par taille — ce qu'on a réellement, pas le nombre de coloris.
+  // Basé sur les quantités live (édition en cours incluse) ; négatifs ignorés (pas de pièce
+  // physique négative) pour rester fidèle au stock réel.
+  const stockBySize = useMemo(() => {
+    const units: Record<string, number> = {};
     for (const v of product.variants) {
-      const qty = quantities[v.id] ?? v.quantity;
+      const qty = Math.max(0, quantities[v.id] ?? v.quantity);
       if (qty <= 0) continue;
       const sizeOpt = v.options?.find(o =>
         o.name.toLowerCase().includes('taille') || o.name.toLowerCase().includes('size')
       );
       const size = sizeOpt?.value;
       if (!size) continue;
-      counts[size] = (counts[size] || 0) + 1;
+      units[size] = (units[size] || 0) + qty;
     }
-    return Object.entries(counts).sort(([a], [b]) => {
+    return Object.entries(units).sort(([a], [b]) => {
       const ai = SIZE_ORDER.indexOf(a);
       const bi = SIZE_ORDER.indexOf(b);
       if (ai !== -1 && bi !== -1) return ai - bi;
@@ -797,9 +798,9 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
             </div>
 
             {/* Nombre de variantes par taille (total fiche) — pour vérification */}
-            {variantCountBySize.length > 0 && (
+            {stockBySize.length > 0 && (
               <Text size="xs" c="slate.5" mt={4}>
-                Variantes en stock par taille : {variantCountBySize.map(([size, n]) => `${n} ${size}`).join(' · ')}
+                Stock par taille : {stockBySize.map(([size, n]) => `${n} ${size}`).join(' · ')}
               </Text>
             )}
 
