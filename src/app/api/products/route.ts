@@ -164,7 +164,7 @@ export async function GET(request: Request) {
           )
         `)
         .eq('shop_id', shopId)
-        .eq('status', 'active')
+        .in('status', ['active', 'local', 'draft'])
         .ilike('title', searchPattern)
         .limit(20);
       
@@ -197,7 +197,7 @@ export async function GET(request: Request) {
           )
         `)
         .eq('product.shop_id', shopId)
-        .eq('product.status', 'active')
+        .in('product.status', ['active', 'local', 'draft'])
         .ilike('sku', searchPattern)
         .limit(50);
       
