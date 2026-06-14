@@ -84,16 +84,32 @@ export async function GET(request: Request) {
       const variantIds: string[] = [];
       for (const p of products) for (const v of p.variants || []) variantIds.push(v.id);
       if (variantIds.length === 0) return;
-      let query = supabase
-        .from('inventory_levels')
-        .select('variant_id, quantity')
-        .eq('location_id', locationId);
-      // Petit lot (une fiche) → filtrer par variantes (requête minuscule). Catalogue complet
-      // (milliers de variantes) → un IN ferait exploser l'URL : on prend tout l'emplacement.
-      if (variantIds.length <= 200) query = query.in('variant_id', variantIds);
-      const { data: levels } = await query;
       const levelByVariant = new Map<string, number>();
-      for (const l of (levels as any[]) || []) levelByVariant.set(l.variant_id, l.quantity);
+      if (variantIds.length <= 200) {
+        // Petit lot (une fiche) → filtrer par variantes (requête minuscule).
+        const { data: levels } = await supabase
+          .from('inventory_levels')
+          .select('variant_id, quantity')
+          .eq('location_id', locationId)
+          .in('variant_id', variantIds);
+        for (const l of (levels as any[]) || []) levelByVariant.set(l.variant_id, l.quantity);
+      } else {
+        // Catalogue complet (milliers de variantes) : un IN ferait exploser l'URL, donc on
+        // prend tout l'emplacement. MAIS PostgREST plafonne à 1000 lignes par réponse : sans
+        // pagination, toutes les variantes au-delà de la 1000e ressortaient à 0 (stock fantôme
+        // après reload). On pagine donc par fenêtres de 1000 jusqu'à épuisement.
+        const PAGE = 1000;
+        for (let from = 0; ; from += PAGE) {
+          const { data: levels, error } = await supabase
+            .from('inventory_levels')
+            .select('variant_id, quantity')
+            .eq('location_id', locationId)
+            .range(from, from + PAGE - 1);
+          if (error || !levels || levels.length === 0) break;
+          for (const l of levels as any[]) levelByVariant.set(l.variant_id, l.quantity);
+          if (levels.length < PAGE) break;
+        }
+      }
       for (const p of products) {
         for (const v of p.variants || []) {
           const q = levelByVariant.get(v.id);
