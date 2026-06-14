@@ -83,7 +83,7 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
     return Object.entries(groups).map(([label, variants]) => ({
       label,
       variants,
-      totalQuantity: variants.reduce((sum, v) => sum + v.quantity, 0),
+      totalQuantity: variants.reduce((sum, v) => sum + (Number.isFinite(v.quantity) ? v.quantity : 0), 0),
       subabaseIds: variants.map(v => v.supabaseId).filter(Boolean) as string[],
       // Répartition par taille (sous-options après la 1ère) : { size, quantity } — brut, négatifs inclus
       sizeBreakdown: variants
@@ -385,28 +385,29 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
     return acc;
   }, [product.variants, quantities]);
 
-  // Modifier la quantité d'une variante
+  // Modifier la quantité d'une variante (NaN possible si le champ est vidé → 0)
   const handleQuantityChange = (variantId: string, value: number) => {
+    const safe = Number.isFinite(value) ? Math.max(0, value) : 0;
     setQuantities(prev => ({
       ...prev,
-      [variantId]: Math.max(0, value),
+      [variantId]: safe,
     }));
   };
 
   // Incrémenter
   const handleIncrement = (variantId: string) => {
-    setQuantities(prev => ({
-      ...prev,
-      [variantId]: (prev[variantId] || 0) + 1,
-    }));
+    setQuantities(prev => {
+      const current = Number.isFinite(prev[variantId]) ? prev[variantId] : 0;
+      return { ...prev, [variantId]: current + 1 };
+    });
   };
 
   // Décrémenter
   const handleDecrement = (variantId: string) => {
-    setQuantities(prev => ({
-      ...prev,
-      [variantId]: Math.max(0, (prev[variantId] || 0) - 1),
-    }));
+    setQuantities(prev => {
+      const current = Number.isFinite(prev[variantId]) ? prev[variantId] : 0;
+      return { ...prev, [variantId]: Math.max(0, current - 1) };
+    });
   };
 
   // Sauvegarder les modifications
@@ -849,7 +850,7 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
             <Group gap="xs" mb="xs">
               <span className={styles.localGroupLabel}>Variantes locales</span>
               <StatusBadge variant="slate">
-                {product.variants.filter(v => v.shopifyActive === false).reduce((sum, v) => sum + v.quantity, 0)}/{product.variants.filter(v => v.shopifyActive === false).length}
+                {product.variants.filter(v => v.shopifyActive === false).reduce((sum, v) => sum + (Number.isFinite(v.quantity) ? v.quantity : 0), 0)}/{product.variants.filter(v => v.shopifyActive === false).length}
               </StatusBadge>
             </Group>
             <Stack gap={6}>
@@ -964,7 +965,7 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
                   <Table.Td style={{ textAlign: 'right' }}>
                     <NumberInput
                       value={costs[variant.id] || 0}
-                      onChange={(val) => setCosts(prev => ({ ...prev, [variant.id]: typeof val === 'number' ? val : 0 }))}
+                      onChange={(val) => setCosts(prev => ({ ...prev, [variant.id]: Number.isFinite(val) ? (val as number) : 0 }))}
                       min={0}
                       decimalScale={2}
                       fixedDecimalScale
@@ -976,7 +977,7 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
                   <Table.Td style={{ textAlign: 'right' }}>
                     <NumberInput
                       value={prices[variant.id] || 0}
-                      onChange={(val) => setPrices(prev => ({ ...prev, [variant.id]: typeof val === 'number' ? val : 0 }))}
+                      onChange={(val) => setPrices(prev => ({ ...prev, [variant.id]: Number.isFinite(val) ? (val as number) : 0 }))}
                       min={0}
                       decimalScale={2}
                       fixedDecimalScale

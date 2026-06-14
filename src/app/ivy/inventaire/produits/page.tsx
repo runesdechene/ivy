@@ -14,7 +14,7 @@ import styles from './inventory.module.scss';
 
 export default function InventoryPage() {
   const { currentShop } = useShop();
-  const { currentLocation, loading: locationLoading } = useLocation();
+  const { currentLocation } = useLocation();
   const { streamFromUrl, endSync } = useTerminalStream();
   const [products, setProducts] = useState<ProductData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,9 +39,11 @@ export default function InventoryPage() {
 
   const fetchProducts = useCallback(async () => {
     if (!currentShop) return;
-    // Tant que les emplacements ne sont pas résolus, ne pas fetcher : sans locationId,
-    // /api/products somme TOUS les emplacements (atelier inclus) → faux négatifs dans la fiche.
-    if (locationLoading) return;
+    // CRUCIAL : ne JAMAIS appeler /api/products sans emplacement résolu. Sans locationId, la
+    // route somme TOUS les emplacements (atelier inclus) → faux stock négatif. Le bug ne se
+    // voyait que sur les machines lentes (race au montage) : on attend donc explicitement
+    // currentLocation (toute boutique Shopify a au moins un emplacement actif).
+    if (!currentLocation) return;
 
     setLoading(true);
     setError(null);
@@ -77,11 +79,23 @@ export default function InventoryPage() {
     } finally {
       setLoading(false);
     }
-  }, [currentShop, currentLocation, locationLoading]);
+  }, [currentShop, currentLocation]);
 
   useEffect(() => {
     fetchProducts();
   }, [fetchProducts]);
+
+  // Quand les produits sont re-fetchés (changement d'emplacement, refresh…), re-synchronise
+  // la fiche ouverte. Sans ça, selectedProduct reste figé sur d'anciennes données — d'où le
+  // cas "je change d'emplacement mais la fiche affiche toujours le même total".
+  useEffect(() => {
+    setSelectedProduct(prev => {
+      if (!prev) return prev;
+      const fresh = products.find(p => productKey(p) === productKey(prev));
+      return fresh ?? prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products]);
 
   // Synchroniser depuis Shopify (appelé après confirmation)
   // Chunked en 3 phases (products → costs → levels) pour respecter le timeout Netlify
@@ -337,6 +351,7 @@ export default function InventoryPage() {
     return (
       <div className={styles.container} ref={containerRef}>
         <ProductDetailView
+          key={`${selectedProduct.id}-${currentLocation?.id ?? 'none'}`}
           product={selectedProduct}
           onBack={handleBackToList}
           locationName={currentLocation?.name}
