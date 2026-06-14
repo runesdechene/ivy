@@ -42,35 +42,60 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    setLoading(true);
+    const shopId = currentShop.id;
+    const pickDefault = (list: ShopifyLocation[]): ShopifyLocation | null => {
+      if (list.length === 0) return null;
+      const savedId = localStorage.getItem(`ivy_location_${shopId}`);
+      return list.find((l) => l.id === savedId) || list[0];
+    };
+
+    // Hydratation IMMÉDIATE depuis le cache : évite d'attendre le round-trip Shopify
+    // (/api/locations appelle Shopify en direct, ~500ms+) à chaque chargement. La liste
+    // est ensuite rafraîchie en arrière-plan.
+    let hydrated = false;
     try {
-      const response = await fetch(`/api/locations?shopId=${currentShop.id}`);
-      
+      const cached = localStorage.getItem(`ivy_locations_${shopId}`);
+      if (cached) {
+        const list: ShopifyLocation[] = JSON.parse(cached);
+        if (Array.isArray(list) && list.length > 0) {
+          setLocations(list);
+          setCurrentLocationState((prev) => prev ?? pickDefault(list));
+          setLoading(false);
+          hydrated = true;
+        }
+      }
+    } catch {
+      /* cache illisible → on ignore */
+    }
+
+    if (!hydrated) setLoading(true);
+
+    try {
+      const response = await fetch(`/api/locations?shopId=${shopId}`);
       if (!response.ok) {
         throw new Error('Failed to fetch locations');
       }
 
       const data = await response.json();
-      const activeLocations = data.locations.filter((loc: ShopifyLocation) => loc.active);
-      
-      setLocations(activeLocations);
+      const activeLocations: ShopifyLocation[] = data.locations.filter(
+        (loc: ShopifyLocation) => loc.active,
+      );
 
-      // Définir l'emplacement par défaut
-      if (activeLocations.length > 0) {
-        // Essayer de récupérer l'emplacement sauvegardé dans localStorage
-        const savedLocationId = localStorage.getItem(`ivy_location_${currentShop.id}`);
-        const savedLocation = activeLocations.find((loc: ShopifyLocation) => loc.id === savedLocationId);
-        
-        if (savedLocation) {
-          setCurrentLocationState(savedLocation);
-        } else {
-          // Sinon prendre le premier emplacement
-          setCurrentLocationState(activeLocations[0]);
-        }
+      setLocations(activeLocations);
+      try {
+        localStorage.setItem(`ivy_locations_${shopId}`, JSON.stringify(activeLocations));
+      } catch {
+        /* quota → on ignore */
       }
+
+      // Conserver la sélection courante si elle existe toujours ; sinon défaut.
+      setCurrentLocationState((prev) => {
+        if (prev && activeLocations.some((l) => l.id === prev.id)) return prev;
+        return pickDefault(activeLocations);
+      });
     } catch (error) {
       console.error('Error loading locations:', error);
-      setLocations([]);
+      if (!hydrated) setLocations([]);
     } finally {
       setLoading(false);
     }
