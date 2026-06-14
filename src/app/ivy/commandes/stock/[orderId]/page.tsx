@@ -396,6 +396,75 @@ export default function OrderDetailPage() {
     }
   };
 
+  // +/- sur la quantité d'une variante (chaque unité = une ligne). Permet d'ajuster
+  // sans devoir supprimer toute la ligne. Garde anti-double-clic par variante.
+  const [mutatingKeys, setMutatingKeys] = useState<Set<string>>(new Set());
+
+  const lockKey = (key: string) => setMutatingKeys(prev => new Set(prev).add(key));
+  const unlockKey = (key: string) =>
+    setMutatingKeys(prev => {
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+
+  const incrementVariant = async (variantGroup: { key: string; items: OrderItem[] }) => {
+    if (!currentShop || isCompleted || mutatingKeys.has(variantGroup.key)) return;
+    const f = variantGroup.items[0];
+    lockKey(variantGroup.key);
+    try {
+      const response = await fetch(`/api/suppliers/orders/${orderId}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shopId: currentShop.id,
+          items: [{
+            variant_id: f.variant_id,
+            product_title: f.product_title,
+            variant_title: f.variant_title,
+            sku: f.sku,
+            quantity: 1,
+          }],
+        }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.items?.length) setItems(prev => [...prev, ...data.items]);
+      } else {
+        notifications.show({ title: 'Erreur', message: 'Impossible d\'ajouter une unité', color: 'red' });
+      }
+    } catch (err) {
+      console.error('Error incrementing variant:', err);
+      notifications.show({ title: 'Erreur', message: 'Impossible d\'ajouter une unité', color: 'red' });
+    } finally {
+      unlockKey(variantGroup.key);
+    }
+  };
+
+  const decrementVariant = async (variantGroup: { key: string; items: OrderItem[] }) => {
+    if (!currentShop || isCompleted || mutatingKeys.has(variantGroup.key)) return;
+    if (variantGroup.items.length <= 1) return; // au minimum 1 unité ; pour 0 → bouton Supprimer
+    // Retirer en priorité une unité NON validée pour ne pas perdre une validation.
+    const target = variantGroup.items.find(i => !i.is_validated) || variantGroup.items[variantGroup.items.length - 1];
+    lockKey(variantGroup.key);
+    setItems(prev => prev.filter(i => i.id !== target.id)); // optimiste
+    try {
+      const response = await fetch(
+        `/api/suppliers/orders/${orderId}/items?itemId=${target.id}&shopId=${currentShop.id}`,
+        { method: 'DELETE' },
+      );
+      if (!response.ok) {
+        setItems(prev => [...prev, target]); // rollback
+        notifications.show({ title: 'Erreur', message: 'Impossible de retirer une unité', color: 'red' });
+      }
+    } catch (err) {
+      console.error('Error decrementing variant:', err);
+      setItems(prev => [...prev, target]); // rollback
+    } finally {
+      unlockKey(variantGroup.key);
+    }
+  };
+
   // Valider/Dévalider un article
   const toggleValidation = async (itemId: string, isValidated: boolean) => {
     if (!currentShop) return;
@@ -1276,9 +1345,40 @@ export default function OrderDetailPage() {
                           )}
                         </td>
                         <td className={clsx(styles.td, styles.tdRight)}>
-                          <span className={someValidated ? styles.qtyPartial : styles.qtyFull}>
-                            {validatedCount}/{variantGroup.items.length}
-                          </span>
+                          {isCompleted ? (
+                            <span className={someValidated ? styles.qtyPartial : styles.qtyFull}>
+                              {validatedCount}/{variantGroup.items.length}
+                            </span>
+                          ) : (
+                            <Group gap={4} justify="flex-end" wrap="nowrap">
+                              <ActionIcon
+                                variant="default"
+                                size="sm"
+                                radius="xl"
+                                onClick={() => decrementVariant(variantGroup)}
+                                disabled={variantGroup.items.length <= 1 || mutatingKeys.has(variantGroup.key)}
+                                aria-label="Retirer une unité"
+                              >
+                                <IconMinus size={14} />
+                              </ActionIcon>
+                              <span
+                                className={someValidated ? styles.qtyPartial : styles.qtyFull}
+                                style={{ minWidth: 38, textAlign: 'center' }}
+                              >
+                                {validatedCount}/{variantGroup.items.length}
+                              </span>
+                              <ActionIcon
+                                variant="default"
+                                size="sm"
+                                radius="xl"
+                                onClick={() => incrementVariant(variantGroup)}
+                                disabled={mutatingKeys.has(variantGroup.key)}
+                                aria-label="Ajouter une unité"
+                              >
+                                <IconPlus size={14} />
+                              </ActionIcon>
+                            </Group>
+                          )}
                         </td>
                         <td className={clsx(styles.td, styles.tdRight, styles.tdUnit)}>
                           {formatEuro(firstItem.unit_price)}
