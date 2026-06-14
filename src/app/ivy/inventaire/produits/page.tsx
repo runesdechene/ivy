@@ -14,7 +14,7 @@ import styles from './inventory.module.scss';
 
 export default function InventoryPage() {
   const { currentShop } = useShop();
-  const { currentLocation } = useLocation();
+  const { currentLocation, loading: locationLoading } = useLocation();
   const { streamFromUrl, endSync } = useTerminalStream();
   const [products, setProducts] = useState<ProductData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,6 +39,9 @@ export default function InventoryPage() {
 
   const fetchProducts = useCallback(async () => {
     if (!currentShop) return;
+    // Tant que les emplacements ne sont pas résolus, ne pas fetcher : sans locationId,
+    // /api/products somme TOUS les emplacements (atelier inclus) → faux négatifs dans la fiche.
+    if (locationLoading) return;
 
     setLoading(true);
     setError(null);
@@ -74,7 +77,7 @@ export default function InventoryPage() {
     } finally {
       setLoading(false);
     }
-  }, [currentShop, currentLocation]);
+  }, [currentShop, currentLocation, locationLoading]);
 
   useEffect(() => {
     fetchProducts();
