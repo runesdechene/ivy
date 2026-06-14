@@ -887,6 +887,33 @@ export default function OrderDetailPage() {
     return { subtotal, totalHt, totalTtc, validatedCount, progress, totalItems: items.length, projectedTtc };
   }, [items, balanceAdjustment]);
 
+  // Résumé de réception : groupé par Motif (avant « | ») puis par Type (après « | »),
+  // somme des quantités de toute la commande. Donne « Hécate : 12 T-shirt unisexe, 8 Débardeur femme ».
+  const orderSummary = useMemo(() => {
+    const byMotif = new Map<string, Map<string, number>>();
+    for (const item of items) {
+      const parts = (item.product_title || '').split('|').map(p => p.trim()).filter(Boolean);
+      const motif = parts[0] || 'Autres';
+      const type = parts.slice(1).join(' | ') || '—';
+      const qty = item.quantity || 0;
+      if (!byMotif.has(motif)) byMotif.set(motif, new Map());
+      const types = byMotif.get(motif)!;
+      types.set(type, (types.get(type) || 0) + qty);
+    }
+    return [...byMotif.entries()]
+      .map(([motif, types]) => ({
+        motif,
+        total: [...types.values()].reduce((s, n) => s + n, 0),
+        types: [...types.entries()].sort((a, b) => b[1] - a[1]),
+      }))
+      .sort((a, b) => a.motif.localeCompare(b.motif, 'fr'));
+  }, [items]);
+
+  const totalPieces = useMemo(
+    () => orderSummary.reduce((sum, g) => sum + g.total, 0),
+    [orderSummary],
+  );
+
   if (loading) {
     return (
       <Center h={400}>
@@ -1124,6 +1151,38 @@ export default function OrderDetailPage() {
           }}
         />
       </div>
+
+      {/* Résumé de réception — groupé par motif et par type */}
+      {orderSummary.length > 0 && (
+        <div className={clsx(styles.card, styles.cardSm)}>
+          <div className={styles.cardHeader}>
+            <h3 className={styles.cardTitle}>Résumé de <em>réception</em></h3>
+            <span className={styles.cardSubNote}>
+              {totalPieces} pièce{totalPieces > 1 ? 's' : ''}
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {orderSummary.map((g) => (
+              <div
+                key={g.motif}
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  alignItems: 'baseline',
+                  gap: 6,
+                  fontFamily: 'var(--font-inter)',
+                  fontSize: 14,
+                }}
+              >
+                <Text component="span" fw={600} c="var(--slate)">{g.motif}</Text>
+                <Text component="span" c="var(--slate-muted)">
+                  : {g.types.map(([type, qty]) => `${qty} ${type}`).join(', ')}
+                </Text>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Tri des articles par drag & drop */}
       {items.length > 0 && (
