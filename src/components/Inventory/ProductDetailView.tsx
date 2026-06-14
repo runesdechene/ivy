@@ -102,10 +102,13 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
     }));
   }, [product.variants]);
 
-  // Nombre de variantes par taille (total de la fiche) — pour vérification
+  // Nombre de variantes EN STOCK par taille (celles qu'on possède réellement, qty > 0).
+  // On se base sur les quantités live (édition en cours incluse).
   const variantCountBySize = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const v of product.variants) {
+      const qty = quantities[v.id] ?? v.quantity;
+      if (qty <= 0) continue;
       const sizeOpt = v.options?.find(o =>
         o.name.toLowerCase().includes('taille') || o.name.toLowerCase().includes('size')
       );
@@ -121,7 +124,7 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
       if (bi !== -1) return 1;
       return a.localeCompare(b, 'fr');
     });
-  }, [product.variants]);
+  }, [product.variants, quantities]);
 
   // Supprimer un groupe de variantes locales
   const handleDeleteVariants = async () => {
@@ -459,31 +462,48 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
         throw new Error(data.error || 'Erreur lors de la mise à jour');
       }
 
-      notifications.show({
-        title: 'Stock mis à jour',
-        message: `${changes.length} variante${changes.length > 1 ? 's' : ''} mise${changes.length > 1 ? 's' : ''} à jour`,
-        color: 'moss',
-      });
+      // La route renvoie HTTP 200 même quand Shopify rejette certaines variantes : il faut
+      // inspecter `results` pour ne jamais afficher un faux « Stock mis à jour ».
+      const results: { variantId: string; success: boolean; error?: unknown }[] = data.results || [];
+      const succeededIds = new Set(results.filter(r => r.success).map(r => r.variantId));
+      const failed = results.filter(r => !r.success);
 
-      // Mettre à jour le produit parent si callback fourni
-      if (onProductUpdated) {
+      // Mettre à jour le parent UNIQUEMENT pour les variantes réellement enregistrées.
+      if (onProductUpdated && succeededIds.size > 0) {
+        const updatedVariants = product.variants.map(v =>
+          succeededIds.has(v.id)
+            ? { ...v, quantity: quantities[v.id], cost: costs[v.id], price: prices[v.id] }
+            : v
+        );
         const updatedProduct: ProductData = {
           ...product,
-          totalQuantity: Object.values(quantities).reduce((sum, qty) => sum + Math.max(0, qty), 0),
-          variants: product.variants.map(v => ({
-            ...v,
-            quantity: quantities[v.id],
-            cost: costs[v.id],
-            price: prices[v.id],
-          })),
-          sizeBreakdown: product.variants.reduce((acc, v) => {
-            if (v.size) {
-              acc[v.size] = (acc[v.size] || 0) + Math.max(0, quantities[v.id]);
-            }
+          variants: updatedVariants,
+          totalQuantity: updatedVariants.reduce((sum, v) => sum + Math.max(0, v.quantity), 0),
+          sizeBreakdown: updatedVariants.reduce((acc, v) => {
+            if (v.size) acc[v.size] = (acc[v.size] || 0) + Math.max(0, v.quantity);
             return acc;
           }, {} as Record<string, number>),
         };
         onProductUpdated(updatedProduct);
+      }
+
+      if (failed.length > 0) {
+        const rawErr = failed[0].error;
+        const errText =
+          typeof rawErr === 'string' ? rawErr : rawErr ? JSON.stringify(rawErr) : '';
+        notifications.show({
+          title: succeededIds.size > 0 ? 'Mise à jour partielle' : 'Échec de la sauvegarde',
+          message:
+            `${failed.length} variante${failed.length > 1 ? 's' : ''} non enregistrée${failed.length > 1 ? 's' : ''}` +
+            (errText ? ` — ${errText}` : ' (rejet Shopify)'),
+          color: 'rust',
+        });
+      } else {
+        notifications.show({
+          title: 'Stock mis à jour',
+          message: `${succeededIds.size} variante${succeededIds.size > 1 ? 's' : ''} mise${succeededIds.size > 1 ? 's' : ''} à jour`,
+          color: 'moss',
+        });
       }
     } catch (err: any) {
       console.error('Error saving:', err);
@@ -778,7 +798,7 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
             {/* Nombre de variantes par taille (total fiche) — pour vérification */}
             {variantCountBySize.length > 0 && (
               <Text size="xs" c="slate.5" mt={4}>
-                Variantes par taille : {variantCountBySize.map(([size, n]) => `${n} ${size}`).join(' · ')}
+                Variantes en stock par taille : {variantCountBySize.map(([size, n]) => `${n} ${size}`).join(' · ')}
               </Text>
             )}
 
