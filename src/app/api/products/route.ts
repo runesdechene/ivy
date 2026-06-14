@@ -29,6 +29,14 @@ export async function GET(request: Request) {
     let productsByTitle: any[] = [];
     let variantsBySku: any[] = [];
 
+    // Noms d'options : lancé tout de suite (le .then démarre la requête) pour qu'il tourne
+    // EN PARALLÈLE de la requête produits au lieu d'ajouter un aller-retour en série.
+    const optionNamesPromise = supabase
+      .from('products')
+      .select('shopify_id, option1_name, option2_name, option3_name')
+      .eq('shop_id', shopId)
+      .then((r) => r);
+
     // Si recherche spécifiée, filtrer par titre et SKU
     if (search && search.length >= 3) {
       const searchPattern = `%${search}%`;
@@ -99,10 +107,11 @@ export async function GET(request: Request) {
       
       variantsBySku = skuResults || [];
     } else {
-      // Pas de recherche - récupérer tous les produits avec inventaire (pour la page inventaire)
-      const { data: allProducts, error: productsError } = await supabase
-        .from('products')
-        .select(`
+      // Page inventaire : tout le catalogue. On filtre les niveaux de stock sur l'emplacement
+      // demandé via une requête PLATE indexée (sinon on rapatrie les niveaux des 3 emplacements
+      // pour 5651 variantes = ~11000 lignes inutiles). L'embed n'est conservé que si aucun
+      // emplacement n'est fourni (fallback "somme tous emplacements", inchangé).
+      const select = `
           id,
           shopify_id,
           title,
@@ -123,27 +132,50 @@ export async function GET(request: Request) {
             cost,
             price,
             shopify_active,
-            inventory_levels(
-              quantity,
-              location_id
-            ),
+            ${locationId ? '' : 'inventory_levels(quantity, location_id),'}
             variant_metafields(
               namespace,
               key,
               value
             )
           )
-        `)
-        .eq('shop_id', shopId)
-        .in('status', ['active', 'local', 'draft'])
-        .order('title');
-      
-      if (productsError) {
-        console.error('Error fetching products:', productsError);
+        `;
+
+      const [productsRes, levelsRes] = await Promise.all([
+        supabase
+          .from('products')
+          .select(select)
+          .eq('shop_id', shopId)
+          .in('status', ['active', 'local', 'draft'])
+          .order('title'),
+        locationId
+          ? supabase
+              .from('inventory_levels')
+              .select('variant_id, quantity')
+              .eq('location_id', locationId)
+          : Promise.resolve({ data: null, error: null }),
+      ]);
+
+      if (productsRes.error) {
+        console.error('Error fetching products:', productsRes.error);
       }
-      
-      productsByTitle = allProducts || [];
-      
+
+      const allProducts = (productsRes.data as any[]) || [];
+
+      // Rattacher les niveaux du seul emplacement demandé, en reconstruisant la forme attendue
+      // par le transform (inventory_levels: [{ quantity, location_id }]).
+      if (locationId && levelsRes.data) {
+        const levelByVariant = new Map<string, number>();
+        for (const l of levelsRes.data as any[]) levelByVariant.set(l.variant_id, l.quantity);
+        for (const p of allProducts) {
+          for (const v of p.variants || []) {
+            const q = levelByVariant.get(v.id);
+            v.inventory_levels = q === undefined ? [] : [{ quantity: q, location_id: locationId }];
+          }
+        }
+      }
+
+      productsByTitle = allProducts;
     }
 
     // Combiner les résultats
@@ -201,14 +233,11 @@ export async function GET(request: Request) {
       });
     }
     
-    // Essayer de récupérer les noms d'options (colonnes optionnelles)
-    let optionNamesMap: Record<string, { option1_name?: string; option2_name?: string; option3_name?: string }> = {};
+    // Noms d'options (lancés en parallèle plus haut). Colonnes optionnelles → try/catch.
+    const optionNamesMap: Record<string, { option1_name?: string; option2_name?: string; option3_name?: string }> = {};
     try {
-      const { data: optionNamesData } = await supabase
-        .from('products')
-        .select('shopify_id, option1_name, option2_name, option3_name')
-        .eq('shop_id', shopId);
-      
+      const { data: optionNamesData } = await optionNamesPromise;
+
       if (optionNamesData) {
         optionNamesData.forEach((p: any) => {
           optionNamesMap[p.shopify_id] = {
