@@ -37,26 +37,28 @@ export default function InventoryPage() {
   productsRef.current = products;
   const productKey = (p: ProductData) => p.supabaseId || p.handle;
 
+  // Dépendances en IDs primitifs (pas les objets shop/location). Les contextes amont
+  // (auth → shop → emplacement) recréent un NOUVEL objet à chaque event Supabase /
+  // navigation ; dépendre des objets relançait fetchProducts → double chargement + flash.
+  // En dépendant des ids, un nouvel objet de même id ne déclenche plus de refetch.
+  const shopId = currentShop?.id;
+  const locationId = currentLocation?.id;
+
   const fetchProducts = useCallback(async () => {
-    if (!currentShop) return;
-    // CRUCIAL : ne JAMAIS appeler /api/products sans emplacement résolu. Sans locationId, la
-    // route somme TOUS les emplacements (atelier inclus) → faux stock négatif. Le bug ne se
-    // voyait que sur les machines lentes (race au montage) : on attend donc explicitement
-    // currentLocation (toute boutique Shopify a au moins un emplacement actif).
-    if (!currentLocation) return;
+    // On attend shop ET emplacement résolus. Sans locationId, /api/products somme TOUS les
+    // emplacements (atelier inclus) → faux stock négatif (race visible sur machines lentes).
+    if (!shopId || !locationId) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      await loadColorMappingsFromSupabase(currentShop.id);
-
-      const params = new URLSearchParams({ shopId: currentShop.id });
-      if (currentLocation) {
-        params.append('locationId', currentLocation.id);
-      }
-
-      const response = await fetch(`/api/products?${params}`);
+      const params = new URLSearchParams({ shopId, locationId });
+      // Couleurs + produits en parallèle : le chargement des couleurs ne bloque plus la liste.
+      const [, response] = await Promise.all([
+        loadColorMappingsFromSupabase(shopId),
+        fetch(`/api/products?${params}`),
+      ]);
 
       if (!response.ok) {
         throw new Error('Failed to fetch products');
@@ -79,7 +81,7 @@ export default function InventoryPage() {
     } finally {
       setLoading(false);
     }
-  }, [currentShop, currentLocation]);
+  }, [shopId, locationId]);
 
   useEffect(() => {
     fetchProducts();
@@ -328,7 +330,9 @@ export default function InventoryPage() {
     );
   }
 
-  if (loading) {
+  // Loader plein écran uniquement au tout premier chargement. Sur un refetch (changement
+  // d'emplacement, sync), on garde la liste/fiche affichée pour éviter le flash.
+  if (loading && products.length === 0) {
     return (
       <div className={styles.container}>
         <div className={styles.loadingWrap}>
