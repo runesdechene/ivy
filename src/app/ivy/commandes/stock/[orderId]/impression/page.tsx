@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Title, Text, Paper, Button, Group, Checkbox, Loader, Center, Progress, SimpleGrid, Stack, Divider, Modal, Image, Tooltip } from '@mantine/core';
 import { IconArrowLeft, IconPrinter, IconCheck, IconPackage, IconPhotoOff } from '@tabler/icons-react';
 import { useShop } from '@/context/ShopContext';
-import { getColorHex, loadColorMappingsFromSupabase } from '@/utils/color-transformer';
+import { getColorHex, loadColorMappingsFromSupabase, transformColor } from '@/utils/color-transformer';
 import { SortOptionsBar } from '@/components/Inventory/SortOptionsBar';
 import { StatusBadge } from '@/components/StatusBadge';
 import { SkuChip } from '@/components/SkuChip';
@@ -401,7 +401,7 @@ export default function FeuilleImpressionPage() {
                                           border: '1px solid var(--divider-strong)',
                                         }}
                                       />
-                                      <Text size="sm" c="var(--slate)">{option}</Text>
+                                      <Text size="sm" c="var(--slate)">{transformColor(option)}</Text>
                                     </Group>
                                   );
                                 }

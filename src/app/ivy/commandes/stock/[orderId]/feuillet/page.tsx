@@ -8,7 +8,7 @@ import {
 } from '@mantine/core';
 import { IconArrowLeft, IconChecklist, IconCheckbox, IconSquare } from '@tabler/icons-react';
 import { useShop } from '@/context/ShopContext';
-import { getColorHex, isColorOption, loadColorMappingsFromSupabase, areColorMappingsLoaded } from '@/utils/color-transformer';
+import { getColorHex, isColorOption, loadColorMappingsFromSupabase, areColorMappingsLoaded, transformColor } from '@/utils/color-transformer';
 import { compareSizes } from '@/utils/size-helpers';
 import { SortOptionsBar } from '@/components/Inventory/SortOptionsBar';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -369,8 +369,8 @@ export default function FeuilletCommandePage() {
                                   )}
                                   <Text size="sm" fw={500} c="var(--slate)">
                                     {sortOrder[0] === 'Taille'
-                                      ? `${group.size} — ${group.color}`
-                                      : `${group.color} — ${group.size}`}
+                                      ? `${group.size} — ${transformColor(group.color)}`
+                                      : `${transformColor(group.color)} — ${group.size}`}
                                   </Text>
                                   <span className={styles.quantity}>
                                     {group.totalQuantity}

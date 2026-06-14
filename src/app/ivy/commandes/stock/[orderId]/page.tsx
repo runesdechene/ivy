@@ -15,7 +15,7 @@ import { StatusBadge, type StatusBadgeVariant } from '@/components/StatusBadge';
 import { SkuChip } from '@/components/SkuChip';
 import { MetaChip } from '@/components/MetaChip';
 import { FilterChip } from '@/components/FilterChip';
-import { getColorHex, isColorOption, loadColorMappingsFromSupabase, areColorMappingsLoaded } from '@/utils/color-transformer';
+import { getColorHex, isColorOption, loadColorMappingsFromSupabase, areColorMappingsLoaded, transformColor } from '@/utils/color-transformer';
 import { useTerminalStream } from '@/hooks/useTerminalStream';
 import styles from './order-detail.module.scss';
 
@@ -1204,7 +1204,7 @@ export default function OrderDetailPage() {
                         <td className={styles.td}>
                           {firstItem.sku ? <SkuChip>{firstItem.sku}</SkuChip> : <span className={styles.metaCellEmpty}>—</span>}
                         </td>
-                        <td className={clsx(styles.td, styles.tdVariant)}>{firstItem.variant_title || '—'}</td>
+                        <td className={clsx(styles.td, styles.tdVariant)}>{firstItem.variant_title ? firstItem.variant_title.split(' / ').map(transformColor).join(' / ') : '—'}</td>
                         <td className={styles.td}>
                           {Object.keys(metafields).length > 0 ? (
                             <div className={styles.metaChipRow}>
