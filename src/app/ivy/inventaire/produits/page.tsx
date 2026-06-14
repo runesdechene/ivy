@@ -202,7 +202,7 @@ export default function InventoryPage() {
   // La boutique attend-elle des métachamps ? Vrai dès qu'au moins une variante de tout le catalogue en a un.
   // Sert à signaler aussi les produits sans aucun métachamp (sinon l'alerte ne s'afficherait que sur les "partiels").
   const expectMetafields = useMemo(() => {
-    return products.some(p => p.variants.some(v => (v.metafields?.length || 0) > 0));
+    return products.some(p => p.variants.some(v => (v.metafieldsCount ?? (v.metafields?.length || 0)) > 0));
   }, [products]);
 
   // Sélectionner un produit (sauvegarde la position de scroll)

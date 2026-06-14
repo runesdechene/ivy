@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Button, Text, Badge, Group, Stack, Table, Image, NumberInput, ActionIcon, Loader, Modal, Paper, Checkbox } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconArrowLeft, IconPhoto, IconPlus, IconMinus, IconDeviceFloppy, IconTrash, IconRefresh, IconArchive, IconUpload, IconArrowsExchange } from '@tabler/icons-react';
@@ -63,6 +63,25 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
   const [transferModalOpened, { open: openTransferModal, close: closeTransferModal }] = useDisclosure(false);
   const { currentLocation } = useLocation();
   const { streamFromUrl } = useTerminalStream();
+
+  // Métachamps : la liste d'inventaire n'envoie qu'un compte (perf). On charge les valeurs
+  // complètes à l'ouverture de la fiche, à la demande, via un endpoint dédié.
+  const [metafieldsByVariant, setMetafieldsByVariant] = useState<
+    Record<string, { namespace: string; key: string; value: string }[]>
+  >({});
+  useEffect(() => {
+    if (!product.supabaseId) return;
+    let cancelled = false;
+    fetch(`/api/products/metafields?productId=${product.supabaseId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && d?.byVariant) setMetafieldsByVariant(d.byVariant);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [product.supabaseId]);
 
   const isLocalProduct = product.status === 'LOCAL' || product.status === 'DRAFT';
   const [fixingStates, setFixingStates] = useState(false);
@@ -988,15 +1007,21 @@ export function ProductDetailView({ product, onBack, locationName, shopId, locat
                     />
                   </Table.Td>
                   <Table.Td>
-                    {variant.metafields && variant.metafields.length > 0 ? (
-                      <Group gap={4} wrap="wrap">
-                        {variant.metafields.map((mf, i) => (
-                          <MetaChip key={i} keyName={mf.key} value={mf.value} />
-                        ))}
-                      </Group>
-                    ) : (
-                      <Text size="xs" c="slate.5">—</Text>
-                    )}
+                    {(() => {
+                      const mfs =
+                        (variant.supabaseId && metafieldsByVariant[variant.supabaseId]) ||
+                        variant.metafields ||
+                        [];
+                      return mfs.length > 0 ? (
+                        <Group gap={4} wrap="wrap">
+                          {mfs.map((mf, i) => (
+                            <MetaChip key={i} keyName={mf.key} value={mf.value} />
+                          ))}
+                        </Group>
+                      ) : (
+                        <Text size="xs" c="slate.5">—</Text>
+                      );
+                    })()}
                   </Table.Td>
                   <Table.Td className={styles.variantQuantity}>
                     <Group gap="xs" justify="flex-end" className={styles.quantityControls}>

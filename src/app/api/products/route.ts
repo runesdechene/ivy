@@ -111,7 +111,11 @@ export async function GET(request: Request) {
       // demandé via une requête PLATE indexée (sinon on rapatrie les niveaux des 3 emplacements
       // pour 5651 variantes = ~11000 lignes inutiles). L'embed n'est conservé que si aucun
       // emplacement n'est fourni (fallback "somme tous emplacements", inchangé).
-      const select = `
+      // Plus de valeurs de métachamps ici (13477 lignes lourdes) : la liste n'a besoin que
+      // d'un COMPTE par variante (badge). Les valeurs sont chargées à l'ouverture d'une fiche
+      // via /api/products/metafields. Le compte se fait via l'agrégat imbriqué
+      // variant_metafields(count) (résultat sur 95 lignes top-level, pas de plafond max-rows).
+      const buildSelect = (withMfCount: boolean) => `
           id,
           shopify_id,
           title,
@@ -131,23 +135,22 @@ export async function GET(request: Request) {
             option3,
             cost,
             price,
-            shopify_active,
-            ${locationId ? '' : 'inventory_levels(quantity, location_id),'}
-            variant_metafields(
-              namespace,
-              key,
-              value
-            )
+            shopify_active${locationId ? '' : `,
+            inventory_levels(quantity, location_id)`}${withMfCount ? `,
+            variant_metafields(count)` : ''}
           )
         `;
 
-      const [productsRes, levelsRes] = await Promise.all([
+      const runProducts = (withMfCount: boolean) =>
         supabase
           .from('products')
-          .select(select)
+          .select(buildSelect(withMfCount))
           .eq('shop_id', shopId)
           .in('status', ['active', 'local', 'draft'])
-          .order('title'),
+          .order('title');
+
+      let [productsRes, levelsRes] = await Promise.all([
+        runProducts(true),
         locationId
           ? supabase
               .from('inventory_levels')
@@ -156,8 +159,11 @@ export async function GET(request: Request) {
           : Promise.resolve({ data: null, error: null }),
       ]);
 
+      // Fallback si les fonctions d'agrégat sont désactivées sur le projet : on recharge
+      // sans le compte (la page fonctionne, seuls les badges métachamps sont absents).
       if (productsRes.error) {
-        console.error('Error fetching products:', productsRes.error);
+        console.warn('metafields(count) indisponible, fallback sans compte:', productsRes.error.message);
+        productsRes = await runProducts(false);
       }
 
       const allProducts = (productsRes.data as any[]) || [];
@@ -298,11 +304,9 @@ export async function GET(request: Request) {
             variant.option2 && { name: optionNames?.option2_name || 'Option 2', value: variant.option2 },
             variant.option3 && { name: optionNames?.option3_name || 'Option 3', value: variant.option3 },
           ].filter(Boolean),
-          metafields: (variant.variant_metafields || []).map((mf: { namespace: string; key: string; value: string }) => ({
-            namespace: mf.namespace,
-            key: mf.key,
-            value: mf.value,
-          })),
+          // Liste : on n'envoie que le NOMBRE de métachamps (badge), via l'agrégat imbriqué.
+          // Les valeurs sont chargées à l'ouverture de la fiche via /api/products/metafields.
+          metafieldsCount: variant.variant_metafields?.[0]?.count ?? 0,
         };
       });
 

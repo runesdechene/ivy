@@ -28,6 +28,8 @@ export interface ProductData {
     price?: number;
     shopifyActive?: boolean;
     options: Array<{ name: string; value: string }>;
+    /** Compte de métachamps (liste, léger). Les valeurs sont chargées à l'ouverture de la fiche. */
+    metafieldsCount?: number;
     metafields?: Array<{ namespace: string; key: string; value: string }>;
   }>;
 }
@@ -45,9 +47,10 @@ export function ProductCard({ product, onClick, expectMetafields = false }: Prod
   const localVariants = product.variants.filter(v => v.shopifyActive === false);
   const localStock = localVariants.reduce((sum, v) => sum + Math.max(0, v.quantity), 0);
 
-  // Métachamps manquants
+  // Métachamps manquants — basé sur le COMPTE par variante (la liste n'envoie pas les valeurs)
+  const mfCount = (v: ProductData['variants'][number]) => v.metafieldsCount ?? (v.metafields?.length || 0);
   const shopifyVariants = product.variants.filter(v => v.shopifyActive !== false);
-  const variantsWithMeta = shopifyVariants.filter(v => (v.metafields?.length || 0) > 0);
+  const variantsWithMeta = shopifyVariants.filter(v => mfCount(v) > 0);
 
   let missingMetafieldsCount = 0;
   if (shopifyVariants.length > 0) {
@@ -56,8 +59,8 @@ export function ProductCard({ product, onClick, expectMetafields = false }: Prod
       if (expectMetafields) missingMetafieldsCount = shopifyVariants.length;
     } else {
       // Au moins une variante en a — comparer au minimum (anti-faux positif Recto/Verso)
-      const minMetafields = variantsWithMeta.reduce((min, v) => Math.min(min, v.metafields!.length), Infinity);
-      missingMetafieldsCount = shopifyVariants.filter(v => (v.metafields?.length || 0) < minMetafields).length;
+      const minMetafields = variantsWithMeta.reduce((min, v) => Math.min(min, mfCount(v)), Infinity);
+      missingMetafieldsCount = shopifyVariants.filter(v => mfCount(v) < minMetafields).length;
     }
   }
 
