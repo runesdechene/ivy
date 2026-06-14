@@ -30,27 +30,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
+  // État d'auth : abonnement monté UNE SEULE FOIS (plus de re-souscription / re-getSession
+  // à chaque navigation, qui relançait toute la cascade user → shop → emplacement → fetch).
+  // On dédoublonne `user` par id : Supabase émet plusieurs events au démarrage
+  // (INITIAL_SESSION, parfois TOKEN_REFRESHED) ; sans ça chaque event recréait un nouvel
+  // objet `user` et déclenchait des refetch inutiles partout dans l'app.
   useEffect(() => {
-    // Récupérer la session initiale
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    const apply = (s: Session | null) => {
+      setSession(s);
+      const nextId = s?.user?.id ?? null;
+      setUser((prev) => (prev?.id === nextId ? prev : s?.user ?? null));
       setLoading(false);
+    };
 
-      // Rediriger vers /login si non authentifié et pas sur une page publique
-      const publicPaths = ['/login', '/signup'];
-      if (!session && !publicPaths.includes(pathname)) {
-        router.push('/login');
-      }
-    });
+    supabase.auth.getSession().then(({ data: { session } }) => apply(session));
 
-    // Écouter les changements d'authentification
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
-
+      (event, session) => {
+        apply(session);
         if (event === 'SIGNED_OUT') {
           router.push('/login');
         }
@@ -58,7 +55,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
 
     return () => subscription.unsubscribe();
-  }, [router, pathname]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Garde de route : redirige vers /login si non authentifié. Effet séparé et léger —
+  // se ré-évalue à chaque navigation sans toucher à l'abonnement auth.
+  useEffect(() => {
+    if (loading) return;
+    const publicPaths = ['/login', '/signup'];
+    if (!session && !publicPaths.includes(pathname)) {
+      router.push('/login');
+    }
+  }, [loading, session, pathname, router]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
