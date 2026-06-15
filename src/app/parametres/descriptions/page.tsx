@@ -60,6 +60,9 @@ export default function DescriptionsPage() {
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
     ],
     content: '',
+    // Next.js App Router + React 19 : sans ce flag, l'éditeur est rendu côté
+    // serveur → mismatch d'hydratation → ProseMirror devient non éditable.
+    immediatelyRender: false,
   });
 
   const fetchData = useCallback(async () => {
