@@ -10,6 +10,9 @@ import '@mantine/core/styles.css';
 import '@mantine/dates/styles.css';
 import '@mantine/nprogress/styles.css';
 import '@mantine/notifications/styles.css';
+// Doit être importé après @mantine/core/styles.css : fournit le style de la
+// zone d'édition ProseMirror (sans lui, le contenu s'effondre et devient illisible).
+import '@mantine/tiptap/styles.css';
 import './globals.scss';
 
 const inter = Inter({
