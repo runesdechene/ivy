@@ -735,8 +735,16 @@ export default function OrderDetailPage() {
 
     // For completed: use streaming endpoint with terminal (chunked for Netlify 26s limit)
     if (newStatus === 'completed') {
+      if (!currentLocation) {
+        notifications.show({
+          title: 'Emplacement requis',
+          message: 'Sélectionnez un emplacement de stock avant d\'ajouter au stock.',
+          color: 'orange',
+        });
+        return;
+      }
       const validatedCount = items.filter(i => i.is_validated).length;
-      if (!confirm(`Terminer cette commande ?\n\n${validatedCount} article(s) validé(s) seront ajoutés au stock et synchronisés vers Shopify.\n\nCette action est irréversible.`)) {
+      if (!confirm(`Terminer cette commande ?\n\n${validatedCount} article(s) validé(s) seront ajoutés au stock « ${currentLocation.name} » et synchronisés vers Shopify.\n\nVérifiez que c'est le bon emplacement. Cette action est irréversible.`)) {
         return;
       }
 
@@ -855,6 +863,15 @@ export default function OrderDetailPage() {
   // Réessayer les articles échoués ou en attente (streaming, chunked)
   const retryFailedStock = async () => {
     if (!currentShop || !order) return;
+    if (!currentLocation) {
+      notifications.show({
+        title: 'Emplacement requis',
+        message: 'Sélectionnez un emplacement de stock avant de réessayer.',
+        color: 'orange',
+      });
+      return;
+    }
+    if (!confirm(`Ajouter les articles restants au stock « ${currentLocation.name} » ?\n\nVérifiez que c'est le bon emplacement.`)) return;
 
     setSaving(true);
     try {
