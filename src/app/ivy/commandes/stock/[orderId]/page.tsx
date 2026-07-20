@@ -1022,6 +1022,42 @@ export default function OrderDetailPage() {
   const statusLabel = STATUS_LABELS[order.status];
   const statusVariant = STATUS_VARIANTS[order.status];
 
+  // Menu d'actions secondaires (recalcul prix / refresh métachamps).
+  // Accessible à tous les statuts éditables, pas seulement en brouillon —
+  // sinon il fallait repasser la commande en brouillon juste pour rafraîchir.
+  const secondaryActionsMenu = (
+    <div className={styles.kebabWrap} ref={kebabRef}>
+      <button
+        type="button"
+        className={styles.btnKebab}
+        onClick={() => setKebabOpen(v => !v)}
+        aria-label="Actions secondaires"
+      >
+        <IconDots size={14} />
+      </button>
+      {kebabOpen && (
+        <div className={styles.kebabMenu}>
+          <button
+            type="button"
+            className={styles.kebabItem}
+            onClick={recalculatePrices}
+            disabled={items.length === 0 || saving}
+          >
+            <IconRefresh size={14} /> Recalculer les prix
+          </button>
+          <button
+            type="button"
+            className={styles.kebabItem}
+            onClick={refreshMetafields}
+            disabled={items.length === 0 || saving}
+          >
+            <IconTag size={14} /> Rafraîchir métachamps
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className={styles.page}>
       {/* Back button */}
@@ -1100,36 +1136,7 @@ export default function OrderDetailPage() {
             </Button>
 
             {/* Kebab for secondary actions */}
-            <div className={styles.kebabWrap} ref={kebabRef}>
-              <button
-                type="button"
-                className={styles.btnKebab}
-                onClick={() => setKebabOpen(v => !v)}
-                aria-label="Actions secondaires"
-              >
-                <IconDots size={14} />
-              </button>
-              {kebabOpen && (
-                <div className={styles.kebabMenu}>
-                  <button
-                    type="button"
-                    className={styles.kebabItem}
-                    onClick={recalculatePrices}
-                    disabled={items.length === 0 || saving}
-                  >
-                    <IconRefresh size={14} /> Recalculer les prix
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.kebabItem}
-                    onClick={refreshMetafields}
-                    disabled={items.length === 0 || saving}
-                  >
-                    <IconTag size={14} /> Rafraîchir métachamps
-                  </button>
-                </div>
-              )}
-            </div>
+            {secondaryActionsMenu}
           </>
         )}
 
@@ -1151,6 +1158,7 @@ export default function OrderDetailPage() {
             >
               Marquer comme Produite
             </Button>
+            {secondaryActionsMenu}
           </>
         )}
 
@@ -1181,6 +1189,7 @@ export default function OrderDetailPage() {
             >
               Terminer et ajouter au stock
             </Button>
+            {secondaryActionsMenu}
           </>
         )}
 
