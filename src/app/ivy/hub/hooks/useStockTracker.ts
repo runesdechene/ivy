@@ -17,7 +17,7 @@ interface UseStockTrackerReturn {
 
 export function useStockTracker(): UseStockTrackerReturn {
   const [movements, setMovements] = useState<StockMovement[]>([]);
-  const [isReturnMode, setReturnMode] = useState(false);
+  const [isReturnMode, setIsReturnMode] = useState(false);
 
   const addMovement = useCallback((item: Omit<StockMovement, 'quantity'>) => {
     setMovements(prev => {
@@ -56,6 +56,24 @@ export function useStockTracker(): UseStockTrackerReturn {
           : m
       );
     });
+  }, []);
+
+  /**
+   * Bascule sortie ↔ retour. Le panier suit : les lignes déjà saisies changent
+   * de signe (−2 → +2) au lieu d'être à ressaisir. L'en-tête du panier annonce
+   * déjà « Sorties » ou « Entrées » pour tout le panier — il est donc homogène
+   * par construction.
+   */
+  const setReturnMode = useCallback((enabled: boolean) => {
+    setIsReturnMode(enabled);
+    setMovements(prev =>
+      prev.map(m => {
+        const flipped = enabled ? Math.abs(m.quantity) : -Math.abs(m.quantity);
+        if (flipped === m.quantity) return m;
+        // Le sens change → l'erreur de la validation précédente ne veut plus rien dire
+        return { ...m, quantity: flipped, syncError: undefined };
+      }),
+    );
   }, []);
 
   const clearMovements = useCallback(() => {
