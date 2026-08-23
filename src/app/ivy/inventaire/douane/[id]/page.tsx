@@ -79,6 +79,7 @@ interface FormState {
   /** Titre et sous-titre de la feuille imprimée. */
   docTitre: string;
   docSousTitre: string;
+  departedOn: string;
   raisonSociale: string;
   nomPrenom: string;
   adresseSiege: string;
@@ -179,6 +180,7 @@ export default function DouanePassageDetailPage() {
     packagingKg: {},
     docTitre: '',
     docSousTitre: '',
+    departedOn: '',
     raisonSociale: '',
     nomPrenom: '',
     adresseSiege: '',
@@ -227,6 +229,7 @@ export default function DouanePassageDetailPage() {
           packagingKg: packs,
           docTitre: data.passage?.doc_titre ?? '',
           docSousTitre: data.passage?.doc_sous_titre ?? '',
+          departedOn: data.passage?.departed_on ?? '',
           raisonSociale: data.passage?.raison_sociale ?? '',
           nomPrenom: data.passage?.nom_prenom ?? '',
           adresseSiege: data.passage?.adresse_siege ?? '',
@@ -269,6 +272,7 @@ export default function DouanePassageDetailPage() {
         customsLabels: next.customsLabels,
         docTitre: next.docTitre,
         docSousTitre: next.docSousTitre,
+        departedOn: next.departedOn || null,
         raisonSociale: next.raisonSociale,
         nomPrenom: next.nomPrenom,
         adresseSiege: next.adresseSiege,
@@ -346,7 +350,7 @@ export default function DouanePassageDetailPage() {
   }, [savePatch]);
 
   const commitDocField = useCallback((
-    field: 'docTitre' | 'docSousTitre' | 'raisonSociale' | 'nomPrenom' | 'adresseSiege'
+    field: 'docTitre' | 'docSousTitre' | 'departedOn' | 'raisonSociale' | 'nomPrenom' | 'adresseSiege'
       | 'adresseExposition' | 'dateExposition' | 'dateRetourPrevue' | 'dateApurement',
     value: string,
   ) => {
@@ -612,7 +616,7 @@ export default function DouanePassageDetailPage() {
                 {passage.status === 'open' ? 'Ouvert' : 'Clôturé'}
               </span>
               <span className={styles.subSep}>·</span>
-              <span>Départ le {formatDate(passage.departed_on)}</span>
+              <span>Entrée sur le territoire le {formatDate(passage.departed_on)}</span>
               {passage.returned_on && (
                 <>
                   <span className={styles.subSep}>·</span>
@@ -773,6 +777,7 @@ export default function DouanePassageDetailPage() {
 
         <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="sm" mb="sm">
           {([
+            ['departedOn', "Date d'entrée sur le territoire (AAAA-MM-JJ)"],
             ['raisonSociale', 'Raison sociale'],
             ['nomPrenom', 'Nom et prénom'],
             ['adresseSiege', 'Adresse du siège social (France)'],

@@ -222,7 +222,7 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
  <b>Lieu d'exposition</b> ${esc(passage.adresse_exposition) || '—'}<br>
  <b>Dates d'exposition</b> ${esc(passage.date_exposition) || '—'}<br>
  <b>Emplacement de départ</b> ${esc(passage.location_name)}<br>
- <b>Date de départ</b> ${esc(passage.departed_on)}<br>
+ <b>Date d'entrée sur le territoire</b> ${esc(passage.departed_on)}<br>
  <b>Date de retour prévue</b> ${esc(passage.date_retour_prevue) || '—'}<br>
  ${passage.date_apurement ? `<b>Date d'apurement</b> ${esc(passage.date_apurement)}<br>` : ''}
  ${closed ? `<b>Date de retour</b> ${esc(passage.returned_on ?? '—')}<br>` : ''}

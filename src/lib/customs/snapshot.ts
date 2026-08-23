@@ -247,6 +247,15 @@ export async function buildSnapshot(
       mismatch = Math.abs(total - (Number(v.cost) || 0)) >= 0.005;
     }
 
+    // Repli : quand aucune regle de prix ne couvre la variante, on utilise le
+    // cout enregistre. La ventilation textile/impression reste inconnue, mais le
+    // TOTAL declare est juste — et c'est le total que la douane regarde. Sans ce
+    // repli, la ligne sortirait a zero, ce qui est bien pire qu'imprecis.
+    if (textile === null && (Number(v.cost) || 0) > 0) {
+      textile = Number(v.cost);
+      print = 0;
+    }
+
     const price = Number(v.price) || 0;
 
     out.push({
