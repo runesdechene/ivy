@@ -355,11 +355,20 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
   } else if (closed) {
     const venduTotal = Math.max(0, pieces - returned);
     const unitHt = pieces > 0 ? customsChf / pieces : 0;
-    html += `<p style="font-size:8pt;color:#555;margin-top:3mm">
-     TVA réellement due : elle ne porte que sur ce qui est resté en Suisse, soit
-     <b>${venduTotal}</b> pièce(s) pour <b>${num(unitHt * venduTotal)} CHF HT</b>,
-     donc <b>${num(vatOnImport(unitHt * venduTotal))} CHF</b> de TVA — à opposer aux
-     ${num(vatOnImport(customsChf))} CHF avancés à l'entrée.
+    // La TVA reellement due porte sur la CONTRE-PRESTATION encaissee, comme la
+    // colonne « TVA due » du tableau : les deux doivent donner le meme montant,
+    // sinon le document se contredit lui-meme.
+    let caTtcTotal = 0;
+    for (const [type, t] of byType) {
+      caTtcTotal += (prices[type] ?? 0) * Math.max(0, t.qty - t.ret);
+    }
+    const baseTotale = caTtcTotal / vatDiv;
+    const tvaDue = caTtcTotal - baseTotale;
+    html += `<p style="font-size:7.5pt;color:#555;margin-top:2mm">
+     <b>TVA réellement due</b> : elle porte sur la contre-prestation encaissée en Suisse,
+     soit <b>${venduTotal}</b> pièce(s) vendues pour <b>${num(caTtcTotal)} CHF TTC</b>,
+     dont <b>${num(baseTotale)} CHF</b> de base imposable et <b>${num(tvaDue)} CHF</b> de TVA —
+     à opposer aux ${num(vatOnImport(customsChf))} CHF avancés à l'entrée.
      « Vendu » vaut ici « parti − revenu » ; le chiffre de la caisse figure sur les feuilles produit.</p>`;
   }
   if (closed && ecarts > 0) {
