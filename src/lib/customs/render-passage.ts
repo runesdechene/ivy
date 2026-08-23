@@ -101,7 +101,10 @@ export function renderPassage(
   const hasPackaging = Object.values(packaging).some(v => Number(v) > 0);
 
   const num = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
-  const kg = (g: number) => (g / 1000).toFixed(3);
+  // Poids arrondis au dixieme de kilo : trois decimales n'apportent rien a un
+  // douanier, et l'entier ecraserait les petites lignes (0,72 kg -> 1 kg).
+  const kg = (g: number) => (g / 1000).toFixed(1);
+  const kgv = (v: number) => v.toFixed(1);
 
   /** Prix de vente TTC en CHF : celui saisi pour le type, sinon le prix Ivy converti. */
   const ttcOf = (it: PassageItem) => {
@@ -187,8 +190,8 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
  <b>Taux appliqué</b> 1 EUR = ${rate} CHF<br>
  <b>TVA suisse déduite</b> ${passage.vat_pct} %<br>
  <b>Origine des marchandises</b> ${esc(passage.origin)}<br>
- <b>Poids net total</b> ${(netG / 1000).toFixed(3)} kg<br>
- <b>Poids brut total</b> ${grossKg !== null ? grossKg.toFixed(3) + ' kg' + (hasPackaging ? ' (net + caisses)' : ' (pesé)') : '— à compléter'}<br>
+ <b>Poids net total</b> ${kgv(netG / 1000)} kg<br>
+ <b>Poids brut total</b> ${grossKg !== null ? kgv(grossKg) + ' kg' + (hasPackaging ? ' (net + caisses)' : ' (pesé)') : '— à compléter'}<br>
  <b>Pièces déclarées</b> <span class="big">${pieces}</span><br>
  ${closed ? `<b>Revenues</b> <span class="big">${returned}</span> &nbsp;·&nbsp; <b style="min-width:auto">vendues (caisse)</b> <span class="big">${sold}</span><br>` : ''}
  <b>Valeur douanière totale</b> <span class="big">${num(customsChf / rate)} EUR &nbsp;/&nbsp; ${num(customsChf)} CHF</span><br>
@@ -222,8 +225,8 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
     const gross = grossOfType(type, t.netG);
     const unitHt = t.qty > 0 ? t.chf / t.qty : 0;
     html += `<tr><td class="l"><b>${esc(labelOf(type))}</b></td><td class="l">${esc(type)}</td><td>${t.qty}</td><td>${kg(t.netG)}</td>` +
-      `<td>${hasPackaging ? packagingOf(type).toFixed(3) : '—'}</td>` +
-      `<td>${gross !== null ? gross.toFixed(3) : '—'}</td>` +
+      `<td>${hasPackaging ? kgv(packagingOf(type)) : '—'}</td>` +
+      `<td>${gross !== null ? kgv(gross) : '—'}</td>` +
       `<td>${num(t.chf / rate)}</td><td>${num(t.chf)}</td><td>${num(vatOnImport(t.chf))}</td>` +
       (closed
         ? (() => {
@@ -241,8 +244,8 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
   }
 
   html += `</tbody><tfoot><tr><td class="l" colspan="2">TOTAL</td><td>${pieces}</td><td>${kg(netG)}</td>` +
-    `<td>${hasPackaging ? totalPackaging.toFixed(3) : '—'}</td>` +
-    `<td>${grossKg !== null ? grossKg.toFixed(3) : '—'}</td>` +
+    `<td>${hasPackaging ? kgv(totalPackaging) : '—'}</td>` +
+    `<td>${grossKg !== null ? kgv(grossKg) : '—'}</td>` +
     `<td>${num(customsChf / rate)}</td><td>${num(customsChf)}</td><td>${num(vatOnImport(customsChf))}</td>` +
     (closed
       ? (() => {

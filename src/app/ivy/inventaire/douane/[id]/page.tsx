@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Fragment, memo, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Loader, Paper, Table, Button, Group, Modal, NumberInput, TextInput,
@@ -67,6 +67,58 @@ interface FormState {
   /** Poids des caisses par type, en kg. */
   packagingKg: Record<string, number | ''>;
 }
+
+/**
+ * Champ de saisie isolé, avec son propre état.
+ *
+ * Sans cette isolation, chaque frappe remonte dans l'état de la page et re-rend
+ * les centaines de lignes de l'instantané — la saisie devient inutilisable.
+ * Ici, taper ne touche personne : la valeur ne remonte qu'à la sortie du champ.
+ */
+const LabelCell = memo(function LabelCell({
+  initial, placeholder, onCommit,
+}: { initial: string; placeholder: string; onCommit: (value: string) => void }) {
+  const [value, setValue] = useState(initial);
+  const seen = useRef(initial);
+  useEffect(() => {
+    if (seen.current !== initial) { seen.current = initial; setValue(initial); }
+  }, [initial]);
+  return (
+    <TextInput
+      size="xs"
+      placeholder={placeholder}
+      value={value}
+      onChange={(e) => setValue(e.currentTarget.value)}
+      onBlur={() => { if (value !== initial) onCommit(value); }}
+      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+    />
+  );
+});
+
+/** Même principe pour le poids des caisses. */
+const PackagingCell = memo(function PackagingCell({
+  initial, onCommit,
+}: { initial: number | ''; onCommit: (value: number | '') => void }) {
+  const [value, setValue] = useState<number | ''>(initial);
+  const seen = useRef(initial);
+  useEffect(() => {
+    if (seen.current !== initial) { seen.current = initial; setValue(initial); }
+  }, [initial]);
+  return (
+    <NumberInput
+      size="xs"
+      value={value}
+      onChange={(v) => setValue(typeof v === 'number' ? v : '')}
+      onBlur={() => { if (value !== initial) onCommit(value); }}
+      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+      decimalScale={1}
+      step={0.5}
+      min={0}
+      placeholder="0"
+      styles={{ input: { textAlign: 'right' } }}
+    />
+  );
+});
 
 function formatDate(d: string | null): string {
   if (!d) return '—';
@@ -216,24 +268,21 @@ export default function DouanePassageDetailPage() {
     });
   }, [debouncedSave]);
 
-  // Saisie libre : on met à jour l'affichage sans rien envoyer. L'enregistrement
-  // part à la sortie du champ — taper ne doit jamais déclencher de requête.
-  const updateLabel = useCallback((type: string, value: string) => {
-    setForm((prev) => ({ ...prev, customsLabels: { ...prev.customsLabels, [type]: value } }));
-  }, []);
-
-  const updatePackaging = useCallback((type: string, value: number | '') => {
+  // La frappe vit dans le composant enfant. Ici on ne reçoit que la valeur
+  // finale, à la sortie du champ : un seul rendu, une seule requête.
+  const commitLabel = useCallback((type: string, value: string) => {
     setForm((prev) => {
-      const next = { ...prev, packagingKg: { ...prev.packagingKg, [type]: value } };
-      debouncedSave(next);
+      const next = { ...prev, customsLabels: { ...prev.customsLabels, [type]: value } };
+      savePatch(next);
       return next;
     });
-  }, [debouncedSave]);
+  }, [savePatch]);
 
-  const commitLabels = useCallback(() => {
+  const commitPackaging = useCallback((type: string, value: number | '') => {
     setForm((prev) => {
-      savePatch(prev);
-      return prev;
+      const next = { ...prev, packagingKg: { ...prev.packagingKg, [type]: value } };
+      savePatch(next);
+      return next;
     });
   }, [savePatch]);
 
@@ -491,7 +540,7 @@ export default function DouanePassageDetailPage() {
         <div className={styles.metricCard}>
           <div className={styles.metricLabel}>Poids net</div>
           <div className={styles.metricValue}>
-            {computed.netWeightKg.toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
+            {computed.netWeightKg.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
             <span className={styles.metricUnit}>kg</span>
           </div>
         </div>
@@ -499,7 +548,7 @@ export default function DouanePassageDetailPage() {
           <div className={styles.metricLabel}>Poids brut</div>
           <div className={styles.metricValue}>
             {computed.grossWeightKg != null
-              ? computed.grossWeightKg.toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
+              ? computed.grossWeightKg.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
               : '—'}
             <span className={styles.metricUnit}>kg</span>
           </div>
@@ -622,43 +671,32 @@ export default function DouanePassageDetailPage() {
             {summary.rows.map((r) => (
               <Table.Tr key={r.type}>
                 <Table.Td>
-                  <TextInput
-                    size="xs"
+                  <LabelCell
+                    initial={form.customsLabels[r.type] ?? ''}
                     placeholder={r.type}
-                    value={form.customsLabels[r.type] ?? ''}
-                    onChange={(e) => updateLabel(r.type, e.currentTarget.value)}
-                    onBlur={commitLabels}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') e.currentTarget.blur();
-                    }}
+                    onCommit={(v) => commitLabel(r.type, v)}
                   />
                 </Table.Td>
                 <Table.Td><Text size="xs" c="dimmed">{r.type}</Text></Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>{r.qty}</Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>
-                  {(r.netG / 1000).toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg
+                  {(r.netG / 1000).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg
                 </Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>
-                  <NumberInput
-                    size="xs"
-                    value={form.packagingKg[r.type] ?? ''}
-                    onChange={(v) => updatePackaging(r.type, typeof v === 'number' ? v : '')}
-                    decimalScale={3}
-                    step={0.5}
-                    min={0}
-                    placeholder="0"
-                    styles={{ input: { textAlign: 'right' } }}
+                  <PackagingCell
+                    initial={form.packagingKg[r.type] ?? ''}
+                    onCommit={(v) => commitPackaging(r.type, v)}
                   />
                 </Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>
-                  {r.grossKg.toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg
+                  {r.grossKg.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg
                 </Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>{formatEur(r.customsEur)}</Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>{formatChf(r.customs)}</Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>{isClosed ? r.ret : '—'}</Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>{isClosed ? r.vendu : '—'}</Table.Td>
-                <Table.Td style={{ textAlign: 'right' }}>{isClosed ? `${r.netResteKg.toFixed(3)} kg` : '—'}</Table.Td>
-                <Table.Td style={{ textAlign: 'right' }}>{isClosed ? `${r.netVenduKg.toFixed(3)} kg` : '—'}</Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}>{isClosed ? `${r.netResteKg.toFixed(1)} kg` : '—'}</Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}>{isClosed ? `${r.netVenduKg.toFixed(1)} kg` : '—'}</Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>{isClosed ? formatChf(r.valResteChf) : '—'}</Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>{isClosed ? formatChf(r.valVenduChf) : '—'}</Table.Td>
               </Table.Tr>
@@ -669,20 +707,20 @@ export default function DouanePassageDetailPage() {
               <Table.Td colSpan={2}><b>TOTAL</b></Table.Td>
               <Table.Td style={{ textAlign: 'right' }}><b>{computed.pieces}</b></Table.Td>
               <Table.Td style={{ textAlign: 'right' }}>
-                <b>{computed.netWeightKg.toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg</b>
+                <b>{computed.netWeightKg.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg</b>
               </Table.Td>
               <Table.Td style={{ textAlign: 'right' }}>
-                <b>{summary.totalPackaging.toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg</b>
+                <b>{summary.totalPackaging.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg</b>
               </Table.Td>
               <Table.Td style={{ textAlign: 'right' }}>
-                <b>{summary.totalGrossKg.toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg</b>
+                <b>{summary.totalGrossKg.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg</b>
               </Table.Td>
               <Table.Td style={{ textAlign: 'right' }}><b>{formatEur(computed.customsValueEur)}</b></Table.Td>
               <Table.Td style={{ textAlign: 'right' }}><b>{formatChf(computed.customsValue)}</b></Table.Td>
               <Table.Td style={{ textAlign: 'right' }}><b>{isClosed ? summary.totalReste : '—'}</b></Table.Td>
               <Table.Td style={{ textAlign: 'right' }}><b>{isClosed ? summary.totalVendu : '—'}</b></Table.Td>
-              <Table.Td style={{ textAlign: 'right' }}><b>{isClosed ? `${summary.totalNetResteKg.toFixed(3)} kg` : '—'}</b></Table.Td>
-              <Table.Td style={{ textAlign: 'right' }}><b>{isClosed ? `${summary.totalNetVenduKg.toFixed(3)} kg` : '—'}</b></Table.Td>
+              <Table.Td style={{ textAlign: 'right' }}><b>{isClosed ? `${summary.totalNetResteKg.toFixed(1)} kg` : '—'}</b></Table.Td>
+              <Table.Td style={{ textAlign: 'right' }}><b>{isClosed ? `${summary.totalNetVenduKg.toFixed(1)} kg` : '—'}</b></Table.Td>
               <Table.Td style={{ textAlign: 'right' }}><b>{isClosed ? formatChf(summary.totalValResteChf) : '—'}</b></Table.Td>
               <Table.Td style={{ textAlign: 'right' }}><b>{isClosed ? formatChf(summary.totalValVenduChf) : '—'}</b></Table.Td>
             </Table.Tr>
@@ -691,7 +729,7 @@ export default function DouanePassageDetailPage() {
         {false && (
           <Alert color="rust" icon={<IconAlertTriangle size={16} />} mt="xs">
             Le poids brut saisi ({computed.grossWeightKg} kg) est <b>inférieur au poids net</b>
-            ({computed.netWeightKg.toFixed(3)} kg). Le brut comprend le net plus les caisses :
+            ({computed.netWeightKg.toFixed(1)} kg). Le brut comprend le net plus les caisses :
             il ne peut pas être plus petit. Vérifie ta pesée dans les paramètres.
           </Alert>
         )}
@@ -743,7 +781,7 @@ export default function DouanePassageDetailPage() {
                       <Table.Td>{it.color || '—'}</Table.Td>
                       <Table.Td style={{ textAlign: 'right' }}>{it.qty_departed}</Table.Td>
                       <Table.Td style={{ textAlign: 'right' }}>
-                        {it.weight_grams ? `${(it.lineWeightGrams / 1000).toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg` : '—'}
+                        {it.weight_grams ? `${(it.lineWeightGrams / 1000).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg` : '—'}
                       </Table.Td>
                       <Table.Td style={{ textAlign: 'right' }}>
                         {it.unit_cost_textile != null ? formatEur(it.unit_cost_textile) : '—'}
