@@ -10,7 +10,7 @@ import {
   IconPackage, IconCurrencyEuro, IconPalette, IconRuler2,
   IconChartBar, IconTrendingUp, IconMapPin, IconDownload,
   IconFileSpreadsheet, IconChevronDown, IconListDetails,
-  IconPrinter, IconFileCertificate, IconEPassport,
+  IconPrinter, IconEPassport,
 } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useRouter } from 'next/navigation';
@@ -71,42 +71,6 @@ export default function InventaireDashboardPage() {
   }, [fetchStats]);
 
   const saleValueOpts: SaleValueOptions = { include: includeSaleValue, modifier: saleValueModifier };
-
-  // --- Declaration douaniere suisse (formulaire 1187) ---
-  const [douaneOpened, douane] = useDisclosure(false);
-  const [douaneRate, setDouaneRate] = useState<number | ''>('');
-  const [douaneGross, setDouaneGross] = useState<number | ''>('');
-  const [douaneRef, setDouaneRef] = useState('');
-  const [douanePrices, setDouanePrices] = useState<Record<string, number | ''>>({});
-  const [douaneVat, setDouaneVat] = useState<number | ''>(8.1);
-
-  const handleDouane = useCallback(() => {
-    if (!currentShop || !currentLocation) return;
-    if (!douaneRate || Number(douaneRate) <= 0) {
-      notifications.show({
-        title: 'Taux manquant',
-        message: 'Saisis le taux EUR vers CHF du jour : il figure sur le document.',
-        color: 'red',
-      });
-      return;
-    }
-    const params = new URLSearchParams({
-      shopId: currentShop.id,
-      locationId: String(currentLocation.id),
-      rate: String(douaneRate),
-    });
-    if (douaneGross) params.append('gross', String(douaneGross));
-    if (douaneRef.trim()) params.append('ref', douaneRef.trim());
-    const prices: Record<string, number> = {};
-    for (const [type, v] of Object.entries(douanePrices)) {
-      if (typeof v === 'number' && v > 0) prices[type] = v;
-    }
-    if (Object.keys(prices).length > 0) params.append('prices', JSON.stringify(prices));
-    params.append('vat', String(douaneVat === '' ? 8.1 : douaneVat));
-    // Nouvel onglet : le document s'imprime depuis le navigateur (Ctrl+P).
-    window.open(`/api/customs/declaration?${params}`, '_blank');
-    douane.close();
-  }, [currentShop, currentLocation, douaneRate, douaneGross, douaneRef, douanePrices, douaneVat, douane]);
 
   const handleExportCsv = useCallback(async () => {
     if (!currentShop) return;
@@ -319,13 +283,6 @@ export default function InventaireDashboardPage() {
             <Menu.Divider />
             <Menu.Label>Douane</Menu.Label>
             <Menu.Item
-              leftSection={<IconFileCertificate size={16} />}
-              onClick={douane.open}
-              disabled={!currentLocation}
-            >
-              Déclaration suisse (1187)
-            </Menu.Item>
-            <Menu.Item
               leftSection={<IconEPassport size={16} />}
               onClick={() => router.push('/ivy/inventaire/douane')}
             >
@@ -335,90 +292,6 @@ export default function InventaireDashboardPage() {
         </Menu>
       </div>
 
-      <Modal
-        opened={douaneOpened}
-        onClose={douane.close}
-        title="Déclaration douanière suisse — formulaire 1187"
-        radius="md"
-        size="md"
-        scrollAreaComponent={undefined}
-        styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}
-      >
-        <Stack gap="sm">
-          <Text size="sm" c="dimmed">
-            Importation temporaire pour vente incertaine, depuis l&apos;emplacement{' '}
-            <b>{currentLocation?.name}</b>. Le document liste chaque produit sur sa
-            propre feuille, précédé d&apos;une feuille de résumé.
-          </Text>
-          <NumberInput
-            label="Taux du jour (1 EUR = ? CHF)"
-            description="Le taux officiel des douanes. Il est imprimé sur le document."
-            value={douaneRate}
-            onChange={(v) => setDouaneRate(typeof v === 'number' ? v : '')}
-            decimalScale={4}
-            step={0.01}
-            min={0}
-            required
-          />
-          <NumberInput
-            label="Poids brut total (kg)"
-            description="Tes caisses pesées, emballage compris. Réparti au prorata par type."
-            value={douaneGross}
-            onChange={(v) => setDouaneGross(typeof v === 'number' ? v : '')}
-            decimalScale={3}
-            step={1}
-            min={0}
-          />
-          <div>
-            <Text size="sm" fw={500}>Prix de vente en Suisse, TTC (CHF)</Text>
-            <Text size="xs" c="dimmed" mb={6}>
-              Tes prix pratiqués au stand. La valeur douanière en sera déduite hors taxe.
-              Un type laissé vide utilise le prix Ivy converti au taux.
-            </Text>
-            <Stack gap={6}>
-              {Object.keys(stats?.byProductType ?? {}).sort().map((type) => (
-                <NumberInput
-                  key={type}
-                  label={type}
-                  value={douanePrices[type] ?? ''}
-                  onChange={(v) =>
-                    setDouanePrices((prev) => ({ ...prev, [type]: typeof v === 'number' ? v : '' }))
-                  }
-                  suffix=" CHF"
-                  decimalScale={2}
-                  step={5}
-                  min={0}
-                  size="xs"
-                />
-              ))}
-            </Stack>
-          </div>
-          <NumberInput
-            label="TVA suisse (%)"
-            description="Déduite du prix majoré : la valeur douanière est hors taxe. 8,1 % en 2026."
-            value={douaneVat}
-            onChange={(v) => setDouaneVat(typeof v === 'number' ? v : '')}
-            suffix=" %"
-            decimalScale={2}
-            step={0.1}
-            min={0}
-          />
-          <TextInput
-            label="Référence 1187"
-            description="Facultatif — le numéro du formulaire, s'il est déjà attribué."
-            value={douaneRef}
-            onChange={(e) => setDouaneRef(e.currentTarget.value)}
-          />
-          <Group justify="flex-end" mt="xs">
-            <Button variant="subtle" color="gray" onClick={douane.close}>
-              Annuler
-            </Button>
-            <Button color="moss" leftSection={<IconFileCertificate size={16} />} onClick={handleDouane}>
-              Générer le document
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
 
       {/* Cartes principales */}
       <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md" className={styles.metricsGrid}>
