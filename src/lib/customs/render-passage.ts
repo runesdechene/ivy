@@ -77,6 +77,7 @@ const CSS = `
  .warn { border: 1px solid #b00; background: #fff3f3; padding: 3mm; margin: 4mm 0; }
  .warn h3 { margin: 0 0 1mm; font-size: 10pt; color: #b00; }
  .big { font-size: 11pt; }
+ th.retour, td.retour { border-left: 2px solid #444; }
  /* Colonnes du retour, imprimees vides a l'aller pour etre remplies a la main. */
  td.tofill { background: #fafafa; }
  th.tofill { color: #666; font-style: italic; }
@@ -213,7 +214,9 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
   }).join('')}</tbody></table>
 
 <h2>Détail par type de produit</h2>
-<table><thead><tr>
+<table><thead>
+<tr><th colspan="9">Départ</th><th colspan="6" class="retour">Retour</th></tr>
+<tr>
  <th class="l">Objet</th><th class="l">Type Ivy</th><th>Quantité</th><th>Poids net (kg)</th><th>Caisses (kg)</th><th>Poids brut (kg)</th>
  <th>Valeur douanière au départ<br>HT (EUR)</th><th>Valeur douanière au départ<br>HT (CHF)</th><th>TVA import CHF</th>
  ${closed
@@ -289,6 +292,62 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
     html += `</ul></div>`;
   }
   html += `</div>`;
+
+  // ---------- Détail par produit ----------
+  // La même lecture, modèle par modèle : Avalon, Yggdrasil…
+  {
+    const byTitle = new Map<string, {
+      titre: string; type: string | null;
+      qty: number; netG: number; chf: number; ret: number;
+    }>();
+    for (const it of items) {
+      const r = byTitle.get(it.product_title) ?? {
+        titre: it.product_title, type: it.product_type,
+        qty: 0, netG: 0, chf: 0, ret: 0,
+      };
+      r.qty += it.qty_departed;
+      r.netG += (it.weight_grams ?? 0) * it.qty_departed;
+      r.chf += customsChfOf(it) * it.qty_departed;
+      r.ret += it.qty_returned ?? 0;
+      byTitle.set(it.product_title, r);
+    }
+    const prods = [...byTitle.values()].sort(
+      (a, b) => (a.type ?? '').localeCompare(b.type ?? '') || a.titre.localeCompare(b.titre),
+    );
+
+    html += `<h2>Détail par produit</h2>
+<table><thead>
+<tr><th colspan="5">Départ</th><th colspan="5" class="retour">Retour</th></tr>
+<tr>
+ <th class="l">Produit</th><th class="l">Type</th><th>Qté de départ</th><th>Poids net (kg)</th><th>Valeur douanière (CHF)</th>
+ <th class="retour">Qté restante</th><th>Qté vendue</th><th>Poids restant (kg)</th><th>Valeur restante</th><th>Valeur vendue</th>
+</tr></thead><tbody>${prods.map(r => {
+      const vendu = Math.max(0, r.qty - r.ret);
+      const unitG = r.qty > 0 ? r.netG / r.qty : 0;
+      const unitHt = r.qty > 0 ? r.chf / r.qty : 0;
+      const vide = '<td class="tofill"></td>';
+      return `<tr>
+ <td class="l">${esc(r.titre)}</td><td class="l">${esc(r.type ?? '—')}</td>
+ <td>${r.qty}</td><td>${kg(r.netG)}</td><td>${num(r.chf)}</td>
+ ${closed
+   ? `<td class="retour">${r.ret}</td><td>${vendu}</td><td>${kg(unitG * r.ret)}</td>` +
+     `<td>${num(unitHt * r.ret)}</td><td>${num(unitHt * vendu)}</td>`
+   : `<td class="tofill retour"></td>${vide}${vide}${vide}${vide}`}
+</tr>`;
+    }).join('')}</tbody>
+<tfoot><tr>
+ <td class="l" colspan="2">TOTAL</td><td>${pieces}</td><td>${kg(netG)}</td><td>${num(customsChf)}</td>
+ ${closed
+   ? (() => {
+       const venduTotal = Math.max(0, pieces - returned);
+       const unitG = pieces > 0 ? netG / pieces : 0;
+       const unitHt = pieces > 0 ? customsChf / pieces : 0;
+       return `<td class="retour">${returned}</td><td>${venduTotal}</td>` +
+         `<td>${kg(unitG * returned)}</td><td>${num(unitHt * returned)}</td><td>${num(unitHt * venduTotal)}</td>`;
+     })()
+   : '<td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>'}
+</tr></tfoot></table>`;
+  }
 
   // La feuille de resume seule : c'est ce que la douane demande en tete de dossier.
   if (options.onlySummary) return html + `</body></html>`;

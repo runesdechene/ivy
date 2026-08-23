@@ -414,6 +414,40 @@ export default function DouanePassageDetailPage() {
     };
   }, [computed, form.packagingKg]);
 
+  // --- Detail par produit : Avalon, Yggdrasil... ---
+  const parProduit = useMemo(() => {
+    const rows = new Map<string, {
+      titre: string; type: string | null;
+      qty: number; netG: number; customs: number; ret: number;
+    }>();
+    for (const it of computed.lines) {
+      const key = it.product_title;
+      const r = rows.get(key) ?? {
+        titre: it.product_title, type: it.product_type,
+        qty: 0, netG: 0, customs: 0, ret: 0,
+      };
+      r.qty += it.qty_departed;
+      r.netG += it.lineWeightGrams;
+      r.customs += it.lineCustomsValue;
+      r.ret += it.qty_returned ?? 0;
+      rows.set(key, r);
+    }
+    return [...rows.values()]
+      .map((r) => {
+        const vendu = Math.max(0, r.qty - r.ret);
+        const unitG = r.qty > 0 ? r.netG / r.qty : 0;
+        const unitHt = r.qty > 0 ? r.customs / r.qty : 0;
+        return {
+          ...r,
+          vendu,
+          netResteKg: (unitG * r.ret) / 1000,
+          valResteChf: unitHt * r.ret,
+          valVenduChf: unitHt * vendu,
+        };
+      })
+      .sort((a, b) => (a.type ?? '').localeCompare(b.type ?? '') || a.titre.localeCompare(b.titre));
+  }, [computed]);
+
   const missing = useMemo(() => {
     let weight = 0;
     let rule = 0;
@@ -647,6 +681,12 @@ export default function DouanePassageDetailPage() {
         <Table striped highlightOnHover withTableBorder>
           <Table.Thead>
             <Table.Tr>
+              <Table.Th colSpan={7} style={{ textAlign: 'center' }}>Départ</Table.Th>
+              <Table.Th colSpan={6} style={{ textAlign: 'center', borderLeft: '2px solid var(--mantine-color-gray-4)' }}>
+                Retour
+              </Table.Th>
+            </Table.Tr>
+            <Table.Tr>
               <Table.Th style={{ minWidth: 180 }}>Objet (libellé douanier)</Table.Th>
               <Table.Th>Type Ivy</Table.Th>
               <Table.Th style={{ textAlign: 'right' }}>Qté de départ</Table.Th>
@@ -733,6 +773,69 @@ export default function DouanePassageDetailPage() {
             il ne peut pas être plus petit. Vérifie ta pesée dans les paramètres.
           </Alert>
         )}
+        <h3 className={styles.panelTitle} style={{ marginTop: '1.5rem' }}>Détail par produit</h3>
+        <Text size="xs" c="dimmed" mb="xs">
+          La même lecture, modèle par modèle. Le poids brut n&apos;y figure pas :
+          les caisses se comptent par type, pas par modèle.
+        </Text>
+        <Table striped highlightOnHover withTableBorder>
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th colSpan={5} style={{ textAlign: 'center' }}>Départ</Table.Th>
+              <Table.Th colSpan={5} style={{ textAlign: 'center', borderLeft: '2px solid var(--mantine-color-gray-4)' }}>
+                Retour
+              </Table.Th>
+            </Table.Tr>
+            <Table.Tr>
+              <Table.Th style={{ minWidth: 200 }}>Produit</Table.Th>
+              <Table.Th>Type</Table.Th>
+              <Table.Th style={{ textAlign: 'right' }}>Qté de départ</Table.Th>
+              <Table.Th style={{ textAlign: 'right' }}>Poids net (kg)</Table.Th>
+              <Table.Th style={{ textAlign: 'right' }}>Valeur douanière (CHF)</Table.Th>
+              <Table.Th style={{ textAlign: 'right', borderLeft: '2px solid var(--mantine-color-gray-4)' }}>
+                Qté restante
+              </Table.Th>
+              <Table.Th style={{ textAlign: 'right' }}>Qté vendue</Table.Th>
+              <Table.Th style={{ textAlign: 'right' }}>Poids restant (kg)</Table.Th>
+              <Table.Th style={{ textAlign: 'right' }}>Valeur restante</Table.Th>
+              <Table.Th style={{ textAlign: 'right' }}>Valeur vendue</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {parProduit.map((r) => (
+              <Table.Tr key={r.titre}>
+                <Table.Td>{r.titre}</Table.Td>
+                <Table.Td><Text size="xs" c="dimmed">{r.type ?? '—'}</Text></Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}>{r.qty}</Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}>{(r.netG / 1000).toFixed(1)}</Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}>{formatChf(r.customs)}</Table.Td>
+                <Table.Td style={{ textAlign: 'right', borderLeft: '2px solid var(--mantine-color-gray-4)' }}>
+                  {isClosed ? r.ret : '—'}
+                </Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}>{isClosed ? r.vendu : '—'}</Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}>{isClosed ? r.netResteKg.toFixed(1) : '—'}</Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}>{isClosed ? formatChf(r.valResteChf) : '—'}</Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}>{isClosed ? formatChf(r.valVenduChf) : '—'}</Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+          <Table.Tfoot>
+            <Table.Tr>
+              <Table.Td colSpan={2}><b>TOTAL</b></Table.Td>
+              <Table.Td style={{ textAlign: 'right' }}><b>{computed.pieces}</b></Table.Td>
+              <Table.Td style={{ textAlign: 'right' }}><b>{computed.netWeightKg.toFixed(1)}</b></Table.Td>
+              <Table.Td style={{ textAlign: 'right' }}><b>{formatChf(computed.customsValue)}</b></Table.Td>
+              <Table.Td style={{ textAlign: 'right', borderLeft: '2px solid var(--mantine-color-gray-4)' }}>
+                <b>{isClosed ? summary.totalReste : '—'}</b>
+              </Table.Td>
+              <Table.Td style={{ textAlign: 'right' }}><b>{isClosed ? summary.totalVendu : '—'}</b></Table.Td>
+              <Table.Td style={{ textAlign: 'right' }}><b>{isClosed ? summary.totalNetResteKg.toFixed(1) : '—'}</b></Table.Td>
+              <Table.Td style={{ textAlign: 'right' }}><b>{isClosed ? formatChf(summary.totalValResteChf) : '—'}</b></Table.Td>
+              <Table.Td style={{ textAlign: 'right' }}><b>{isClosed ? formatChf(summary.totalValVenduChf) : '—'}</b></Table.Td>
+            </Table.Tr>
+          </Table.Tfoot>
+        </Table>
+
         <Text size="xs" c="dimmed" mt="xs">
           Le poids brut d&apos;une ligne vaut son poids net plus celui de ses caisses.
           Laisse à zéro si ce type voyage sans emballage propre.

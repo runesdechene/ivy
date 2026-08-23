@@ -44,6 +44,7 @@ interface VariantRow {
 interface ProductRow {
   id: string;
   title: string;
+  status: string | null;
   product_type: string | null;
   image_url: string | null;
   option1_name: string | null;
@@ -88,11 +89,17 @@ function optionOf(v: VariantRow, p: ProductRow, names: string[]): string | null 
  * impression = majorations de métachamp. Un écart avec `product_variants.cost`
  * n'est jamais corrigé en silence : la ligne est marquée `incomplete`.
  */
+export interface SnapshotResult {
+  items: SnapshotItem[];
+  /** Produits archivés écartés de l'instantané, avec leurs quantités. */
+  archivesExclus: { titre: string; pieces: number }[];
+}
+
 export async function buildSnapshot(
   supabase: SupabaseClient,
   shopId: string,
   locationShopifyId: string,
-): Promise<SnapshotItem[]> {
+): Promise<SnapshotResult> {
   const levels = await page<{ variant_id: string; quantity: number }>(supabase, (a, b) =>
     supabase
       .from('inventory_levels')
@@ -114,7 +121,7 @@ export async function buildSnapshot(
   const products = await page<ProductRow>(supabase, (a, b) =>
     supabase
       .from('products')
-      .select('id, title, product_type, image_url, option1_name, option2_name, option3_name')
+      .select('id, title, status, product_type, image_url, option1_name, option2_name, option3_name')
       .eq('shop_id', shopId)
       .order('id')
       .range(a, b),
@@ -185,12 +192,21 @@ export async function buildSnapshot(
   }
 
   const out: SnapshotItem[] = [];
+  const exclus = new Map<string, number>();
 
   for (const lvl of levels) {
     const v = V.get(lvl.variant_id);
     if (!v) continue;
     const p = P.get(v.product_id);
     if (!p) continue;
+
+    // Un produit archivé n'est plus en circulation : il n'a rien à faire dans une
+    // déclaration douanière. On l'écarte, mais jamais en silence — l'appelant
+    // reçoit la liste pour la montrer à l'utilisateur.
+    if (p.status === 'archived') {
+      exclus.set(p.title, (exclus.get(p.title) ?? 0) + lvl.quantity);
+      continue;
+    }
 
     const sku = (v.sku ?? '').toUpperCase();
     const rule = rules.find(
@@ -250,5 +266,10 @@ export async function buildSnapshot(
     });
   }
 
-  return out;
+  return {
+    items: out,
+    archivesExclus: [...exclus.entries()]
+      .map(([titre, pieces]) => ({ titre, pieces }))
+      .sort((a, b) => b.pieces - a.pieces),
+  };
 }

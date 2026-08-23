@@ -58,6 +58,44 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     }
     patch.customs_labels = clean;
   }
+  // Champs legaux de l'admission temporaire (spec « Vente incertaine Suisse »)
+  for (const [key, col] of [
+    ['numeroDecision', 'numero_decision'],
+    ['bureauDouane', 'bureau_douane'],
+    ['lieuVente', 'lieu_vente'],
+  ] as const) {
+    if (typeof body[key] === 'string') patch[col] = body[key];
+  }
+  if (typeof body.dateExpiration === 'string' || body.dateExpiration === null) {
+    patch.date_expiration = body.dateExpiration;
+  }
+  for (const [key, col] of [
+    ['fraisTransportChf', 'frais_transport_chf'],
+    ['sureteDeposeeChf', 'surete_deposee_chf'],
+  ] as const) {
+    if (typeof body[key] === 'number' && body[key] >= 0) patch[col] = body[key];
+    else if (body[key] === null) patch[col] = null;
+  }
+  if (body.methodeRepartition === 'VALEUR' || body.methodeRepartition === 'POIDS') {
+    patch.methode_repartition = body.methodeRepartition;
+  }
+  if (body.regimeValeur === 'NEGOCE' || body.regimeValeur === 'PRODUCTION_PROPRE') {
+    patch.regime_valeur = body.regimeValeur;
+  }
+  if (body.tariffByType && typeof body.tariffByType === 'object') {
+    const clean: Record<string, { position?: string; origine?: string; tva?: number }> = {};
+    for (const [type, raw] of Object.entries(body.tariffByType as Record<string, unknown>)) {
+      if (!raw || typeof raw !== 'object') continue;
+      const r = raw as Record<string, unknown>;
+      const entry: { position?: string; origine?: string; tva?: number } = {};
+      if (typeof r.position === 'string' && r.position.trim()) entry.position = r.position.trim();
+      if (typeof r.origine === 'string' && r.origine.trim()) entry.origine = r.origine.trim().toUpperCase();
+      const tva = Number(r.tva);
+      if (Number.isFinite(tva) && tva > 0) entry.tva = tva;
+      clean[type] = entry;
+    }
+    patch.tariff_by_type = clean;
+  }
   if (body.packagingKg && typeof body.packagingKg === 'object') {
     const clean: Record<string, number> = {};
     for (const [k, v] of Object.entries(body.packagingKg as Record<string, unknown>)) {
@@ -112,7 +150,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const current = await buildSnapshot(supabase, passage.shop_id, passage.location_id);
+  const { items: current } = await buildSnapshot(supabase, passage.shop_id, passage.location_id);
   const backByVariant = new Map(current.map(i => [i.variant_id, i.qty_departed]));
 
   // Ventes enregistrées au stand sur la période, depuis stock_movements.

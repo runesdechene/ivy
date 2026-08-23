@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const items = await buildSnapshot(supabase, shopId, locationId);
+  const { items, archivesExclus } = await buildSnapshot(supabase, shopId, locationId);
   if (items.length === 0) {
     return NextResponse.json({ error: 'Aucun stock à cet emplacement' }, { status: 400 });
   }
@@ -131,5 +131,7 @@ export async function POST(request: NextRequest) {
     id: passage.id,
     lines: items.length,
     pieces: items.reduce((s, i) => s + i.qty_departed, 0),
+    // Ecartes de l'instantane, mais jamais en silence : l'ecran les affiche.
+    archivesExclus,
   });
 }
