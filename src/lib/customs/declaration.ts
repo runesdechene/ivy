@@ -36,6 +36,9 @@ interface VariantRow {
   option3: string | null;
   cost: number | null;
   price: number | null;
+  /** Poids saisi dans Ivy. Fait foi sur celui de Shopify : pour une variante
+   *  supprimee de Shopify, Ivy en est la seule source possible. */
+  weight_grams: number | null;
 }
 
 interface ProductRow {
@@ -177,7 +180,7 @@ export async function buildCustomsDeclaration(
 
   const variants = await readAll<VariantRow>(
     supabase, 'product_variants',
-    'id, product_id, shopify_id, title, sku, option1, option2, option3, cost, price',
+    'id, product_id, shopify_id, title, sku, option1, option2, option3, cost, price, weight_grams',
     q => q,
   );
   const products = await readAll<ProductRow>(
@@ -305,7 +308,9 @@ export async function buildCustomsDeclaration(
     const p = P.get(v.product_id);
     if (!p) continue;
 
-    const grams = gramsByVariant.get(String(v.shopify_id ?? '')) ?? null;
+    // Ivy d'abord : une variante supprimee de Shopify n'a de poids que dans Ivy,
+    // et un poids saisi a la main ne doit jamais etre supplante par Shopify.
+    const grams = v.weight_grams ?? gramsByVariant.get(String(v.shopify_id ?? '')) ?? null;
     const b = breakdown(v, p);
     const price = Number(v.price) || 0;
     const qty = lvl.quantity;
