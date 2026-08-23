@@ -216,7 +216,7 @@ export function renderPassage(
     : 'Importation temporaire pour vente incertaine — formulaire 1187';
 
   let html = `<!doctype html><html lang="fr"><head><meta charset="utf-8">
-<title>Douane suisse — ${esc(passage.location_name)} — ${esc(passage.departed_on)}</title>
+<title>${esc(passage.doc_titre) || 'Douane suisse'} — ${esc(passage.departed_on)}</title>
 <style>${CSS}</style></head><body>
 <div class="noprint"><b>Ctrl+P</b> puis « Enregistrer en PDF », orientation <b>paysage</b>.
 Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent visibles. Ce bandeau ne s'imprime pas.</div>`;
@@ -231,7 +231,6 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
  <b>Siège social (France)</b> ${esc(passage.adresse_siege) || '—'}<br>
  <b>Lieu d'exposition</b> ${esc(passage.adresse_exposition) || '—'}<br>
  <b>Dates d'exposition</b> ${esc(passage.date_exposition) || '—'}<br>
- <b>Emplacement de départ</b> ${esc(passage.location_name)}<br>
  <b>Date d'entrée sur le territoire</b> ${esc(passage.departed_on)}<br>
  <b>Date de retour prévue</b> ${esc(passage.date_retour_prevue) || '—'}<br>
  ${passage.date_apurement ? `<b>Date d'apurement</b> ${esc(passage.date_apurement)}<br>` : ''}
@@ -402,8 +401,7 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
  <b>Quantité totale</b> ${t.qty} pièce(s)<br>
  <b>Poids net / brut</b> ${kg(t.netG)} kg / ${brut !== null ? kgv(brut) : '—'} kg<br>
  <b>Valeur en douane</b> ${num(t.chf / rate)} EUR &nbsp;/&nbsp; ${num(t.chf)} CHF<br>
- <b>Origine</b> ${esc(passage.origin)} &nbsp;·&nbsp;
- <b style="min-width:auto">Emplacement</b> ${esc(passage.location_name)} &nbsp;·&nbsp; ${esc(passage.departed_on)}
+ <b>Origine</b> ${esc(passage.origin)} &nbsp;·&nbsp; ${esc(passage.departed_on)}
 </div>
 <table><thead><tr>
  <th class="l">Photo</th><th class="l">Modèle</th><th>Quantité</th>
