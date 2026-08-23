@@ -37,7 +37,7 @@ Les pipelines AST et Supabase sont indépendantes — les nodes SQL (`category: 
 | **App Next.js** | `src/` | UI + API routes |
 | **Supabase** | `supabase/migrations/` | DB + RLS multi-tenant |
 | **Shopify Admin API** | externe (GraphQL) | Source produits / variantes / metafields |
-| **Netlify** | déploiement manuel CLI | Hébergement front + functions |
+| **Netlify** | projet `ivy-app` → `ivy.runesdechene.com` | Hébergement front + functions. **Auto-deploy sur `push origin main`** — `main` est la SEULE branche buildée |
 
 Détail des zones dev : `~/ivy-vault/🛠️ DEV/_Index DEV.md`
 
@@ -46,7 +46,8 @@ Détail des zones dev : `~/ivy-vault/🛠️ DEV/_Index DEV.md`
 - **pnpm** uniquement (jamais npm / yarn)
 - **TypeScript strict** — pas de `any`
 - **Path alias** : `@/*` → `./src/*`
-- **Branche feature** obligatoire pour multi-commits (Ivy auto-deploy sur `push origin main` via Netlify)
+- **Branche feature** obligatoire pour multi-commits (Ivy auto-deploy sur `push origin main` via Netlify). Une branche feature poussée ne déploie **rien** (`allowed_branches: [main]`) — pour tester en ligne sans toucher la prod : `npx netlify deploy` (draft, sans `--prod`)
+- **`APP_VERSION`** (`src/config/version.ts`) : patch +1 à chaque commit touchant `src/`. `package.json` (`0.1.0`, `order-pro`) est mort, ne pas s'y fier
 - **NF525** : Ivy n'est PAS une caisse — jamais enregistrer prix de vente / paiements / remises dans le tracker de stock
 - **Multi-tenant** : tout query DB doit filtrer par `shop_id` (RLS bypassée par `service_role` côté API)
 
