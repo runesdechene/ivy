@@ -97,24 +97,33 @@ const CSS = `
  .warn { border: 1px solid #b00; background: #fff3f3; padding: 3mm; margin: 4mm 0; }
  .warn h3 { margin: 0 0 1mm; font-size: 10pt; color: #b00; }
  .big { font-size: 11pt; }
- .soustitre { font-size: 8.5pt; color: #444; margin: -0.5mm 0 2mm; }
+ .soustitre { font-size: 8.5pt; color: #222; margin: -0.5mm 0 2mm; }
  /* En-tete en pastilles : treize lignes empilees poussaient le tableau sur
     une seconde page. Sur une ou deux lignes, tout tient. */
  .chips { display: flex; flex-wrap: wrap; gap: 1mm; margin-bottom: 1.8mm; }
  .chip { border: 1px solid #c4c4c4; border-radius: 1.5mm; padding: 0.5mm 1.6mm;
          font-size: 6.8pt; background: #fbfbfb; white-space: nowrap; }
- .chip b { color: #666; font-weight: 600; margin-right: 1mm; }
+ /* Les libelles etaient en gris clair : une imprimante jet d'encre les rendait
+    illisibles a 6,8 pt. On les distingue par la casse et la graisse, pas par la
+    couleur — le gris ne survit pas a l'impression. */
+ .chip b { color: #111; font-weight: 700; margin-right: 1.2mm;
+           text-transform: uppercase; letter-spacing: 0.02em; font-size: 6pt; }
  .totaux .chip { font-size: 8pt; padding: 0.8mm 2mm; background: #f0f0ea;
                  border-color: #999; }
- .totaux .chip b { color: #444; }
+ .totaux .chip b { color: #000; font-size: 6.6pt; }
  th.retour, td.retour { border-left: 2px solid #444; }
  /* Colonnes du retour, imprimees vides a l'aller pour etre remplies a la main. */
  td.tofill { background: #fafafa; }
- td.tailles { font-size: 7.5pt; color: #333; line-height: 1.25; }
- th.tofill { color: #666; font-style: italic; }
+ td.tailles { font-size: 7.5pt; color: #111; line-height: 1.25; }
+ th.tofill { color: #222; font-style: italic; }
  /* Ces colonnes se remplissent a la cloture, par comparaison des deux instantanes. */
  .noprint { margin: 0 0 5mm; padding: 3mm; background: #eef4ee; border: 1px solid #9ab; }
- @media print { .noprint { display: none; } }
+ @media print {
+   .noprint { display: none; }
+   /* Rien ne doit dependre d'un gris : sur papier, il disparait. */
+   .chip b, .totaux .chip b { color: #000; }
+   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+ }
 `;
 
 export function renderPassage(
@@ -266,7 +275,7 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
  <span class="chip fort"><b>TVA à l'import</b> ${num(vatOnImport(customsChf))} CHF</span>
  ${closed ? `<span class="chip fort"><b>Revenues</b> ${returned}</span><span class="chip fort"><b>Vendues (caisse)</b> ${sold}</span>` : ''}
 </div>
-<p style="font-size:6.8pt;color:#555;margin:0 0 2mm">
+<p style="font-size:6.8pt;color:#333;margin:0 0 2mm">
  <b>Valeur en douane = prix d'achat</b> (coût du textile + coût de l'impression), hors taxe par nature.
  Conversion en francs au taux de ${rate}. Les prix de vente ci-dessous ne servent qu'à situer la marchandise ;
  ils n'entrent pas dans la valeur déclarée.
@@ -348,7 +357,7 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
     `</tr></tfoot></table>`;
 
   if (!closed) {
-    html += `<p style="font-size:8pt;color:#555;margin-top:3mm">
+    html += `<p style="font-size:7.5pt;color:#333;margin-top:2mm">
      Les six colonnes de droite se remplissent automatiquement à la clôture du passage,
      en comparant l'instantané de départ au stock constaté au retour. Rien n'est à saisir à la main.
      Le poids brut par type est réparti au prorata du poids net.</p>`;
@@ -364,7 +373,7 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
     }
     const baseTotale = caTtcTotal / vatDiv;
     const tvaDue = caTtcTotal - baseTotale;
-    html += `<p style="font-size:7.5pt;color:#555;margin-top:2mm">
+    html += `<p style="font-size:7.5pt;color:#333;margin-top:2mm">
      <b>TVA réellement due</b> : elle porte sur la contre-prestation encaissée en Suisse,
      soit <b>${venduTotal}</b> pièce(s) vendues pour <b>${num(caTtcTotal)} CHF TTC</b>,
      dont <b>${num(baseTotale)} CHF</b> de base imposable et <b>${num(tvaDue)} CHF</b> de TVA —
