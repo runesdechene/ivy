@@ -295,10 +295,34 @@ pour le signaler.
 
 ## Risques
 
-**Poids absents dans Shopify.** Si les variantes n'ont pas de `grams` renseigné, la
-colonne sort à zéro et le blocage se déclenche sur tout le catalogue. À vérifier
-immédiatement, avant d'écrire la moindre ligne de la suite. Plan B si c'est vide : saisie
-en masse par type de produit dans l'écran de contrôle.
+**Poids absents dans Shopify — mesuré le 2026-08-23, pas supposé.**
+
+Sur l'ensemble du catalogue : 4 502 variantes sur 4 910 ont un poids (92 %). Les 408
+manquantes sont concentrées sur **« Le Zippé »** (324 sur 804), plus « L'Essentiel » (0/30)
+et « Invisible » (0/28).
+
+Sur **Uriel (Boxer)**, l'emplacement du festival : 489 lignes, 1 070 pièces, dont
+**116 pièces sans poids (11 %)**, réparties en deux causes distinctes :
+
+| Pièces | Cause | Conséquence |
+|---|---|---|
+| 96 | Variantes `shopify_active = false` — supprimées de Shopify, stock gardé dans Ivy | Le poids **ne peut pas** venir de Shopify ni y être poussé. Saisie locale obligatoire. |
+| 20 | Vestes zippées (Hoplite, Avalon, Hécate, Skjaldmö) sans `grams` sur Shopify | Corrigeable dans Shopify, ou en place depuis l'écran de contrôle. |
+
+Aucune variante purement locale (`shopify_id IS NULL`) en stock à cet emplacement.
+
+Conséquences sur le design — toutes déjà couvertes, mais à ne pas perdre de vue :
+
+1. L'écran de contrôle doit **distinguer les deux cas** : « corrigeable dans Shopify » et
+   « saisie locale uniquement ». Pousser vers Shopify une variante `shopify_active=false`
+   échouerait avec « inventory item could not be found ».
+2. `weight_grams` doit donc être une colonne Ivy **autonome**, pas un simple miroir de
+   Shopify : pour ces 96 pièces, Ivy est la seule source possible.
+3. La sync ne doit **jamais écraser** un `weight_grams` saisi à la main par un zéro venu de
+   Shopify. Règle : la sync ne remplit que si Shopify renvoie une valeur > 0.
+
+**Vérifier aussi le prix de vente et le coût de ces 96 variantes supprimées** — si elles
+n'ont plus de prix, elles n'ont pas de valeur douanière, et le blocage se déclenchera.
 
 **Variantes hors règle de prix.** Impossible de décomposer textile / impression. Elles
 sont listées à part et bloquent, plutôt que de sortir un chiffre inventé.
