@@ -4,7 +4,7 @@ import styles from './IvyLayout.module.scss';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import clsx from 'clsx';
-import { IconPalette, IconTag, IconShoppingCart, IconCurrencyEuro, IconFileDescription, IconPhoto, IconBox } from '@tabler/icons-react';
+import { IconPalette, IconTag, IconShoppingCart, IconCurrencyEuro, IconFileDescription, IconPhoto, IconBox, IconWeight } from '@tabler/icons-react';
 
 interface ParametresLayoutProps {
   children: React.ReactNode;
@@ -52,6 +52,11 @@ export function ParametresLayout({ children }: ParametresLayoutProps) {
           href: '/parametres/conteneurs',
           label: 'Conteneurs',
           icon: IconBox,
+        },
+        {
+          href: '/parametres/poids',
+          label: 'Poids',
+          icon: IconWeight,
         },
       ],
     },
