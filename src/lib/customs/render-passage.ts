@@ -66,10 +66,10 @@ const esc = (s: unknown): string =>
   String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
 
 const CSS = `
- @page { size: A4 landscape; margin: 10mm; }
- body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; font-size: 9pt; color: #1a1a1a; }
- h1 { font-size: 15pt; margin: 0 0 2mm; }
- h2 { font-size: 12pt; margin: 0 0 1mm; }
+ @page { size: A4 landscape; margin: 7mm; }
+ body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; font-size: 8pt; color: #1a1a1a; }
+ h1 { font-size: 12.5pt; margin: 0 0 1.5mm; }
+ h2 { font-size: 10pt; margin: 2mm 0 1mm; }
  .sheet { page-break-after: always; }
  .sheet:last-child { page-break-after: auto; }
  .meta { margin-bottom: 4mm; }
@@ -81,8 +81,8 @@ const CSS = `
  tr { page-break-inside: avoid; page-break-after: auto; }
  thead { display: table-header-group; }
  tfoot { display: table-row-group; }
- th, td { border: 1px solid #999; padding: 1.2mm 1.6mm; text-align: right; }
- th { background: #eee; text-align: center; font-size: 8pt; }
+ th, td { border: 1px solid #999; padding: 0.7mm 1.1mm; text-align: right; }
+ th { background: #eee; text-align: center; font-size: 7pt; line-height: 1.15; }
  td.l, th.l { text-align: left; }
  tr.incomplete td { background: #ffecec; }
  tr.ecart td { background: #fff6e5; }
@@ -97,14 +97,14 @@ const CSS = `
  .warn { border: 1px solid #b00; background: #fff3f3; padding: 3mm; margin: 4mm 0; }
  .warn h3 { margin: 0 0 1mm; font-size: 10pt; color: #b00; }
  .big { font-size: 11pt; }
- .soustitre { font-size: 10pt; color: #444; margin: -1mm 0 3mm; }
+ .soustitre { font-size: 8.5pt; color: #444; margin: -0.5mm 0 2mm; }
  /* En-tete en pastilles : treize lignes empilees poussaient le tableau sur
     une seconde page. Sur une ou deux lignes, tout tient. */
- .chips { display: flex; flex-wrap: wrap; gap: 1.2mm; margin-bottom: 2.5mm; }
- .chip { border: 1px solid #c4c4c4; border-radius: 1.5mm; padding: 0.7mm 2mm;
-         font-size: 7.4pt; background: #fbfbfb; white-space: nowrap; }
+ .chips { display: flex; flex-wrap: wrap; gap: 1mm; margin-bottom: 1.8mm; }
+ .chip { border: 1px solid #c4c4c4; border-radius: 1.5mm; padding: 0.5mm 1.6mm;
+         font-size: 6.8pt; background: #fbfbfb; white-space: nowrap; }
  .chip b { color: #666; font-weight: 600; margin-right: 1mm; }
- .totaux .chip { font-size: 8.6pt; padding: 1mm 2.4mm; background: #f0f0ea;
+ .totaux .chip { font-size: 8pt; padding: 0.8mm 2mm; background: #f0f0ea;
                  border-color: #999; }
  .totaux .chip b { color: #444; }
  th.retour, td.retour { border-left: 2px solid #444; }
@@ -267,7 +267,7 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
  ${closed ? `<span class="chip fort"><b>Revenues</b> ${returned}</span><span class="chip fort"><b>Vendues (caisse)</b> ${sold}</span>` : ''}
 </div>
 </div>
-<p style="font-size:8pt;color:#555;margin:-2mm 0 3mm">
+<p style="font-size:6.8pt;color:#555;margin:0 0 2mm">
  <b>Valeur en douane = prix d'achat</b> (coût du textile + coût de l'impression), hors taxe par nature.
  Conversion en francs au taux de ${rate}. Les prix de vente ci-dessous ne servent qu'à situer la marchandise ;
  ils n'entrent pas dans la valeur déclarée.
