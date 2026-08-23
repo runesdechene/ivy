@@ -24,6 +24,8 @@ export interface PassageRow {
   prices_chf_ttc: Record<string, number>;
   /** Libelle douanier par type : { "Le Confort": "T-shirt coton" }. */
   customs_labels?: Record<string, string>;
+  /** Poids des caisses par type, en kg. */
+  packaging_kg?: Record<string, number>;
 }
 
 export interface PassageItem {
@@ -91,6 +93,8 @@ export function renderPassage(
   const labels = passage.customs_labels ?? {};
   /** Ce que le douanier lit : le libelle saisi, a defaut le nom du type. */
   const labelOf = (type: string) => labels[type] || type;
+  const packaging = passage.packaging_kg ?? {};
+  const hasPackaging = Object.values(packaging).some(v => Number(v) > 0);
 
   const num = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
   const kg = (g: number) => (g / 1000).toFixed(3);
@@ -140,8 +144,17 @@ export function renderPassage(
     byProduct.set(key, p);
   }
 
-  const grossKg = passage.gross_weight_kg !== null ? Number(passage.gross_weight_kg) : null;
-  const grossRatio = grossKg !== null && netG > 0 ? grossKg / (netG / 1000) : null;
+  const globalGross = passage.gross_weight_kg !== null ? Number(passage.gross_weight_kg) : null;
+  // Le brut d'un type = son net + le poids de SES caisses. On ne retombe sur le
+  // poids brut global (reparti au prorata) que si aucune caisse n'est renseignee.
+  const packagingOf = (type: string) => Number(packaging[type]) || 0;
+  const totalPackaging = [...byType.keys()].reduce((n, t) => n + packagingOf(t), 0);
+  const grossKg = hasPackaging ? netG / 1000 + totalPackaging : globalGross;
+  const grossRatio = !hasPackaging && globalGross !== null && netG > 0 ? globalGross / (netG / 1000) : null;
+  const grossOfType = (type: string, typeNetG: number) =>
+    hasPackaging
+      ? typeNetG / 1000 + packagingOf(type)
+      : grossRatio !== null ? (typeNetG / 1000) * grossRatio : null;
   const titre = closed
     ? 'Réexportation après vente incertaine — formulaire 11.74'
     : 'Importation temporaire pour vente incertaine — formulaire 1187';
@@ -163,7 +176,7 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
  <b>TVA suisse déduite</b> ${passage.vat_pct} %<br>
  <b>Origine des marchandises</b> ${esc(passage.origin)}<br>
  <b>Poids net total</b> ${(netG / 1000).toFixed(3)} kg<br>
- <b>Poids brut total</b> ${grossKg !== null ? grossKg.toFixed(3) + ' kg (pesé)' : '— à compléter'}<br>
+ <b>Poids brut total</b> ${grossKg !== null ? grossKg.toFixed(3) + ' kg' + (hasPackaging ? ' (net + caisses)' : ' (pesé)') : '— à compléter'}<br>
  <b>Pièces déclarées</b> <span class="big">${pieces}</span><br>
  ${closed ? `<b>Revenues</b> <span class="big">${returned}</span> &nbsp;·&nbsp; <b style="min-width:auto">vendues (caisse)</b> <span class="big">${sold}</span><br>` : ''}
  <b>Valeur douanière totale</b> <span class="big">${num(customsChf)} CHF HT &nbsp;/&nbsp; ${num(customsChf / rate)} EUR</span><br>
@@ -184,15 +197,16 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
 
 <h2>Détail par type de produit</h2>
 <table><thead><tr>
- <th class="l">Objet</th><th class="l">Type Ivy</th><th>Quantité</th><th>Poids net (kg)</th><th>Poids brut (kg)</th>
+ <th class="l">Objet</th><th class="l">Type Ivy</th><th>Quantité</th><th>Poids net (kg)</th><th>Caisses (kg)</th><th>Poids brut (kg)</th>
  <th>Valeur douanière au départ<br>CHF HT</th><th>équiv. EUR</th><th>TVA import CHF</th>
  ${closed ? '<th>Revenues</th><th>Vendues</th><th>Poids revenu</th><th>Valeur revenue CHF</th><th>Valeur vendue CHF</th>' : '<th>Qté vendue</th><th>Qté restante</th><th>Poids vendu</th><th>Valeur vendue</th>'}
 </tr></thead><tbody>`;
 
   for (const [type, t] of [...byType.entries()].sort((a, b) => b[1].qty - a[1].qty)) {
-    const gross = grossRatio !== null ? (t.netG / 1000) * grossRatio : null;
+    const gross = grossOfType(type, t.netG);
     const unitHt = t.qty > 0 ? t.chf / t.qty : 0;
     html += `<tr><td class="l"><b>${esc(labelOf(type))}</b></td><td class="l">${esc(type)}</td><td>${t.qty}</td><td>${kg(t.netG)}</td>` +
+      `<td>${hasPackaging ? packagingOf(type).toFixed(3) : '—'}</td>` +
       `<td>${gross !== null ? gross.toFixed(3) : '—'}</td>` +
       `<td>${num(t.chf)}</td><td>${num(t.chf / rate)}</td><td>${num(vatOnImport(t.chf))}</td>` +
       (closed
@@ -203,6 +217,7 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
   }
 
   html += `</tbody><tfoot><tr><td class="l" colspan="2">TOTAL</td><td>${pieces}</td><td>${kg(netG)}</td>` +
+    `<td>${hasPackaging ? totalPackaging.toFixed(3) : '—'}</td>` +
     `<td>${grossKg !== null ? grossKg.toFixed(3) : '—'}</td>` +
     `<td>${num(customsChf)}</td><td>${num(customsChf / rate)}</td><td>${num(vatOnImport(customsChf))}</td>` +
     (closed ? `<td>${returned}</td><td>${sold}</td><td></td><td></td><td></td>` : `<td></td><td></td><td></td><td></td>`) +

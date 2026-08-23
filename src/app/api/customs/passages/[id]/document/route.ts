@@ -22,7 +22,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
   const { data: passage, error } = await supabase
     .from('customs_declarations')
-    .select('shop_id, location_name, status, reference, departed_on, returned_on, eur_to_chf, vat_pct, gross_weight_kg, origin, prices_chf_ttc, customs_labels')
+    .select('shop_id, location_name, status, reference, departed_on, returned_on, eur_to_chf, vat_pct, gross_weight_kg, origin, prices_chf_ttc, customs_labels, packaging_kg')
     .eq('id', id)
     .maybeSingle();
 

@@ -58,6 +58,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     }
     patch.customs_labels = clean;
   }
+  if (body.packagingKg && typeof body.packagingKg === 'object') {
+    const clean: Record<string, number> = {};
+    for (const [k, v] of Object.entries(body.packagingKg as Record<string, unknown>)) {
+      const n = Number(v);
+      if (Number.isFinite(n) && n >= 0) clean[k] = n;
+    }
+    patch.packaging_kg = clean;
+  }
   if (body.pricesChfTtc && typeof body.pricesChfTtc === 'object') {
     const clean: Record<string, number> = {};
     for (const [k, v] of Object.entries(body.pricesChfTtc as Record<string, unknown>)) {

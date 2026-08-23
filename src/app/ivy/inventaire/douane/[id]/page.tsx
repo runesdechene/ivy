@@ -28,6 +28,7 @@ interface Passage {
   origin: string;
   prices_chf_ttc: Record<string, number>;
   customs_labels: Record<string, string>;
+  packaging_kg: Record<string, number>;
   departure_snapshot_at: string;
   returned_on: string | null;
   return_snapshot_at: string | null;
@@ -63,6 +64,8 @@ interface FormState {
   pricesChfTtc: Record<string, number | ''>;
   /** Libellé douanier par type : « T-shirt » pour « Le Confort ». */
   customsLabels: Record<string, string>;
+  /** Poids des caisses par type, en kg. */
+  packagingKg: Record<string, number | ''>;
 }
 
 function formatDate(d: string | null): string {
@@ -99,6 +102,7 @@ export default function DouanePassageDetailPage() {
     reference: '',
     pricesChfTtc: {},
     customsLabels: {},
+    packagingKg: {},
   });
 
   const fetchPassage = useCallback(async () => {
@@ -124,6 +128,11 @@ export default function DouanePassageDetailPage() {
         for (const [k, v] of Object.entries((data.passage?.customs_labels ?? {}) as Record<string, unknown>)) {
           if (typeof v === 'string') labels[k] = v;
         }
+        const packs: Record<string, number> = {};
+        for (const [k, v] of Object.entries((data.passage?.packaging_kg ?? {}) as Record<string, unknown>)) {
+          const n = Number(v);
+          if (Number.isFinite(n)) packs[k] = n;
+        }
         setForm({
           eurToChf: data.passage?.eur_to_chf ?? '',
           vatPct: data.passage?.vat_pct ?? '',
@@ -131,6 +140,7 @@ export default function DouanePassageDetailPage() {
           reference: data.passage?.reference ?? '',
           pricesChfTtc: prices,
           customsLabels: labels,
+          packagingKg: packs,
         });
         hydratedRef.current = true;
       }
@@ -160,6 +170,9 @@ export default function DouanePassageDetailPage() {
         grossWeightKg: next.grossWeightKg === '' ? null : Number(next.grossWeightKg),
         pricesChfTtc,
         customsLabels: next.customsLabels,
+        packagingKg: Object.fromEntries(
+          Object.entries(next.packagingKg).filter(([, v]) => typeof v === 'number'),
+        ),
       };
       if (typeof next.eurToChf === 'number' && next.eurToChf > 0) body.eurToChf = next.eurToChf;
       if (typeof next.vatPct === 'number' && next.vatPct >= 0) body.vatPct = next.vatPct;
@@ -208,6 +221,14 @@ export default function DouanePassageDetailPage() {
   const updateLabel = useCallback((type: string, value: string) => {
     setForm((prev) => ({ ...prev, customsLabels: { ...prev.customsLabels, [type]: value } }));
   }, []);
+
+  const updatePackaging = useCallback((type: string, value: number | '') => {
+    setForm((prev) => {
+      const next = { ...prev, packagingKg: { ...prev.packagingKg, [type]: value } };
+      debouncedSave(next);
+      return next;
+    });
+  }, [debouncedSave]);
 
   const commitLabels = useCallback(() => {
     setForm((prev) => {
@@ -280,22 +301,27 @@ export default function DouanePassageDetailPage() {
       r.customs += it.lineCustomsValue;
       rows.set(type, r);
     }
-    const totalNetG = [...rows.values()].reduce((n, r) => n + r.netG, 0);
-    // Le poids brut saisi (caisses comprises) est reparti au prorata du poids net.
-    const ratio = computed.grossWeightKg !== null && totalNetG > 0
-      ? computed.grossWeightKg / (totalNetG / 1000)
-      : null;
+    // Le brut d'un type = son net + le poids de SES caisses. Les t-shirts et les
+    // sweats ne voyagent pas dans les mêmes, un poids brut unique serait faux.
+    const packOf = (type: string) => {
+      const v = form.packagingKg[type];
+      return typeof v === 'number' ? v : 0;
+    };
+    const totalPackaging = [...rows.keys()].reduce((n, t) => n + packOf(t), 0);
+    const totalNetKg = [...rows.values()].reduce((n, r) => n + r.netG, 0) / 1000;
     return {
-      ratio,
+      totalPackaging,
+      totalGrossKg: totalNetKg + totalPackaging,
       rows: [...rows.entries()]
         .map(([type, r]) => ({
           type,
           ...r,
-          grossKg: ratio !== null ? (r.netG / 1000) * ratio : null,
+          packagingKg: packOf(type),
+          grossKg: r.netG / 1000 + packOf(type),
         }))
         .sort((a, b) => b.qty - a.qty),
     };
-  }, [computed]);
+  }, [computed, form.packagingKg]);
 
   const missing = useMemo(() => {
     let weight = 0;
@@ -533,6 +559,7 @@ export default function DouanePassageDetailPage() {
               <Table.Th>Type Ivy</Table.Th>
               <Table.Th style={{ textAlign: 'right' }}>Qté de départ</Table.Th>
               <Table.Th style={{ textAlign: 'right' }}>Poids net</Table.Th>
+              <Table.Th style={{ textAlign: 'right', minWidth: 110 }}>Caisses (kg)</Table.Th>
               <Table.Th style={{ textAlign: 'right' }}>Poids brut</Table.Th>
               <Table.Th style={{ textAlign: 'right' }}>Valeur douanière au départ (HT)</Table.Th>
             </Table.Tr>
@@ -558,9 +585,19 @@ export default function DouanePassageDetailPage() {
                   {(r.netG / 1000).toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg
                 </Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>
-                  {r.grossKg !== null
-                    ? `${r.grossKg.toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg`
-                    : '—'}
+                  <NumberInput
+                    size="xs"
+                    value={form.packagingKg[r.type] ?? ''}
+                    onChange={(v) => updatePackaging(r.type, typeof v === 'number' ? v : '')}
+                    decimalScale={3}
+                    step={0.5}
+                    min={0}
+                    placeholder="0"
+                    styles={{ input: { textAlign: 'right' } }}
+                  />
+                </Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}>
+                  {r.grossKg.toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg
                 </Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>{formatChf(r.customs)}</Table.Td>
               </Table.Tr>
@@ -574,26 +611,26 @@ export default function DouanePassageDetailPage() {
                 <b>{computed.netWeightKg.toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg</b>
               </Table.Td>
               <Table.Td style={{ textAlign: 'right' }}>
-                <b>{computed.grossWeightKg !== null
-                  ? `${computed.grossWeightKg.toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg`
-                  : '—'}</b>
+                <b>{summary.totalPackaging.toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg</b>
+              </Table.Td>
+              <Table.Td style={{ textAlign: 'right' }}>
+                <b>{summary.totalGrossKg.toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg</b>
               </Table.Td>
               <Table.Td style={{ textAlign: 'right' }}><b>{formatChf(computed.customsValue)}</b></Table.Td>
             </Table.Tr>
           </Table.Tfoot>
         </Table>
-        {computed.grossWeightKg !== null && computed.grossWeightKg < computed.netWeightKg && (
+        {false && (
           <Alert color="rust" icon={<IconAlertTriangle size={16} />} mt="xs">
             Le poids brut saisi ({computed.grossWeightKg} kg) est <b>inférieur au poids net</b>
             ({computed.netWeightKg.toFixed(3)} kg). Le brut comprend le net plus les caisses :
             il ne peut pas être plus petit. Vérifie ta pesée dans les paramètres.
           </Alert>
         )}
-        {summary.ratio === null && (
-          <Text size="xs" c="dimmed" mt="xs">
-            Renseigne le poids brut dans les paramètres pour qu&apos;il se répartisse par type.
-          </Text>
-        )}
+        <Text size="xs" c="dimmed" mt="xs">
+          Le poids brut d&apos;une ligne vaut son poids net plus celui de ses caisses.
+          Laisse à zéro si ce type voyage sans emballage propre.
+        </Text>
       </Paper>
 
       {missing.total > 0 && (
