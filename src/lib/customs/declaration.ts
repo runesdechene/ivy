@@ -23,6 +23,16 @@ export interface CustomsParams {
   reference: string;
   /** Code d'origine des marchandises. */
   origin: string;
+  /**
+   * Majoration appliquee aux prix pour la vente en Suisse, en %.
+   * 0 = on vend au meme prix qu'en France.
+   */
+  markupPct: number;
+  /**
+   * TVA suisse, en % (8.1 au 2026-01). Le prix majore est un prix TTC :
+   * la valeur douaniere est ce prix HORS TAXE, donc divise par (1 + tva).
+   */
+  vatPct: number;
 }
 
 interface VariantRow {
@@ -83,6 +93,10 @@ interface MetafieldRow {
 
 interface Line {
   type: string;
+  /** Prix de vente en Suisse, TTC, en CHF. */
+  sellChfTtc: number;
+  /** Valeur douaniere : ce meme prix hors taxe, en CHF. */
+  customsChfHt: number;
   image: string | null;
   ref: string;
   size: string;
@@ -101,7 +115,8 @@ export interface CustomsResult {
   locationName: string;
   totalPieces: number;
   netKg: number;
-  customsValueEur: number;
+  /** Valeur douaniere totale, en CHF hors taxe. */
+  customsValueChf: number;
   sheets: number;
   problems: { noWeight: number; noRule: number; mismatch: number; noPrice: number };
 }
@@ -295,12 +310,20 @@ export async function buildCustomsDeclaration(
     return { textile, print, total, matched: true, mismatch: Math.abs(total - recorded) >= 0.005, recorded };
   }
 
+  // Chaine de calcul du prix suisse :
+  //   prix Ivy (EUR) -> x taux -> x (1 + majoration) = prix de vente CHF TTC
+  //   prix TTC / (1 + TVA) = valeur douaniere CHF HT
+  const markup = 1 + (params.markupPct || 0) / 100;
+  const vatDiv = 1 + (params.vatPct || 0) / 100;
+  const toSellChfTtc = (priceEur: number) => priceEur * params.rate * markup;
+  const toCustomsChfHt = (priceEur: number) => toSellChfTtc(priceEur) / vatDiv;
+
   const byProduct = new Map<string, { product: ProductRow; rows: Line[] }>();
-  const byType = new Map<string, { qty: number; netG: number; customsEur: number }>();
+  const byType = new Map<string, { qty: number; netG: number; customsChf: number }>();
   const problems = { noWeight: 0, noRule: 0, mismatch: 0, noPrice: 0 };
   let totalPieces = 0;
   let totalNetG = 0;
-  let totalCustomsEur = 0;
+  let totalCustomsChf = 0;
 
   for (const lvl of levels) {
     const v = V.get(lvl.variant_id);
@@ -322,6 +345,8 @@ export async function buildCustomsDeclaration(
 
     const line: Line = {
       type: p.product_type ?? '(sans type)',
+      sellChfTtc: toSellChfTtc(price),
+      customsChfHt: toCustomsChfHt(price),
       image: p.image_url,
       ref: p.title,
       size: optionOf(v, p, 'size') || v.option2 || '',
@@ -341,18 +366,23 @@ export async function buildCustomsDeclaration(
 
     totalPieces += qty;
     totalNetG += (grams ?? 0) * qty;
-    totalCustomsEur += price * qty;
+    totalCustomsChf += line.customsChfHt * qty;
 
-    const t = byType.get(line.type) ?? { qty: 0, netG: 0, customsEur: 0 };
+    const t = byType.get(line.type) ?? { qty: 0, netG: 0, customsChf: 0 };
     t.qty += qty;
     t.netG += (grams ?? 0) * qty;
-    t.customsEur += price * qty;
+    t.customsChf += line.customsChfHt * qty;
     byType.set(line.type, t);
   }
 
-  const { rate, grossKg, reference, origin } = params;
+  const { rate, grossKg, reference, origin, markupPct, vatPct } = params;
   const eur = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
+  /** Convertit un montant EUR en CHF. */
   const chf = (n: number) => (Math.round(n * rate * 100) / 100).toFixed(2);
+  /** Formate un montant deja exprime en CHF. */
+  const chfRaw = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
+  /** Equivalent EUR d'un montant deja exprime en CHF. */
+  const eurFromChf = (n: number) => (Math.round((n / rate) * 100) / 100).toFixed(2);
   const kg = (g: number) => (g / 1000).toFixed(3);
   const today = new Date().toISOString().slice(0, 10);
   const netKg = totalNetG / 1000;
@@ -404,16 +434,22 @@ export async function buildCustomsDeclaration(
  <b>Date</b> ${today}<br>
  <b>Référence 1187</b> ${esc(reference) || '—'}<br>
  <b>Taux appliqué</b> 1 EUR = ${rate} CHF<br>
+ <b>Majoration Suisse</b> ${markupPct > 0 ? `+ ${markupPct} %` : 'aucune'}<br>
+ <b>TVA suisse déduite</b> ${vatPct} %<br>
  <b>Origine des marchandises</b> ${esc(origin)}<br>
  <b>Poids net total</b> ${netKg.toFixed(3)} kg<br>
  <b>Poids brut total</b> ${grossKg !== null ? grossKg.toFixed(3) + ' kg (pesé)' : '— à compléter à la main'}<br>
  <b>Nombre de pièces</b> <span class="big">${totalPieces}</span><br>
- <b>Valeur douanière totale</b> <span class="big">${eur(totalCustomsEur)} EUR &nbsp;/&nbsp; ${chf(totalCustomsEur)} CHF</span>
+ <b>Valeur douanière totale</b> <span class="big">${chfRaw(totalCustomsChf)} CHF HT &nbsp;/&nbsp; ${eurFromChf(totalCustomsChf)} EUR</span>
 </div>
+<p style="font-size:8pt;color:#555;margin:-2mm 0 3mm">
+ Valeur douanière = prix de vente Ivy × ${rate} (taux)${markupPct > 0 ? ` × ${(1 + markupPct / 100).toFixed(4)} (majoration ${markupPct} %)` : ''}
+ ÷ ${(1 + vatPct / 100).toFixed(3)} (TVA ${vatPct} %). Elle est donc <b>hors taxe</b>.
+</p>
 <h2>Détail par type de produit</h2>
 <table><thead><tr>
  <th class="l">Type</th><th>Quantité</th><th>Poids net (kg)</th><th>Poids brut (kg)</th>
- <th>Valeur douanière CHF</th><th>Valeur douanière EUR</th>
+ <th>Valeur douanière CHF HT</th><th>équiv. EUR</th>
  <th>Qté vendue</th><th>Qté restante</th><th>Poids vendu</th><th>Poids restant</th>
  <th>Valeur vendue</th><th>Valeur restante</th>
 </tr></thead><tbody>`;
@@ -423,13 +459,13 @@ export async function buildCustomsDeclaration(
     const gross = grossRatio !== null ? (t.netG / 1000) * grossRatio : null;
     html += `<tr><td class="l">${esc(type)}</td><td>${t.qty}</td><td>${kg(t.netG)}</td>` +
       `<td>${gross !== null ? gross.toFixed(3) : '—'}</td>` +
-      `<td>${chf(t.customsEur)}</td><td>${eur(t.customsEur)}</td>` +
+      `<td>${chfRaw(t.customsChf)}</td><td>${eurFromChf(t.customsChf)}</td>` +
       `<td></td><td></td><td></td><td></td><td></td><td></td></tr>`;
   }
 
   html += `</tbody><tfoot><tr><td class="l">TOTAL</td><td>${totalPieces}</td><td>${kg(totalNetG)}</td>` +
     `<td>${grossKg !== null ? grossKg.toFixed(3) : '—'}</td>` +
-    `<td>${chf(totalCustomsEur)}</td><td>${eur(totalCustomsEur)}</td>` +
+    `<td>${chfRaw(totalCustomsChf)}</td><td>${eurFromChf(totalCustomsChf)}</td>` +
     `<td></td><td></td><td></td><td></td><td></td><td></td></tr></tfoot></table>
 <p style="font-size:8pt;color:#555;margin-top:3mm">
  Les colonnes vendue / restante se remplissent au retour, pour le formulaire 11.74.
@@ -452,7 +488,7 @@ export async function buildCustomsDeclaration(
     const sQty = rows.reduce((s, r) => s + r.qty, 0);
     const sNet = rows.reduce((s, r) => s + (r.grams ?? 0) * r.qty, 0);
     const sVal = rows.reduce((s, r) => s + (r.total ?? 0) * r.qty, 0);
-    const sCus = rows.reduce((s, r) => s + r.price * r.qty, 0);
+    const sCus = rows.reduce((s, r) => s + r.customsChfHt * r.qty, 0);
 
     html += `<div class="sheet${rows.length > 24 ? ' dense' : ''}">
 <div class="prodhead">
@@ -468,7 +504,7 @@ export async function buildCustomsDeclaration(
  <th>Qté apportée</th><th>Vendu</th><th>Poids unit. (kg)</th>
  <th>Textile HT €</th><th>Impression HT €</th><th>Valeur totale €</th>
  <th>Textile CHF</th><th>Impression CHF</th><th>Val. unit. CHF</th>
- <th>Valeur douanière €</th><th class="l">Origine</th>
+ <th>Prix Ivy €</th><th>Vente CHF TTC</th><th>Valeur douanière CHF HT</th><th class="l">Origine</th>
 </tr></thead><tbody>`;
 
     for (const r of rows) {
@@ -482,12 +518,15 @@ export async function buildCustomsDeclaration(
         `<td>${r.textile !== null ? chf(r.textile) : '<b>?</b>'}</td>` +
         `<td>${r.print !== null ? chf(r.print) : '<b>?</b>'}</td>` +
         `<td>${r.total !== null ? chf(r.total) : '<b>?</b>'}</td>` +
-        `<td>${eur(r.price)}</td><td class="l">${esc(origin)}</td></tr>`;
+        `<td>${eur(r.price)}</td>` +
+        `<td>${chfRaw(r.sellChfTtc)}</td>` +
+        `<td><b>${chfRaw(r.customsChfHt)}</b></td>` +
+        `<td class="l">${esc(origin)}</td></tr>`;
     }
 
     html += `</tbody><tfoot><tr><td class="l" colspan="3">Sous-total — ${esc(product.title)}</td>` +
       `<td>${sQty}</td><td></td><td>${kg(sNet)}</td><td colspan="2"></td><td>${eur(sVal)}</td>` +
-      `<td colspan="3"></td><td>${eur(sCus)}</td><td></td></tr></tfoot></table></div>`;
+      `<td colspan="4"></td><td><b>${chfRaw(sCus)}</b></td><td></td></tr></tfoot></table></div>`;
   }
 
   html += `</body></html>`;
@@ -497,7 +536,7 @@ export async function buildCustomsDeclaration(
     locationName: location.name,
     totalPieces,
     netKg,
-    customsValueEur: totalCustomsEur,
+    customsValueChf: totalCustomsChf,
     sheets: sheets.length,
     problems,
   };

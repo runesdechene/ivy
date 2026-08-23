@@ -75,6 +75,8 @@ export default function InventaireDashboardPage() {
   const [douaneRate, setDouaneRate] = useState<number | ''>('');
   const [douaneGross, setDouaneGross] = useState<number | ''>('');
   const [douaneRef, setDouaneRef] = useState('');
+  const [douaneMarkup, setDouaneMarkup] = useState<number | ''>(0);
+  const [douaneVat, setDouaneVat] = useState<number | ''>(8.1);
 
   const handleDouane = useCallback(() => {
     if (!currentShop || !currentLocation) return;
@@ -93,10 +95,12 @@ export default function InventaireDashboardPage() {
     });
     if (douaneGross) params.append('gross', String(douaneGross));
     if (douaneRef.trim()) params.append('ref', douaneRef.trim());
+    params.append('markup', String(douaneMarkup || 0));
+    params.append('vat', String(douaneVat === '' ? 8.1 : douaneVat));
     // Nouvel onglet : le document s'imprime depuis le navigateur (Ctrl+P).
     window.open(`/api/customs/declaration?${params}`, '_blank');
     douane.close();
-  }, [currentShop, currentLocation, douaneRate, douaneGross, douaneRef, douane]);
+  }, [currentShop, currentLocation, douaneRate, douaneGross, douaneRef, douaneMarkup, douaneVat, douane]);
 
   const handleExportCsv = useCallback(async () => {
     if (!currentShop) return;
@@ -349,6 +353,26 @@ export default function InventaireDashboardPage() {
             onChange={(v) => setDouaneGross(typeof v === 'number' ? v : '')}
             decimalScale={3}
             step={1}
+            min={0}
+          />
+          <NumberInput
+            label="Majoration Suisse (%)"
+            description="Tes prix suisses par rapport aux prix Ivy. 0 = mêmes prix."
+            value={douaneMarkup}
+            onChange={(v) => setDouaneMarkup(typeof v === 'number' ? v : '')}
+            suffix=" %"
+            decimalScale={2}
+            step={5}
+            min={0}
+          />
+          <NumberInput
+            label="TVA suisse (%)"
+            description="Déduite du prix majoré : la valeur douanière est hors taxe. 8,1 % en 2026."
+            value={douaneVat}
+            onChange={(v) => setDouaneVat(typeof v === 'number' ? v : '')}
+            suffix=" %"
+            decimalScale={2}
+            step={0.1}
             min={0}
           />
           <TextInput

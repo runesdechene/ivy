@@ -23,6 +23,10 @@ export async function GET(request: NextRequest) {
   const grossRaw = sp.get('gross');
   const reference = sp.get('ref') ?? '';
   const origin = sp.get('origin') || 'BD';
+  // Majoration appliquee aux prix pour la vente en Suisse, et TVA suisse a deduire
+  // pour obtenir une valeur douaniere hors taxe. 8.1 % est le taux normal en 2026.
+  const markupPct = Number(sp.get('markup') ?? 0) || 0;
+  const vatPct = sp.get('vat') !== null ? Number(sp.get('vat')) : 8.1;
 
   if (!shopId || !locationId) {
     return NextResponse.json({ error: 'shopId et locationId requis' }, { status: 400 });
@@ -39,6 +43,8 @@ export async function GET(request: NextRequest) {
       grossKg,
       reference,
       origin,
+      markupPct,
+      vatPct: Number.isFinite(vatPct) ? vatPct : 8.1,
     });
 
     return new NextResponse(result.html, {
