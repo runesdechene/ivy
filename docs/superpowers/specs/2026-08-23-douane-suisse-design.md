@@ -216,6 +216,107 @@ et chaque ligne concernée porte `incomplete = true` et **apparaît marquée sur
    l'erreur est affichée.
 3. Variante purement locale → écriture Ivy seulement, sans appel Shopify.
 
+## L'écran de réglage des poids
+
+`/parametres/poids` — à côté de Couleurs, Prix, Métachamps, Descriptions.
+
+Même modèle mental que l'écran Règles de prix : on remplit, on clique **Appliquer**, les
+valeurs se propagent. Rien de calculé en douce au moment de l'export.
+
+### Le principe : une pesée, le reste déduit
+
+Un poids n'est jamais mesuré taille par taille. On pèse **une** variante — typiquement la
+taille M — et les autres tailles se déduisent par une variation en pourcentage,
+**cumulée d'un cran à l'autre**.
+
+Pour une taille située à `d` crans de la référence (`d` négatif vers les petites tailles) :
+
+```
+poids(d) = round(reference_grams × (1 + step_pct / 100) ^ d)
+```
+
+Exemple, Le Confort, référence M = 250 g, variation 8 % :
+
+| XS | S | M | L | XL | XXL | 3XL |
+|---|---|---|---|---|---|---|
+| 214 | 230 | **250** | 270 | 292 | 315 | 340 |
+
+L'écart en grammes grandit avec la taille, ce qui colle à la réalité du textile.
+
+**Échelle des tailles** (l'ordre qui définit les crans) :
+`XXS, XS, S, M, L, XL, XXL, 3XL, 4XL, 5XL`, avec les synonymes courants (`2XL` = `XXL`).
+Une taille hors échelle ne se déduit pas : la variante bascule dans la liste d'exceptions.
+
+### Table `weight_type_rules` (migration `052`)
+
+```sql
+CREATE TABLE weight_type_rules (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  product_type TEXT NOT NULL,
+
+  reference_size TEXT NOT NULL,        -- la taille réellement pesée
+  reference_grams INTEGER NOT NULL,    -- le poids mesuré
+  step_pct DECIMAL(5, 2) NOT NULL DEFAULT 8,
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(shop_id, product_type)
+);
+```
+
+Une ligne par type de produit. Pas de table de cellules : les valeurs par taille sont
+**calculées**, jamais stockées. Ce qui se stocke, c'est la mesure et la règle — et au
+moment d'Appliquer, le résultat atterrit dans `product_variants.weight_grams`.
+
+### La grille
+
+Lignes = les `product_type` du shop. Colonnes = les tailles de l'échelle. Chaque ligne
+porte :
+
+- les poids calculés, affichés en grisé (ce sont des estimations, pas des mesures) ;
+- sur chaque case, un bouton **« Faire de ce poids la référence »** — tu pèses un 3XL
+  plutôt qu'un M ? Tu tapes sa valeur sur la colonne 3XL, tu cliques, et toute la ligne se
+  recalcule autour de lui ;
+- un champ **variation %** (défaut 8 %) ;
+- un bouton **Appliquer**.
+
+La case de référence est marquée visuellement : sur un document douanier, il faut pouvoir
+dire quelle valeur a été pesée et lesquelles sont déduites.
+
+Un produit sans taille utilise `reference_size = '—'` et un seul poids, sans variation.
+
+La taille d'une variante se résout via l'option nommée `Taille` / `Size` sur le produit
+(`option1Name` / `option2Name` / `option3Name`), comme le fait déjà `getOptionValue()`
+dans `csv-export.ts`. Une variante dont la taille ne se résout pas bascule dans la liste
+d'exceptions.
+
+### Appliquer
+
+Bouton **Appliquer** (par ligne ou global). Pour chaque variante du type, à sa taille
+déduite de l'échelle :
+
+- Par défaut, **ne remplit que les variantes sans poids**. Une case à cocher explicite
+  « écraser les poids existants » permet de forcer.
+- Écrit `product_variants.weight_grams`, et pousse vers Shopify quand la variante le
+  permet (`inventory_item_id` présent **et** `shopify_active !== false`), via
+  `inventoryItemUpdate`. Shopify d'abord, Ivy ensuite.
+- Retourne un compte-rendu : combien remplies, combien poussées vers Shopify, combien
+  gardées en local, combien en échec — avec le détail des échecs.
+
+### La liste d'exceptions
+
+Sous la grille, la liste des variantes **encore sans poids** après application, plus un
+filtre pour retrouver n'importe quelle variante et corriger son poids à la main. C'est là
+que se règlent les 96 pièces supprimées de Shopify : elles s'éditent, elles ne se
+poussent pas.
+
+### Interaction avec la sync
+
+La sync ne renseigne `weight_grams` que si Shopify renvoie une valeur **> 0**. Un zéro ou
+une absence côté Shopify **n'écrase jamais** un poids saisi à la main — sans cette règle,
+le travail de saisie serait perdu au prochain rafraîchissement.
+
 ## Les écrans
 
 **Menu Exporter** (`/ivy/inventaire`) : une entrée « Douane suisse ».
@@ -286,12 +387,16 @@ pour le signaler.
 
 ## Ordre de livraison
 
-1. **Migration poids + sync** — en premier, pour qu'Uriel puisse vérifier ses poids dès ce
-   soir. C'est le risque le plus bloquant.
-2. Tables du passage + module de calcul.
-3. Écran de contrôle + correction du poids.
+1. **Migration poids + sync + écran `/parametres/poids`** — en premier. C'est le seul
+   chantier qui demande un travail humain (remplir la grille), donc celui qui doit être
+   livré le plus tôt : Uriel peut saisir pendant que le reste se construit.
+2. Tables du passage + module de calcul des coûts.
+3. Écran de contrôle avant départ.
 4. Génération du passage + PDF de l'aller.
 5. *(après le départ)* Retour, réconciliation, PDF 11.74.
+
+L'ordre n'est pas négociable sur le point 1 : tout le reste peut être écrit pendant
+qu'Uriel remplit la grille, mais l'inverse est impossible.
 
 ## Risques
 
