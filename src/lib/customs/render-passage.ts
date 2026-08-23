@@ -77,6 +77,10 @@ const CSS = `
  .warn { border: 1px solid #b00; background: #fff3f3; padding: 3mm; margin: 4mm 0; }
  .warn h3 { margin: 0 0 1mm; font-size: 10pt; color: #b00; }
  .big { font-size: 11pt; }
+ /* Colonnes du retour, imprimees vides a l'aller pour etre remplies a la main. */
+ td.tofill { background: #fafafa; }
+ th.tofill { color: #666; font-style: italic; }
+ /* Ces colonnes se remplissent a la cloture, par comparaison des deux instantanes. */
  .noprint { margin: 0 0 5mm; padding: 3mm; background: #eef4ee; border: 1px solid #9ab; }
  @media print { .noprint { display: none; } }
 `;
@@ -199,7 +203,9 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
 <table><thead><tr>
  <th class="l">Objet</th><th class="l">Type Ivy</th><th>Quantité</th><th>Poids net (kg)</th><th>Caisses (kg)</th><th>Poids brut (kg)</th>
  <th>Valeur douanière au départ<br>CHF HT</th><th>équiv. EUR</th><th>TVA import CHF</th>
- ${closed ? '<th>Revenues</th><th>Vendues</th><th>Poids revenu</th><th>Valeur revenue CHF</th><th>Valeur vendue CHF</th>' : '<th>Qté vendue</th><th>Qté restante</th><th>Poids vendu</th><th>Valeur vendue</th>'}
+ ${closed
+    ? '<th>Qté restante</th><th>Qté vendue</th><th>Poids restant (kg)</th><th>Poids vendu (kg)</th><th>Valeur restante CHF</th><th>Valeur vendue CHF</th>'
+    : '<th class="tofill">Qté restante</th><th class="tofill">Qté vendue</th><th class="tofill">Poids restant</th><th class="tofill">Poids vendu</th><th class="tofill">Valeur restante</th><th class="tofill">Valeur vendue</th>'}
 </tr></thead><tbody>`;
 
   for (const [type, t] of [...byType.entries()].sort((a, b) => b[1].qty - a[1].qty)) {
@@ -210,9 +216,17 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
       `<td>${gross !== null ? gross.toFixed(3) : '—'}</td>` +
       `<td>${num(t.chf)}</td><td>${num(t.chf / rate)}</td><td>${num(vatOnImport(t.chf))}</td>` +
       (closed
-        ? `<td>${t.ret}</td><td>${t.sold}</td><td>${kg(t.qty > 0 ? (t.netG / t.qty) * t.ret : 0)}</td>` +
-          `<td>${num(unitHt * t.ret)}</td><td>${num(unitHt * t.sold)}</td>`
-        : `<td></td><td></td><td></td><td></td>`) +
+        ? (() => {
+            // « Vendu » au sens douanier : ce qui est physiquement resté en Suisse,
+            // soit parti − revenu. Le chiffre de la caisse sert de contrôle ailleurs.
+            const reste = t.ret;
+            const vendu = Math.max(0, t.qty - t.ret);
+            const unitG = t.qty > 0 ? t.netG / t.qty : 0;
+            return `<td>${reste}</td><td>${vendu}</td>` +
+              `<td>${kg(unitG * reste)}</td><td>${kg(unitG * vendu)}</td>` +
+              `<td>${num(unitHt * reste)}</td><td>${num(unitHt * vendu)}</td>`;
+          })()
+        : `<td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
       `</tr>`;
   }
 
@@ -220,14 +234,34 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
     `<td>${hasPackaging ? totalPackaging.toFixed(3) : '—'}</td>` +
     `<td>${grossKg !== null ? grossKg.toFixed(3) : '—'}</td>` +
     `<td>${num(customsChf)}</td><td>${num(customsChf / rate)}</td><td>${num(vatOnImport(customsChf))}</td>` +
-    (closed ? `<td>${returned}</td><td>${sold}</td><td></td><td></td><td></td>` : `<td></td><td></td><td></td><td></td>`) +
+    (closed
+      ? (() => {
+          const venduTotal = Math.max(0, pieces - returned);
+          const unitG = pieces > 0 ? netG / pieces : 0;
+          const unitHt = pieces > 0 ? customsChf / pieces : 0;
+          return `<td>${returned}</td><td>${venduTotal}</td>` +
+            `<td>${kg(unitG * returned)}</td><td>${kg(unitG * venduTotal)}</td>` +
+            `<td>${num(unitHt * returned)}</td><td>${num(unitHt * venduTotal)}</td>`;
+        })()
+      : `<td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
     `</tr></tfoot></table>`;
 
   if (!closed) {
     html += `<p style="font-size:8pt;color:#555;margin-top:3mm">
-     Les colonnes vendue / restante se remplissent au retour, pour le formulaire 11.74.
+     Les six colonnes de droite se remplissent automatiquement à la clôture du passage,
+     en comparant l'instantané de départ au stock constaté au retour. Rien n'est à saisir à la main.
      Le poids brut par type est réparti au prorata du poids net.</p>`;
-  } else if (ecarts > 0) {
+  } else if (closed) {
+    const venduTotal = Math.max(0, pieces - returned);
+    const unitHt = pieces > 0 ? customsChf / pieces : 0;
+    html += `<p style="font-size:8pt;color:#555;margin-top:3mm">
+     TVA réellement due : elle ne porte que sur ce qui est resté en Suisse, soit
+     <b>${venduTotal}</b> pièce(s) pour <b>${num(unitHt * venduTotal)} CHF HT</b>,
+     donc <b>${num(vatOnImport(unitHt * venduTotal))} CHF</b> de TVA — à opposer aux
+     ${num(vatOnImport(customsChf))} CHF avancés à l'entrée.
+     « Vendu » vaut ici « parti − revenu » ; le chiffre de la caisse figure sur les feuilles produit.</p>`;
+  }
+  if (closed && ecarts > 0) {
     html += `<div class="warn"><h3>${ecarts} ligne(s) avec un écart</h3>
      <p style="margin:0">Sur ces lignes, « parti − revenu » ne correspond pas aux ventes enregistrées à la caisse.
      L'écart correspond à de la casse, un cadeau, ou une pièce partie sans passer en caisse. Les lignes concernées sont surlignées.</p></div>`;

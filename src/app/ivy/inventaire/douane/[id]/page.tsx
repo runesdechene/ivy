@@ -290,15 +290,18 @@ export default function DouanePassageDetailPage() {
     // Les inclure ferait recalculer 489 lignes à chaque frappe.
   }, [items, form.eurToChf, form.vatPct, form.grossWeightKg, form.pricesChfTtc, passage]);
 
+  const isClosed = passage?.status === 'closed';
+
   // --- Synthese par type : ce que la douane lit en tete de dossier ---
   const summary = useMemo(() => {
-    const rows = new Map<string, { qty: number; netG: number; customs: number }>();
+    const rows = new Map<string, { qty: number; netG: number; customs: number; ret: number }>();
     for (const it of computed.lines) {
       const type = it.product_type ?? '(sans type)';
-      const r = rows.get(type) ?? { qty: 0, netG: 0, customs: 0 };
+      const r = rows.get(type) ?? { qty: 0, netG: 0, customs: 0, ret: 0 };
       r.qty += it.qty_departed;
       r.netG += it.lineWeightGrams;
       r.customs += it.lineCustomsValue;
+      r.ret += it.qty_returned ?? 0;
       rows.set(type, r);
     }
     // Le brut d'un type = son net + le poids de SES caisses. Les t-shirts et les
@@ -309,16 +312,47 @@ export default function DouanePassageDetailPage() {
     };
     const totalPackaging = [...rows.keys()].reduce((n, t) => n + packOf(t), 0);
     const totalNetKg = [...rows.values()].reduce((n, r) => n + r.netG, 0) / 1000;
+    const built = [...rows.entries()];
+    const agg = built.reduce((acc, [type, r]) => {
+      const vendu = Math.max(0, r.qty - r.ret);
+      const unitG = r.qty > 0 ? r.netG / r.qty : 0;
+      const unitHt = r.qty > 0 ? r.customs / r.qty : 0;
+      acc.reste += r.ret;
+      acc.vendu += vendu;
+      acc.netResteKg += (unitG * r.ret) / 1000;
+      acc.netVenduKg += (unitG * vendu) / 1000;
+      acc.valResteChf += unitHt * r.ret;
+      acc.valVenduChf += unitHt * vendu;
+      return acc;
+    }, { reste: 0, vendu: 0, netResteKg: 0, netVenduKg: 0, valResteChf: 0, valVenduChf: 0 });
+
     return {
       totalPackaging,
       totalGrossKg: totalNetKg + totalPackaging,
+      totalReste: agg.reste,
+      totalVendu: agg.vendu,
+      totalNetResteKg: agg.netResteKg,
+      totalNetVenduKg: agg.netVenduKg,
+      totalValResteChf: agg.valResteChf,
+      totalValVenduChf: agg.valVenduChf,
       rows: [...rows.entries()]
-        .map(([type, r]) => ({
-          type,
-          ...r,
-          packagingKg: packOf(type),
-          grossKg: r.netG / 1000 + packOf(type),
-        }))
+        .map(([type, r]) => {
+          // « Vendu » au sens douanier : ce qui est resté en Suisse, soit parti − revenu.
+          const vendu = Math.max(0, r.qty - r.ret);
+          const unitG = r.qty > 0 ? r.netG / r.qty : 0;
+          const unitHt = r.qty > 0 ? r.customs / r.qty : 0;
+          return {
+            type,
+            ...r,
+            packagingKg: packOf(type),
+            grossKg: r.netG / 1000 + packOf(type),
+            vendu,
+            netResteKg: (unitG * r.ret) / 1000,
+            netVenduKg: (unitG * vendu) / 1000,
+            valResteChf: unitHt * r.ret,
+            valVenduChf: unitHt * vendu,
+          };
+        })
         .sort((a, b) => b.qty - a.qty),
     };
   }, [computed, form.packagingKg]);
@@ -562,6 +596,16 @@ export default function DouanePassageDetailPage() {
               <Table.Th style={{ textAlign: 'right', minWidth: 110 }}>Caisses (kg)</Table.Th>
               <Table.Th style={{ textAlign: 'right' }}>Poids brut</Table.Th>
               <Table.Th style={{ textAlign: 'right' }}>Valeur douanière au départ (HT)</Table.Th>
+              {/* Toujours affichées : à l'aller elles s'impriment vides, pour être
+                  remplies à la main au festival. */}
+              {['Qté restante', 'Qté vendue', 'Poids restant', 'Poids vendu', 'Valeur restante', 'Valeur vendue'].map((h) => (
+                <Table.Th
+                  key={h}
+                  style={{ textAlign: 'right', color: isClosed ? undefined : 'var(--mantine-color-dimmed)' }}
+                >
+                  {h}
+                </Table.Th>
+              ))}
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -600,6 +644,12 @@ export default function DouanePassageDetailPage() {
                   {r.grossKg.toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg
                 </Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>{formatChf(r.customs)}</Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}>{isClosed ? r.ret : '—'}</Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}>{isClosed ? r.vendu : '—'}</Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}>{isClosed ? `${r.netResteKg.toFixed(3)} kg` : '—'}</Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}>{isClosed ? `${r.netVenduKg.toFixed(3)} kg` : '—'}</Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}>{isClosed ? formatChf(r.valResteChf) : '—'}</Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}>{isClosed ? formatChf(r.valVenduChf) : '—'}</Table.Td>
               </Table.Tr>
             ))}
           </Table.Tbody>
@@ -617,6 +667,12 @@ export default function DouanePassageDetailPage() {
                 <b>{summary.totalGrossKg.toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg</b>
               </Table.Td>
               <Table.Td style={{ textAlign: 'right' }}><b>{formatChf(computed.customsValue)}</b></Table.Td>
+              <Table.Td style={{ textAlign: 'right' }}><b>{isClosed ? summary.totalReste : '—'}</b></Table.Td>
+              <Table.Td style={{ textAlign: 'right' }}><b>{isClosed ? summary.totalVendu : '—'}</b></Table.Td>
+              <Table.Td style={{ textAlign: 'right' }}><b>{isClosed ? `${summary.totalNetResteKg.toFixed(3)} kg` : '—'}</b></Table.Td>
+              <Table.Td style={{ textAlign: 'right' }}><b>{isClosed ? `${summary.totalNetVenduKg.toFixed(3)} kg` : '—'}</b></Table.Td>
+              <Table.Td style={{ textAlign: 'right' }}><b>{isClosed ? formatChf(summary.totalValResteChf) : '—'}</b></Table.Td>
+              <Table.Td style={{ textAlign: 'right' }}><b>{isClosed ? formatChf(summary.totalValVenduChf) : '—'}</b></Table.Td>
             </Table.Tr>
           </Table.Tfoot>
         </Table>
@@ -630,6 +686,11 @@ export default function DouanePassageDetailPage() {
         <Text size="xs" c="dimmed" mt="xs">
           Le poids brut d&apos;une ligne vaut son poids net plus celui de ses caisses.
           Laisse à zéro si ce type voyage sans emballage propre.
+          {!isClosed && (
+            <> Les six dernières colonnes se rempliront <b>toutes seules à la clôture</b>,
+            en comparant l&apos;instantané de départ au stock du moment. Elles apparaissent
+            dès maintenant pour figurer sur le document d&apos;aller.</>
+          )}
         </Text>
       </Paper>
 
