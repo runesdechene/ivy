@@ -266,7 +266,6 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
  <span class="chip fort"><b>TVA à l'import</b> ${num(vatOnImport(customsChf))} CHF</span>
  ${closed ? `<span class="chip fort"><b>Revenues</b> ${returned}</span><span class="chip fort"><b>Vendues (caisse)</b> ${sold}</span>` : ''}
 </div>
-</div>
 <p style="font-size:6.8pt;color:#555;margin:0 0 2mm">
  <b>Valeur en douane = prix d'achat</b> (coût du textile + coût de l'impression), hors taxe par nature.
  Conversion en francs au taux de ${rate}. Les prix de vente ci-dessous ne servent qu'à situer la marchandise ;
