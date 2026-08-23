@@ -11,6 +11,12 @@ export interface StockMovement {
   };
   quantity: number; // negative = sortie, positive = retour
   stock: number; // stock actuel
+  /**
+   * Renseigné quand la dernière validation a échoué pour cette ligne : elle
+   * reste au panier, en rouge, avec la raison. Rien n'a été écrit (ni Shopify
+   * ni Ivy) dans ce cas, donc revalider est sûr.
+   */
+  syncError?: string;
 }
 
 export interface ProductSelection {

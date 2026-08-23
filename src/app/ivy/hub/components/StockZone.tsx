@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@mantine/core';
-import { IconPackage, IconTrash, IconArrowBackUp, IconRotate } from '@tabler/icons-react';
+import { IconPackage, IconTrash, IconArrowBackUp, IconRotate, IconAlertTriangle } from '@tabler/icons-react';
 import { StockMovement } from '../types';
 import styles from '../caisse.module.scss';
 
@@ -28,6 +28,8 @@ export function StockZone({
   onConfirm,
   processing,
 }: StockZoneProps) {
+  const failedCount = movements.filter(m => m.syncError).length;
+
   return (
     <div className={styles.cartZone}>
       {/* Header */}
@@ -54,6 +56,15 @@ export function StockZone({
 
       {/* Items */}
       <div className={styles.cartItems}>
+        {failedCount > 0 && (
+          <div className={styles.cartFailedBanner}>
+            <IconAlertTriangle size={16} style={{ flexShrink: 0 }} />
+            <span>
+              {failedCount} ligne{failedCount > 1 ? 's' : ''} non validée{failedCount > 1 ? 's' : ''} —
+              rien n&apos;a été décompté, tu peux revalider.
+            </span>
+          </div>
+        )}
         {movements.length === 0 ? (
           <div className={styles.emptyCart}>
             <div className={styles.emptyCartIcon}>📦</div>
@@ -64,7 +75,13 @@ export function StockZone({
           movements.map(movement => (
             <div
               key={movement.variantId}
-              className={`${styles.cartItem} ${movement.quantity > 0 ? styles.returnItem : ''}`}
+              className={[
+                styles.cartItem,
+                movement.quantity > 0 ? styles.returnItem : '',
+                movement.syncError ? styles.failedItem : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
             >
               <div className={styles.cartItemHeader}>
                 <div className={styles.cartItemName}>
@@ -87,6 +104,9 @@ export function StockZone({
                   </span>
                 </div>
               </div>
+              {movement.syncError && (
+                <div className={styles.cartItemError}>⚠️ {movement.syncError}</div>
+              )}
             </div>
           ))
         )}

@@ -8,6 +8,7 @@ interface UseStockTrackerReturn {
   addMovement: (item: Omit<StockMovement, 'quantity'>) => void;
   undoMovement: (variantId: string) => void;
   clearMovements: () => void;
+  keepFailed: (failures: { variantId: string; error?: string }[]) => void;
   totalOut: number;
   totalReturn: number;
   isReturnMode: boolean;
@@ -25,7 +26,8 @@ export function useStockTracker(): UseStockTrackerReturn {
       if (existing) {
         return prev.map(m =>
           m.variantId === item.variantId
-            ? { ...m, quantity: m.quantity + (isReturnMode ? 1 : -1) }
+            // On retouche la ligne → l'erreur de la validation précédente n'a plus de sens
+            ? { ...m, quantity: m.quantity + (isReturnMode ? 1 : -1), syncError: undefined }
             : m
         );
       }
@@ -60,6 +62,20 @@ export function useStockTracker(): UseStockTrackerReturn {
     setMovements([]);
   }, []);
 
+  /**
+   * Après une validation partielle : ne garde au panier que les lignes qui ont
+   * échoué sans rien écrire, taguées avec leur raison. Les lignes passées sont
+   * retirées (les revalider les compterait deux fois).
+   */
+  const keepFailed = useCallback((failures: { variantId: string; error?: string }[]) => {
+    const byVariant = new Map(failures.map(f => [f.variantId, f.error]));
+    setMovements(prev =>
+      prev
+        .filter(m => byVariant.has(m.variantId))
+        .map(m => ({ ...m, syncError: byVariant.get(m.variantId) ?? 'Échec de la validation' })),
+    );
+  }, []);
+
   const totalOut = useMemo(() => {
     return movements.reduce((sum, m) => sum + (m.quantity < 0 ? Math.abs(m.quantity) : 0), 0);
   }, [movements]);
@@ -73,6 +89,7 @@ export function useStockTracker(): UseStockTrackerReturn {
     addMovement,
     undoMovement,
     clearMovements,
+    keepFailed,
     totalOut,
     totalReturn,
     isReturnMode,

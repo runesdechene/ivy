@@ -80,8 +80,9 @@ export default function CaissePage() {
     ps.resetSelection();
   }, [tracker, ps]);
 
-  const handleConfirm = async () => {
-    if (!currentShop || tracker.movements.length === 0) return;
+  /** Retourne false si des lignes sont restées au panier (à revalider). */
+  const handleConfirm = async (): Promise<boolean> => {
+    if (!currentShop || tracker.movements.length === 0) return true;
 
     setProcessing(true);
     try {
@@ -106,31 +107,25 @@ export default function CaissePage() {
 
       const data = (await response.json()) as {
         success: boolean;
-        results?: { label?: string; variantId: string; success: boolean; error?: string; shopifyFailed?: boolean }[];
+        results?: {
+          label?: string;
+          variantId: string;
+          success: boolean;
+          error?: string;
+          shopifyFailed?: boolean;
+          retryable?: boolean;
+        }[];
         shopifyFailedCount?: number;
       };
-      const failed = (data.results ?? []).filter(r => !r.success);
+      const results = data.results ?? [];
+      const failed = results.filter(r => !r.success);
+      // Rejouables = rien n'a été écrit, la ligne peut rester au panier telle
+      // quelle. Les autres ont laissé un état partiel : on ne les remet PAS,
+      // sinon une revalidation compterait deux fois.
+      const retryable = failed.filter(r => r.retryable);
+      const manual = failed.filter(r => !r.retryable);
 
-      if (failed.length > 0) {
-        // Alerte persistante : un ajustement non synchronisé fait diverger Ivy et
-        // Shopify en silence. On nomme les lignes en échec pour pouvoir les rejouer.
-        const detail = failed
-          .map(r => `• ${r.label ?? r.variantId} — ${r.error ?? 'échec'}`)
-          .join('\n');
-        notifications.show({
-          title: `⚠️ ${failed.length} ajustement${failed.length > 1 ? 's' : ''} non synchronisé${failed.length > 1 ? 's' : ''}`,
-          message:
-            (data.shopifyFailedCount
-              ? "La synchro Shopify a échoué. Le stock local n'a PAS été modifié pour ces lignes — à ressaisir.\n\n"
-              : '') + detail,
-          color: 'red',
-          autoClose: false,
-          withCloseButton: true,
-          style: { whiteSpace: 'pre-line' },
-        });
-      }
-
-      const okCount = (data.results ?? []).length - failed.length;
+      const okCount = results.length - failed.length;
       if (okCount > 0) {
         notifications.show({
           title: 'Stock mis à jour',
@@ -139,15 +134,51 @@ export default function CaissePage() {
         });
       }
 
-      tracker.clearMovements();
+      if (retryable.length > 0) {
+        notifications.show({
+          title: `⚠️ ${retryable.length} ligne${retryable.length > 1 ? 's' : ''} non synchronisée${retryable.length > 1 ? 's' : ''}`,
+          message:
+            (data.shopifyFailedCount ? 'La synchro Shopify a échoué. ' : '') +
+            "Rien n'a été décompté pour ces lignes : elles restent au panier, en rouge. Revalide quand la connexion est revenue.",
+          color: 'red',
+          autoClose: false,
+          withCloseButton: true,
+        });
+      }
+
+      if (manual.length > 0) {
+        // État partiel : Shopify est peut-être à jour, Ivy non. Revalider est
+        // dangereux → on sort la ligne du panier et on demande un contrôle.
+        notifications.show({
+          title: `🛑 ${manual.length} ligne${manual.length > 1 ? 's' : ''} à vérifier à la main`,
+          message: manual
+            .map(r => `• ${r.label ?? r.variantId} — ${r.error ?? 'échec'}`)
+            .join('\n'),
+          color: 'red',
+          autoClose: false,
+          withCloseButton: true,
+          style: { whiteSpace: 'pre-line' },
+        });
+      }
+
+      if (retryable.length > 0) {
+        tracker.keepFailed(retryable);
+      } else {
+        tracker.clearMovements();
+      }
       ps.refreshInventory();
+      return failed.length === 0;
     } catch (error) {
       console.error('Stock adjustment error:', error);
       notifications.show({
         title: 'Erreur',
-        message: 'Une erreur est survenue lors de la mise à jour du stock',
-        color: 'rust',
+        message:
+          "Le stock n'a pas pu être mis à jour. Les mouvements restent au panier — vérifie la connexion et revalide.",
+        color: 'red',
+        autoClose: false,
+        withCloseButton: true,
       });
+      return false;
     } finally {
       setProcessing(false);
     }

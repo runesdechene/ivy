@@ -250,6 +250,38 @@
     background: $plum-bg;
     border: 1px solid $plum;
   }
+
+  // Ligne restée au panier après un échec de validation. Prime sur returnItem :
+  // au stand, il faut la voir du premier coup d'œil.
+  &.failedItem {
+    background: $clay-bg;
+    border: 1px solid $rust;
+    box-shadow: inset 3px 0 0 0 $rust;
+  }
+}
+
+// Bandeau en tête de panier quand des lignes n'ont pas pu être validées.
+.cartFailedBanner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  margin-bottom: 0.5rem;
+  border-radius: $radius-md;
+  background: $clay-bg;
+  border: 1px solid $rust;
+  color: $rust;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.cartItemError {
+  margin-top: 0.4rem;
+  color: $rust;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.3;
 }
 
 .cartItemHeader {

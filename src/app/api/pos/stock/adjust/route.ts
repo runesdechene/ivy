@@ -22,6 +22,12 @@ interface ItemResult {
   error?: string;
   /** true quand l'échec vient de la synchro Shopify (et non du local). */
   shopifyFailed?: boolean;
+  /**
+   * true = rien n'a été écrit (ni Shopify ni Ivy), la ligne peut être revalidée
+   * telle quelle. false = état partiel ou inconnu, revalider risque de compter
+   * deux fois — l'UI doit alerter au lieu de remettre la ligne au panier.
+   */
+  retryable?: boolean;
 }
 
 function itemLabel(item: StockAdjustment): string {
@@ -88,7 +94,7 @@ export async function POST(request: NextRequest) {
         // Resolve variant ID (could be Shopify ID)
         const resolvedVariantId = await resolveVariantId(supabase, item.variantId);
         if (!resolvedVariantId) {
-          results.push({ variantId: item.variantId, label, success: false, error: 'Variante introuvable' });
+          results.push({ variantId: item.variantId, label, success: false, retryable: true, error: 'Variante introuvable' });
           continue;
         }
 
@@ -104,6 +110,7 @@ export async function POST(request: NextRequest) {
             variantId: item.variantId,
             label,
             success: false,
+            retryable: true,
             error: 'Variante introuvable',
           });
           continue;
@@ -166,6 +173,7 @@ export async function POST(request: NextRequest) {
               label,
               success: false,
               shopifyFailed: true,
+              retryable: true,
               error: `Shopify a refusé l'ajustement (HTTP ${shopifyResponse.status})`,
             });
             continue;
@@ -179,6 +187,7 @@ export async function POST(request: NextRequest) {
               label,
               success: false,
               shopifyFailed: true,
+              retryable: true,
               error: `Shopify : ${userErrors.map((e: { message: string }) => e.message).join(' / ')}`,
             });
             continue;
@@ -213,7 +222,11 @@ export async function POST(request: NextRequest) {
               variantId: item.variantId,
               label,
               success: false,
-              error: 'Mise à jour du stock local impossible',
+              retryable: false,
+              error:
+                variant.inventory_item_id && variant.shopify_active !== false
+                  ? 'Shopify est à jour mais PAS le stock Ivy — à corriger à la main, ne pas revalider'
+                  : 'Mise à jour du stock local impossible',
             });
             continue;
           }
@@ -243,7 +256,8 @@ export async function POST(request: NextRequest) {
           variantId: item.variantId,
           label,
           success: false,
-          error: 'Erreur de traitement',
+          retryable: false,
+          error: 'Erreur de traitement — vérifier le stock avant de revalider',
         });
       }
     }

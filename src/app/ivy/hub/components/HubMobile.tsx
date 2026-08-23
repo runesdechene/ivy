@@ -32,7 +32,8 @@ interface HubMobileProps {
   onUndo: (variantId: string) => void;
   onClear: () => void;
   onToggleReturnMode: (enabled: boolean) => void;
-  onConfirm: () => void | Promise<void>;
+  /** Retourne false si des lignes sont restées au panier → on garde le tiroir ouvert. */
+  onConfirm: () => boolean | void | Promise<boolean | void>;
   processing: boolean;
 }
 
@@ -197,7 +198,12 @@ export function HubMobile({
           onUndo={onUndo}
           onClear={onClear}
           onToggleReturnMode={onToggleReturnMode}
-          onConfirm={async () => { await onConfirm(); cart.close(); }}
+          onConfirm={async () => {
+            const ok = await onConfirm();
+            // Des lignes en échec restent au panier : on laisse le tiroir ouvert
+            // pour qu'elles soient vues, pas juste signalées par une notification.
+            if (ok !== false) cart.close();
+          }}
           processing={processing}
         />
       </Drawer>
