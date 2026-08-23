@@ -49,6 +49,21 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   if (typeof body.vatPct === 'number' && body.vatPct >= 0) patch.vat_pct = body.vatPct;
   if (body.grossWeightKg === null || typeof body.grossWeightKg === 'number') patch.gross_weight_kg = body.grossWeightKg;
   if (typeof body.reference === 'string') patch.reference = body.reference;
+  for (const [key, col] of [
+    ['raisonSociale', 'raison_sociale'],
+    ['nomPrenom', 'nom_prenom'],
+    ['adresseSiege', 'adresse_siege'],
+    ['adresseExposition', 'adresse_exposition'],
+    ['dateExposition', 'date_exposition'],
+  ] as const) {
+    if (typeof body[key] === 'string') patch[col] = body[key];
+  }
+  for (const [key, col] of [
+    ['dateRetourPrevue', 'date_retour_prevue'],
+    ['dateApurement', 'date_apurement'],
+  ] as const) {
+    if (typeof body[key] === 'string' || body[key] === null) patch[col] = body[key] || null;
+  }
   if (typeof body.docTitre === 'string') patch.doc_titre = body.docTitre;
   if (typeof body.docSousTitre === 'string') patch.doc_sous_titre = body.docSousTitre;
   if (typeof body.origin === 'string' && body.origin) patch.origin = body.origin;

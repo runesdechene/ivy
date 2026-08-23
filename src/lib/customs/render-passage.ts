@@ -29,6 +29,15 @@ export interface PassageRow {
   /** Titre et sous-titre libres de la feuille imprimee. */
   doc_titre?: string | null;
   doc_sous_titre?: string | null;
+  raison_sociale?: string | null;
+  nom_prenom?: string | null;
+  adresse_siege?: string | null;
+  adresse_exposition?: string | null;
+  date_exposition?: string | null;
+  date_retour_prevue?: string | null;
+  date_apurement?: string | null;
+  /** Position tarifaire, origine et TVA par type. Le code SH vient d'ici. */
+  tariff_by_type?: Record<string, { position?: string; origine?: string; tva?: number }>;
 }
 
 export interface PassageItem {
@@ -74,6 +83,8 @@ const CSS = `
  tfoot td { font-weight: bold; background: #f4f4f4; }
  .prodhead { display: flex; align-items: center; gap: 4mm; margin-bottom: 2mm; }
  .prodhead img { height: 22mm; border: 1px solid #ccc; }
+ img { height: 13mm; border: 1px solid #ddd; }
+ .dense img { height: 9mm; }
  .dense table { font-size: 7.4pt; }
  .dense th, .dense td { padding: 0.5mm 1.2mm; }
  .dense .prodhead img { height: 16mm; }
@@ -103,6 +114,8 @@ export function renderPassage(
   /** Ce que le douanier lit : le libelle saisi, a defaut le nom du type. */
   const labelOf = (type: string) => labels[type] || type;
   const packaging = passage.packaging_kg ?? {};
+  const tariffs = passage.tariff_by_type ?? {};
+  const shOf = (type: string) => tariffs[type]?.position ?? '';
   const hasPackaging = Object.values(packaging).some(v => Number(v) > 0);
 
   const num = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
@@ -171,6 +184,19 @@ export function renderPassage(
   const totalPackaging = [...byType.keys()].reduce((n, t) => n + packagingOf(t), 0);
   const grossKg = hasPackaging ? netG / 1000 + totalPackaging : globalGross;
   const grossRatio = !hasPackaging && globalGross !== null && netG > 0 ? globalGross / (netG / 1000) : null;
+  /**
+   * Une ligne par TYPE Ivy. On ne fusionne jamais sur le libellé : un t-shirt
+   * classique et un 240 g coton brossé peuvent porter le même mot courant, ce
+   * sont deux articles distincts, de prix et de poids différents.
+   */
+  const byObjet = new Map<string, {
+    qty: number; netG: number; chf: number; ret: number; types: string[];
+  }>();
+  for (const [type, t] of byType) {
+    byObjet.set(type, { qty: t.qty, netG: t.netG, chf: t.chf, ret: t.ret, types: [type] });
+  }
+  const packagingOfObjet = (types: string[]) => types.reduce((n, t) => n + packagingOf(t), 0);
+
   const grossOfType = (type: string, typeNetG: number) =>
     hasPackaging
       ? typeNetG / 1000 + packagingOf(type)
@@ -190,8 +216,15 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
 <h1>${esc(passage.doc_titre) || titre}</h1>
 ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}</p>` : ''}
 <div class="meta">
- <b>Emplacement</b> ${esc(passage.location_name)}<br>
+ <b>Raison sociale</b> ${esc(passage.raison_sociale) || '—'}<br>
+ <b>Nom et prénom</b> ${esc(passage.nom_prenom) || '—'}<br>
+ <b>Siège social (France)</b> ${esc(passage.adresse_siege) || '—'}<br>
+ <b>Lieu d'exposition</b> ${esc(passage.adresse_exposition) || '—'}<br>
+ <b>Dates d'exposition</b> ${esc(passage.date_exposition) || '—'}<br>
+ <b>Emplacement de départ</b> ${esc(passage.location_name)}<br>
  <b>Date de départ</b> ${esc(passage.departed_on)}<br>
+ <b>Date de retour prévue</b> ${esc(passage.date_retour_prevue) || '—'}<br>
+ ${passage.date_apurement ? `<b>Date d'apurement</b> ${esc(passage.date_apurement)}<br>` : ''}
  ${closed ? `<b>Date de retour</b> ${esc(passage.returned_on ?? '—')}<br>` : ''}
  <b>Référence 1187</b> ${esc(passage.reference) || '—'}<br>
  <b>Taux appliqué</b> 1 EUR = ${rate} CHF<br>
@@ -210,49 +243,39 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
  ils n'entrent pas dans la valeur déclarée.
 </p>
 
-<h2>Prix de vente pratiqués en Suisse</h2>
-<table style="width:auto;margin-bottom:4mm"><thead><tr>
- <th class="l">Type</th><th>Prix TTC (CHF)</th><th>dont TVA</th><th>Prix HT (CHF)</th>
-</tr></thead><tbody>${[...byType.keys()].sort().map(t => {
-    const ttc = prices[t];
-    if (!ttc) return `<tr><td class="l">${esc(t)}</td><td colspan="3">converti depuis le prix Ivy</td></tr>`;
-    return `<tr><td class="l">${esc(t)}</td><td>${num(ttc)}</td><td>${num(ttc - ttc / vatDiv)}</td><td><b>${num(ttc / vatDiv)}</b></td></tr>`;
-  }).join('')}</tbody></table>
-
 <h2>Détail par type de produit</h2>
 <table><thead>
-<tr><th colspan="9">Départ</th><th colspan="6" class="retour">Retour</th></tr>
+<tr><th colspan="10">Départ</th><th colspan="6" class="retour">Retour</th></tr>
 <tr>
- <th class="l">Objet</th><th class="l">Type Ivy</th><th>Quantité</th><th>Poids net (kg)</th><th>Caisses (kg)</th><th>Poids brut (kg)</th>
+ <th class="l">Objet</th><th class="l">Code SH</th><th class="l">Type Ivy</th><th>Quantité</th><th>Poids net (kg)</th><th>Caisses (kg)</th><th>Poids brut (kg)</th>
  <th>Valeur douanière au départ<br>HT (EUR)</th><th>Valeur douanière au départ<br>HT (CHF)</th><th>TVA import CHF</th>
  ${closed
     ? '<th class="retour">Qté restante</th><th>Qté vendue</th><th>Poids restant (kg)</th><th>Poids vendu (kg)</th><th>Valeur restante (CHF)</th><th>Valeur vendue (CHF)</th>'
     : '<th class="tofill retour">Qté restante</th><th class="tofill">Qté vendue</th><th class="tofill">Poids restant (kg)</th><th class="tofill">Poids vendu (kg)</th><th class="tofill">Valeur restante (CHF)</th><th class="tofill">Valeur vendue (CHF)</th>'}
 </tr></thead><tbody>`;
 
-  for (const [type, t] of [...byType.entries()].sort((a, b) => b[1].qty - a[1].qty)) {
-    const gross = grossOfType(type, t.netG);
-    const unitHt = t.qty > 0 ? t.chf / t.qty : 0;
-    html += `<tr><td class="l"><b>${esc(labelOf(type))}</b></td><td class="l">${esc(type)}</td><td>${t.qty}</td><td>${kg(t.netG)}</td>` +
-      `<td>${hasPackaging ? kgv(packagingOf(type)) : '—'}</td>` +
-      `<td>${gross !== null ? kgv(gross) : '—'}</td>` +
-      `<td>${num(t.chf / rate)}</td><td>${num(t.chf)}</td><td>${num(vatOnImport(t.chf))}</td>` +
+  for (const [objet, o] of [...byObjet.entries()].sort((a, b) => b[1].qty - a[1].qty)) {
+    const pack = packagingOfObjet(o.types);
+    const brut = hasPackaging ? o.netG / 1000 + pack : null;
+    const reste = o.ret;
+    const vendu = Math.max(0, o.qty - o.ret);
+    const unitG = o.qty > 0 ? o.netG / o.qty : 0;
+    const unitHt = o.qty > 0 ? o.chf / o.qty : 0;
+    html += `<tr><td class="l"><b>${esc(labelOf(objet))}</b></td>` +
+      `<td class="l">${shOf(objet) || '<b style="color:#b00">—</b>'}</td>` +
+      `<td class="l">${esc(objet)}</td><td>${o.qty}</td><td>${kg(o.netG)}</td>` +
+      `<td>${hasPackaging ? kgv(pack) : '—'}</td>` +
+      `<td>${brut !== null ? kgv(brut) : '—'}</td>` +
+      `<td>${num(o.chf / rate)}</td><td>${num(o.chf)}</td><td>${num(vatOnImport(o.chf))}</td>` +
       (closed
-        ? (() => {
-            // « Vendu » au sens douanier : ce qui est physiquement resté en Suisse,
-            // soit parti − revenu. Le chiffre de la caisse sert de contrôle ailleurs.
-            const reste = t.ret;
-            const vendu = Math.max(0, t.qty - t.ret);
-            const unitG = t.qty > 0 ? t.netG / t.qty : 0;
-            return `<td>${reste}</td><td>${vendu}</td>` +
-              `<td>${kg(unitG * reste)}</td><td>${kg(unitG * vendu)}</td>` +
-              `<td>${num(unitHt * reste)}</td><td>${num(unitHt * vendu)}</td>`;
-          })()
-        : `<td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
+        ? `<td class="retour">${reste}</td><td>${vendu}</td>` +
+          `<td>${kg(unitG * reste)}</td><td>${kg(unitG * vendu)}</td>` +
+          `<td>${num(unitHt * reste)}</td><td>${num(unitHt * vendu)}</td>`
+        : `<td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
       `</tr>`;
   }
 
-  html += `</tbody><tfoot><tr><td class="l" colspan="2">TOTAL</td><td>${pieces}</td><td>${kg(netG)}</td>` +
+  html += `</tbody><tfoot><tr><td class="l" colspan="3">TOTAL</td><td>${pieces}</td><td>${kg(netG)}</td>` +
     `<td>${hasPackaging ? kgv(totalPackaging) : '—'}</td>` +
     `<td>${grossKg !== null ? kgv(grossKg) : '—'}</td>` +
     `<td>${num(customsChf / rate)}</td><td>${num(customsChf)}</td><td>${num(vatOnImport(customsChf))}</td>` +
@@ -299,113 +322,61 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
   }
   html += `</div>`;
 
-  // ---------- Détail par produit ----------
-  // La même lecture, modèle par modèle : Avalon, Yggdrasil…
-  {
-    const byTitle = new Map<string, {
-      titre: string; type: string | null;
-      qty: number; netG: number; chf: number; ret: number;
-    }>();
-    for (const it of items) {
-      const r = byTitle.get(it.product_title) ?? {
-        titre: it.product_title, type: it.product_type,
-        qty: 0, netG: 0, chf: 0, ret: 0,
-      };
-      r.qty += it.qty_departed;
-      r.netG += (it.weight_grams ?? 0) * it.qty_departed;
-      r.chf += customsChfOf(it) * it.qty_departed;
-      r.ret += it.qty_returned ?? 0;
-      byTitle.set(it.product_title, r);
-    }
-    const prods = [...byTitle.values()].sort(
-      (a, b) => (a.type ?? '').localeCompare(b.type ?? '') || a.titre.localeCompare(b.titre),
-    );
-
-    html += `<h2>Détail par produit</h2>
-<table><thead>
-<tr><th colspan="6">Départ</th><th colspan="5" class="retour">Retour</th></tr>
-<tr>
- <th class="l">Produit</th><th class="l">Type</th><th>Qté de départ</th><th>Poids net (kg)</th>
- <th>Valeur douanière HT (EUR)</th><th>Valeur douanière HT (CHF)</th>
- <th class="retour">Qté restante</th><th>Qté vendue</th><th>Poids restant (kg)</th><th>Valeur restante (CHF)</th><th>Valeur vendue (CHF)</th>
-</tr></thead><tbody>${prods.map(r => {
-      const vendu = Math.max(0, r.qty - r.ret);
-      const unitG = r.qty > 0 ? r.netG / r.qty : 0;
-      const unitHt = r.qty > 0 ? r.chf / r.qty : 0;
-      const vide = '<td class="tofill"></td>';
-      return `<tr>
- <td class="l">${esc(r.titre)}</td><td class="l">${esc(r.type ?? '—')}</td>
- <td>${r.qty}</td><td>${kg(r.netG)}</td><td>${num(r.chf / rate)}</td><td>${num(r.chf)}</td>
- ${closed
-   ? `<td class="retour">${r.ret}</td><td>${vendu}</td><td>${kg(unitG * r.ret)}</td>` +
-     `<td>${num(unitHt * r.ret)}</td><td>${num(unitHt * vendu)}</td>`
-   : `<td class="tofill retour"></td>${vide}${vide}${vide}${vide}`}
-</tr>`;
-    }).join('')}</tbody>
-<tfoot><tr>
- <td class="l" colspan="2">TOTAL</td><td>${pieces}</td><td>${kg(netG)}</td><td>${num(customsChf / rate)}</td><td>${num(customsChf)}</td>
- ${closed
-   ? (() => {
-       const venduTotal = Math.max(0, pieces - returned);
-       const unitG = pieces > 0 ? netG / pieces : 0;
-       const unitHt = pieces > 0 ? customsChf / pieces : 0;
-       return `<td class="retour">${returned}</td><td>${venduTotal}</td>` +
-         `<td>${kg(unitG * returned)}</td><td>${num(unitHt * returned)}</td><td>${num(unitHt * venduTotal)}</td>`;
-     })()
-   : '<td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>'}
-</tr></tfoot></table>`;
-  }
-
   // La feuille de resume seule : c'est ce que la douane demande en tete de dossier.
   if (options.onlySummary) return html + `</body></html>`;
 
-  // ---------- Une feuille par produit ----------
-  const sheets = [...byProduct.values()].sort(
-    (a, b) => (a.type ?? '').localeCompare(b.type ?? '') || a.title.localeCompare(b.title),
-  );
+  // ---------- Une annexe par objet declare ----------
+  // Six feuilles au lieu de cinquante-quatre. Chacune rappelle le total du type
+  // puis detaille ses modeles, avec leur photo : c'est ce qui permet a un
+  // douanier de verifier un carton sans qu'on l'y invite.
+  const parObjet = new Map<string, Map<string, {
+    titre: string; image: string | null; qty: number; netG: number; chf: number;
+  }>>();
+  for (const it of items) {
+    const type = it.product_type ?? '(sans type)';
+    if (!parObjet.has(type)) parObjet.set(type, new Map());
+    const m = parObjet.get(type)!;
+    const r = m.get(it.product_title) ?? {
+      titre: it.product_title, image: it.image_url, qty: 0, netG: 0, chf: 0,
+    };
+    r.qty += it.qty_departed;
+    r.netG += (it.weight_grams ?? 0) * it.qty_departed;
+    r.chf += customsChfOf(it) * it.qty_departed;
+    if (!r.image && it.image_url) r.image = it.image_url;
+    m.set(it.product_title, r);
+  }
 
-  for (const s of sheets) {
-    s.rows.sort((a, b) => (a.color ?? '').localeCompare(b.color ?? '') || sizeRank(a.size) - sizeRank(b.size));
-    const sQty = s.rows.reduce((n, r) => n + r.qty_departed, 0);
-    const sNet = s.rows.reduce((n, r) => n + (r.weight_grams ?? 0) * r.qty_departed, 0);
-    const sHt = s.rows.reduce((n, r) => n + customsChfOf(r) * r.qty_departed, 0);
+  for (const [objet, modeles] of [...parObjet.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const lignes = [...modeles.values()].sort((a, b) => b.qty - a.qty);
+    const t = byObjet.get(objet)!;
+    const brut = hasPackaging ? t.netG / 1000 + packagingOfObjet(t.types) : null;
 
-    html += `<div class="sheet${s.rows.length > 24 ? ' dense' : ''}">
-<div class="prodhead">${s.image ? `<img src="${esc(s.image)}" alt="">` : ''}<div><h2>${esc(s.title)}</h2></div></div>
-<div class="meta"><b style="min-width:auto">Objet</b> ${esc(labelOf(s.type ?? '—'))} &nbsp;·&nbsp;
- <b style="min-width:auto">Origine</b> ${esc(passage.origin)} &nbsp;·&nbsp;
- <b style="min-width:auto">Taux</b> 1 EUR = ${rate} CHF &nbsp;·&nbsp;
- <b style="min-width:auto">Emplacement</b> ${esc(passage.location_name)} &nbsp;·&nbsp; ${esc(passage.departed_on)}</div>
+    html += `<div class="sheet${lignes.length > 22 ? ' dense' : ''}">
+<h1>Annexe — ${esc(labelOf(objet))}</h1>
+<div class="meta">
+ <b>Objet déclaré</b> ${esc(labelOf(objet))}<br>
+ <b>Type Ivy</b> ${esc(objet)}<br>
+ <b>Code SH</b> ${esc(shOf(objet)) || "—"}<br>
+ <b>Quantité totale</b> ${t.qty} pièce(s)<br>
+ <b>Poids net / brut</b> ${kg(t.netG)} kg / ${brut !== null ? kgv(brut) : '—'} kg<br>
+ <b>Valeur en douane</b> ${num(t.chf / rate)} EUR &nbsp;/&nbsp; ${num(t.chf)} CHF<br>
+ <b>Origine</b> ${esc(passage.origin)} &nbsp;·&nbsp;
+ <b style="min-width:auto">Emplacement</b> ${esc(passage.location_name)} &nbsp;·&nbsp; ${esc(passage.departed_on)}
+</div>
 <table><thead><tr>
- <th class="l">Taille</th><th class="l">Couleur</th><th>Qté apportée</th>
- ${closed ? '<th>Revenue</th><th>Vendue</th><th>Écart</th>' : '<th>Vendu</th>'}
- <th>Poids unit. (kg)</th><th>Textile HT €</th><th>Impression HT €</th>
- <th>Vente CHF TTC<br><i>(indicatif)</i></th><th>Valeur douanière<br>HT (EUR)</th><th>Valeur douanière<br>HT (CHF)</th><th>TVA import CHF</th><th class="l">Origine</th>
-</tr></thead><tbody>`;
-
-    for (const r of s.rows) {
-      const ecart = closed ? r.qty_departed - (r.qty_returned ?? 0) - (r.qty_sold_recorded ?? 0) : 0;
-      const cls = r.incomplete ? 'incomplete' : (closed && ecart !== 0 ? 'ecart' : '');
-      html += `<tr class="${cls}">` +
-        `<td class="l">${esc(r.size)}</td><td class="l">${esc(r.color)}</td><td>${r.qty_departed}</td>` +
-        (closed
-          ? `<td>${r.qty_returned ?? 0}</td><td>${r.qty_sold_recorded ?? 0}</td><td>${ecart !== 0 ? `<b>${ecart}</b>` : '0'}</td>`
-          : `<td></td>`) +
-        `<td>${r.weight_grams ? kg(r.weight_grams) : '<b>?</b>'}</td>` +
-        `<td>${r.unit_cost_textile !== null ? num(r.unit_cost_textile) : '<b>?</b>'}</td>` +
-        `<td>${r.unit_cost_print !== null ? num(r.unit_cost_print) : '<b>?</b>'}</td>` +
-        `<td>${num(ttcOf(r))}</td>` +
-        `<td><b>${num(customsEurOf(r))}</b></td><td><b>${num(customsChfOf(r))}</b></td>` +
-        `<td>${num(vatOnImport(customsChfOf(r)))}</td>` +
-        `<td class="l">${esc(passage.origin)}</td></tr>`;
-    }
-
-    html += `</tbody><tfoot><tr><td class="l" colspan="2">Sous-total — ${esc(s.title)}</td><td>${sQty}</td>` +
-      (closed ? `<td colspan="3"></td>` : `<td></td>`) +
-      `<td>${kg(sNet)}</td><td colspan="2"></td><td></td>` +
-      `<td><b>${num(sHt / rate)}</b></td><td><b>${num(sHt)}</b></td>` +
-      `<td><b>${num(vatOnImport(sHt))}</b></td><td></td>` +
-      `</tr></tfoot></table></div>`;
+ <th class="l">Photo</th><th class="l">Modèle</th><th>Quantité</th><th>Poids net (kg)</th>
+ <th>Valeur HT (EUR)</th><th>Valeur HT (CHF)</th>
+</tr></thead><tbody>${lignes.map(l => `<tr>
+ <td class="l">${l.image ? `<img src="${esc(l.image)}" alt="">` : ''}</td>
+ <td class="l">${esc(l.titre)}</td>
+ <td>${l.qty}</td><td>${kg(l.netG)}</td>
+ <td>${num(l.chf / rate)}</td><td>${num(l.chf)}</td>
+</tr>`).join('')}</tbody>
+<tfoot><tr>
+ <td class="l" colspan="2">TOTAL — ${esc(labelOf(objet))}</td>
+ <td>${t.qty}</td><td>${kg(t.netG)}</td>
+ <td>${num(t.chf / rate)}</td><td>${num(t.chf)}</td>
+</tr></tfoot></table></div>`;
   }
 
   return html + `</body></html>`;

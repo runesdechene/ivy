@@ -29,6 +29,14 @@ interface Passage {
   prices_chf_ttc: Record<string, number>;
   customs_labels: Record<string, string>;
   doc_titre: string | null;
+  raison_sociale: string | null;
+  nom_prenom: string | null;
+  adresse_siege: string | null;
+  adresse_exposition: string | null;
+  date_exposition: string | null;
+  date_retour_prevue: string | null;
+  date_apurement: string | null;
+  tariff_by_type: Record<string, { position?: string; origine?: string; tva?: number }>;
   doc_sous_titre: string | null;
   packaging_kg: Record<string, number>;
   departure_snapshot_at: string;
@@ -71,6 +79,15 @@ interface FormState {
   /** Titre et sous-titre de la feuille imprimée. */
   docTitre: string;
   docSousTitre: string;
+  raisonSociale: string;
+  nomPrenom: string;
+  adresseSiege: string;
+  adresseExposition: string;
+  dateExposition: string;
+  dateRetourPrevue: string;
+  dateApurement: string;
+  /** Code SH par type de produit. */
+  shByType: Record<string, string>;
 }
 
 /**
@@ -162,6 +179,14 @@ export default function DouanePassageDetailPage() {
     packagingKg: {},
     docTitre: '',
     docSousTitre: '',
+    raisonSociale: '',
+    nomPrenom: '',
+    adresseSiege: '',
+    adresseExposition: '',
+    dateExposition: '',
+    dateRetourPrevue: '',
+    dateApurement: '',
+    shByType: {},
   });
 
   const fetchPassage = useCallback(async () => {
@@ -202,6 +227,17 @@ export default function DouanePassageDetailPage() {
           packagingKg: packs,
           docTitre: data.passage?.doc_titre ?? '',
           docSousTitre: data.passage?.doc_sous_titre ?? '',
+          raisonSociale: data.passage?.raison_sociale ?? '',
+          nomPrenom: data.passage?.nom_prenom ?? '',
+          adresseSiege: data.passage?.adresse_siege ?? '',
+          adresseExposition: data.passage?.adresse_exposition ?? '',
+          dateExposition: data.passage?.date_exposition ?? '',
+          dateRetourPrevue: data.passage?.date_retour_prevue ?? '',
+          dateApurement: data.passage?.date_apurement ?? '',
+          shByType: Object.fromEntries(
+            Object.entries((data.passage?.tariff_by_type ?? {}) as Record<string, { position?: string }>)
+              .map(([k, v]) => [k, v?.position ?? '']),
+          ),
         });
         hydratedRef.current = true;
       }
@@ -233,6 +269,18 @@ export default function DouanePassageDetailPage() {
         customsLabels: next.customsLabels,
         docTitre: next.docTitre,
         docSousTitre: next.docSousTitre,
+        raisonSociale: next.raisonSociale,
+        nomPrenom: next.nomPrenom,
+        adresseSiege: next.adresseSiege,
+        adresseExposition: next.adresseExposition,
+        dateExposition: next.dateExposition,
+        dateRetourPrevue: next.dateRetourPrevue || null,
+        dateApurement: next.dateApurement || null,
+        tariffByType: Object.fromEntries(
+          Object.entries(next.shByType)
+            .filter(([, v]) => v.trim())
+            .map(([k, v]) => [k, { position: v.trim() }]),
+        ),
         packagingKg: Object.fromEntries(
           Object.entries(next.packagingKg).filter(([, v]) => typeof v === 'number'),
         ),
@@ -289,7 +337,19 @@ export default function DouanePassageDetailPage() {
     });
   }, [savePatch]);
 
-  const commitDocField = useCallback((field: 'docTitre' | 'docSousTitre', value: string) => {
+  const commitSh = useCallback((type: string, value: string) => {
+    setForm((prev) => {
+      const next = { ...prev, shByType: { ...prev.shByType, [type]: value } };
+      savePatch(next);
+      return next;
+    });
+  }, [savePatch]);
+
+  const commitDocField = useCallback((
+    field: 'docTitre' | 'docSousTitre' | 'raisonSociale' | 'nomPrenom' | 'adresseSiege'
+      | 'adresseExposition' | 'dateExposition' | 'dateRetourPrevue' | 'dateApurement',
+    value: string,
+  ) => {
     setForm((prev) => {
       const next = { ...prev, [field]: value };
       savePatch(next);
@@ -710,6 +770,27 @@ export default function DouanePassageDetailPage() {
           Ces deux champs remplacent le titre par défaut du document imprimé.
           Laissés vides, le titre réglementaire s&apos;affiche.
         </Text>
+
+        <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="sm" mb="sm">
+          {([
+            ['raisonSociale', 'Raison sociale'],
+            ['nomPrenom', 'Nom et prénom'],
+            ['adresseSiege', 'Adresse du siège social (France)'],
+            ['adresseExposition', "Adresse d'exposition"],
+            ['dateExposition', "Dates d'exposition"],
+            ['dateRetourPrevue', 'Date de retour prévue'],
+            ['dateApurement', "Date d'apurement"],
+          ] as const).map(([champ, label]) => (
+            <div key={champ}>
+              <Text size="xs" c="dimmed" mb={2}>{label}</Text>
+              <LabelCell
+                initial={form[champ]}
+                placeholder={label}
+                onCommit={(v) => commitDocField(champ, v)}
+              />
+            </div>
+          ))}
+        </SimpleGrid>
         <Text size="xs" c="dimmed" mb="sm">
           La colonne <b>Objet</b> est ce que lira le douanier : mets-y un mot courant
           (« T-shirt », « Sweat-shirt »), pas le nom commercial. Elle est enregistrée avec le passage.
@@ -717,13 +798,14 @@ export default function DouanePassageDetailPage() {
         <Table striped highlightOnHover withTableBorder>
           <Table.Thead>
             <Table.Tr>
-              <Table.Th colSpan={8} style={{ textAlign: 'center' }}>Départ</Table.Th>
+              <Table.Th colSpan={9} style={{ textAlign: 'center' }}>Départ</Table.Th>
               <Table.Th colSpan={6} style={{ textAlign: 'center', borderLeft: '2px solid var(--mantine-color-gray-4)' }}>
                 Retour
               </Table.Th>
             </Table.Tr>
             <Table.Tr>
               <Table.Th style={{ minWidth: 180 }}>Objet (libellé douanier)</Table.Th>
+              <Table.Th style={{ minWidth: 110 }}>Code SH</Table.Th>
               <Table.Th>Type Ivy</Table.Th>
               <Table.Th style={{ textAlign: 'right' }}>Qté de départ</Table.Th>
               <Table.Th style={{ textAlign: 'right' }}>Poids net</Table.Th>
@@ -751,6 +833,13 @@ export default function DouanePassageDetailPage() {
                     initial={form.customsLabels[r.type] ?? ''}
                     placeholder={r.type}
                     onCommit={(v) => commitLabel(r.type, v)}
+                  />
+                </Table.Td>
+                <Table.Td>
+                  <LabelCell
+                    initial={form.shByType[r.type] ?? ''}
+                    placeholder="00000000"
+                    onCommit={(v) => commitSh(r.type, v)}
                   />
                 </Table.Td>
                 <Table.Td><Text size="xs" c="dimmed">{r.type}</Text></Table.Td>
