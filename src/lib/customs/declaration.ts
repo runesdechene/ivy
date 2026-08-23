@@ -380,7 +380,14 @@ export async function buildCustomsDeclaration(
  td.l, th.l { text-align: left; }
  tr.incomplete td { background: #ffecec; }
  tfoot td { font-weight: bold; background: #f4f4f4; }
- img { height: 14mm; }
+ .prodhead { display: flex; align-items: center; gap: 4mm; margin-bottom: 2mm; }
+ .prodhead img { height: 22mm; border: 1px solid #ccc; }
+ .prodhead .t { flex: 1; }
+ /* Une feuille = une page. Au-dela de 24 lignes on resserre plutot que de deborder. */
+ .dense table { font-size: 7.4pt; }
+ .dense th, .dense td { padding: 0.5mm 1.2mm; }
+ .dense .prodhead img { height: 16mm; }
+ table { page-break-inside: avoid; }
  .warn { border: 1px solid #b00; background: #fff3f3; padding: 3mm; margin: 4mm 0; }
  .warn h3 { margin: 0 0 1mm; font-size: 10pt; color: #b00; }
  .warn ul { margin: 0; padding-left: 5mm; }
@@ -447,13 +454,17 @@ export async function buildCustomsDeclaration(
     const sVal = rows.reduce((s, r) => s + (r.total ?? 0) * r.qty, 0);
     const sCus = rows.reduce((s, r) => s + r.price * r.qty, 0);
 
-    html += `<div class="sheet"><h2>${esc(product.title)}</h2>
+    html += `<div class="sheet${rows.length > 24 ? ' dense' : ''}">
+<div class="prodhead">
+ ${product.image_url ? `<img src="${esc(product.image_url)}" alt="">` : ''}
+ <div class="t"><h2>${esc(product.title)}</h2></div>
+</div>
 <div class="meta"><b style="min-width:auto">Type</b> ${esc(product.product_type ?? '—')} &nbsp;·&nbsp;
  <b style="min-width:auto">Origine</b> ${esc(origin)} &nbsp;·&nbsp;
  <b style="min-width:auto">Taux</b> 1 EUR = ${rate} CHF &nbsp;·&nbsp;
  <b style="min-width:auto">Emplacement</b> ${esc(location.name)} &nbsp;·&nbsp; ${today}</div>
 <table><thead><tr>
- <th class="l">Image</th><th class="l">Référence</th><th class="l">Taille</th><th class="l">Couleur</th>
+ <th class="l">Référence</th><th class="l">Taille</th><th class="l">Couleur</th>
  <th>Qté apportée</th><th>Vendu</th><th>Poids unit. (kg)</th>
  <th>Textile HT €</th><th>Impression HT €</th><th>Valeur totale €</th>
  <th>Textile CHF</th><th>Impression CHF</th><th>Val. unit. CHF</th>
@@ -462,7 +473,6 @@ export async function buildCustomsDeclaration(
 
     for (const r of rows) {
       html += `<tr class="${r.incomplete ? 'incomplete' : ''}">` +
-        `<td class="l">${r.image ? `<img src="${esc(r.image)}" alt="">` : ''}</td>` +
         `<td class="l">${esc(r.ref)}</td><td class="l">${esc(r.size)}</td><td class="l">${esc(r.color)}</td>` +
         `<td>${r.qty}</td><td></td>` +
         `<td>${r.grams ? kg(r.grams) : '<b>?</b>'}</td>` +
@@ -475,7 +485,7 @@ export async function buildCustomsDeclaration(
         `<td>${eur(r.price)}</td><td class="l">${esc(origin)}</td></tr>`;
     }
 
-    html += `</tbody><tfoot><tr><td class="l" colspan="4">Sous-total — ${esc(product.title)}</td>` +
+    html += `</tbody><tfoot><tr><td class="l" colspan="3">Sous-total — ${esc(product.title)}</td>` +
       `<td>${sQty}</td><td></td><td>${kg(sNet)}</td><td colspan="2"></td><td>${eur(sVal)}</td>` +
       `<td colspan="3"></td><td>${eur(sCus)}</td><td></td></tr></tfoot></table></div>`;
   }

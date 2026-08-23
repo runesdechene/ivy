@@ -73,7 +73,7 @@ if (!location) {
 }
 
 const levels = await readAll(`inventory_levels?select=variant_id,quantity&location_id=eq.${location.shopify_id}&quantity=gt.0&order=variant_id`);
-const variants = await readAll('product_variants?select=id,product_id,shopify_id,title,sku,option1,option2,option3,cost,price,inventory_item_id,shopify_active&order=id');
+const variants = await readAll('product_variants?select=id,product_id,shopify_id,title,sku,option1,option2,option3,cost,price,weight_grams,inventory_item_id,shopify_active&order=id');
 const products = await readAll(`products?select=id,title,product_type,image_url,option1_name,option2_name,option3_name&shop_id=eq.${shop.id}&order=id`);
 const rules = await readAll(`price_rules?select=id,sku,base_price,product_type,is_active&shop_id=eq.${shop.id}&order=id`);
 const mods = await readAll('price_rule_modifiers?select=price_rule_id,metafield_namespace,metafield_key,metafield_value,modifier_amount&order=id');
@@ -205,7 +205,8 @@ for (const lvl of levels) {
   const p = P.get(v.product_id);
   if (!p) continue;
 
-  const grams = gramsByShopifyVariant.get(String(v.shopify_id ?? '')) ?? null;
+  // Ivy d'abord : une variante supprimee de Shopify n'a de poids que dans Ivy.
+  const grams = v.weight_grams ?? gramsByShopifyVariant.get(String(v.shopify_id ?? '')) ?? null;
   const b = breakdown(v, p);
   const price = Number(v.price) || 0;
   const qty = lvl.quantity;
@@ -277,7 +278,14 @@ let html = `<!doctype html><html lang="fr"><head><meta charset="utf-8">
  td.l, th.l { text-align: left; }
  tr.incomplete td { background: #ffecec; }
  tfoot td { font-weight: bold; background: #f4f4f4; }
- img { height: 14mm; }
+ .prodhead { display: flex; align-items: center; gap: 4mm; margin-bottom: 2mm; }
+ .prodhead img { height: 22mm; border: 1px solid #ccc; }
+ .prodhead .t { flex: 1; }
+ /* Une feuille = une page. Au-dela de 24 lignes on resserre plutot que de deborder. */
+ .dense table { font-size: 7.4pt; }
+ .dense th, .dense td { padding: 0.5mm 1.2mm; }
+ .dense .prodhead img { height: 16mm; }
+ table { page-break-inside: avoid; }
  .warn { border: 1px solid #b00; background: #fff3f3; padding: 3mm; margin: 4mm 0; }
  .warn h3 { margin: 0 0 1mm; font-size: 10pt; color: #b00; }
  .warn ul { margin: 0; padding-left: 5mm; }
@@ -349,14 +357,17 @@ for (const { product, rows } of sheets) {
   const sVal = rows.reduce((s, r) => s + (r.total || 0) * r.qty, 0);
   const sCus = rows.reduce((s, r) => s + r.price * r.qty, 0);
 
-  html += `<div class="sheet">
-  <h2>${esc(product.title)}</h2>
+  html += `<div class="sheet${rows.length > 24 ? ' dense' : ''}">
+  <div class="prodhead">
+   ${product.image_url ? `<img src="${esc(product.image_url)}" alt="">` : ''}
+   <div class="t"><h2>${esc(product.title)}</h2></div>
+  </div>
   <div class="meta"><b>Type</b> ${esc(product.product_type || '—')} &nbsp;·&nbsp;
    <b style="min-width:auto">Origine</b> ${esc(ORIGIN)} &nbsp;·&nbsp;
    <b style="min-width:auto">Taux</b> 1 EUR = ${RATE} CHF &nbsp;·&nbsp;
    <b style="min-width:auto">Emplacement</b> ${esc(location.name)} &nbsp;·&nbsp; ${today}</div>
   <table><thead><tr>
-   <th class="l">Image</th><th class="l">Référence</th><th class="l">Taille</th><th class="l">Couleur</th>
+   <th class="l">Référence</th><th class="l">Taille</th><th class="l">Couleur</th>
    <th>Qté apportée</th><th>Vendu</th><th>Poids unit. (kg)</th>
    <th>Textile HT €</th><th>Impression HT €</th><th>Valeur totale €</th>
    <th>Textile CHF</th><th>Impression CHF</th><th>Val. unit. CHF</th>
@@ -365,7 +376,6 @@ for (const { product, rows } of sheets) {
 
   for (const r of rows) {
     html += `<tr class="${r.incomplete ? 'incomplete' : ''}">
-     <td class="l">${r.image ? `<img src="${esc(r.image)}" alt="">` : ''}</td>
      <td class="l">${esc(r.ref)}</td>
      <td class="l">${esc(r.size)}</td>
      <td class="l">${esc(r.color)}</td>
@@ -384,7 +394,7 @@ for (const { product, rows } of sheets) {
   }
 
   html += `</tbody><tfoot><tr>
-   <td class="l" colspan="4">Sous-total — ${esc(product.title)}</td>
+   <td class="l" colspan="3">Sous-total — ${esc(product.title)}</td>
    <td>${sQty}</td><td></td><td>${kg(sNet)}</td>
    <td colspan="2"></td><td>${eur(sVal)}</td>
    <td colspan="3"></td><td>${eur(sCus)}</td><td></td>
