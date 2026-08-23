@@ -10,9 +10,10 @@ import {
   IconPackage, IconCurrencyEuro, IconPalette, IconRuler2,
   IconChartBar, IconTrendingUp, IconMapPin, IconDownload,
   IconFileSpreadsheet, IconChevronDown, IconListDetails,
-  IconPrinter, IconFileCertificate,
+  IconPrinter, IconFileCertificate, IconEPassport,
 } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
+import { useRouter } from 'next/navigation';
 import { useShop } from '@/context/ShopContext';
 import { useLocation } from '@/context/LocationContext';
 import { generateInventoryCsv, generateSummaryCsv, downloadCsv, type SaleValueOptions } from '@/utils/csv-export';
@@ -32,6 +33,7 @@ interface Stats {
 }
 
 export default function InventaireDashboardPage() {
+  const router = useRouter();
   const { currentShop } = useShop();
   const { currentLocation } = useLocation();
   const [loading, setLoading] = useState(true);
@@ -322,6 +324,12 @@ export default function InventaireDashboardPage() {
               disabled={!currentLocation}
             >
               Déclaration suisse (1187)
+            </Menu.Item>
+            <Menu.Item
+              leftSection={<IconEPassport size={16} />}
+              onClick={() => router.push('/ivy/inventaire/douane')}
+            >
+              Passages en douane
             </Menu.Item>
           </Menu.Dropdown>
         </Menu>

@@ -1,0 +1,92 @@
+@use '@/style/_tokens.scss' as *;
+@use '@/style/_typography.scss' as *;
+
+.container {
+  position: relative;
+  min-height: 100%;
+  padding: $space-xl;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+// Page head
+.pageHead {
+  margin-bottom: 28px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: $space-lg;
+  flex-wrap: wrap;
+}
+
+.pageHeadLeft {
+  min-width: 0;
+}
+
+.eyebrow {
+  @include type-eyebrow;
+  margin-bottom: 10px;
+}
+
+.title {
+  @include type-display;
+  font-size: 40px;
+  line-height: 1;
+  margin: 0 0 8px;
+
+  em {
+    @include type-display-accent;
+  }
+}
+
+.sub {
+  @include type-sub;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.subSep {
+  color: $slate-muted;
+  font-style: normal;
+}
+
+.locationChip {
+  font-family: $font-inter;
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: $moss;
+  background: $moss-bg;
+  border: 1px solid rgba(107, 122, 85, 0.25);
+  border-radius: $radius-pill;
+  padding: 3px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.loadingWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  background: $cream-soft;
+}
+
+.row {
+  cursor: pointer;
+}
+
+.emptyState {
+  max-width: 540px;
+  margin: 40px auto;
+  background: $cream-soft;
+}
