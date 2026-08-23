@@ -15,12 +15,14 @@ const supabase = createClient(
  *
  * GET /api/customs/passages/<id>/document
  */
-export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
+  // ?only=resume : la feuille de synthese seule, sans le detail par produit.
+  const onlySummary = request.nextUrl.searchParams.get('only') === 'resume';
 
   const { data: passage, error } = await supabase
     .from('customs_declarations')
-    .select('shop_id, location_name, status, reference, departed_on, returned_on, eur_to_chf, vat_pct, gross_weight_kg, origin, prices_chf_ttc')
+    .select('shop_id, location_name, status, reference, departed_on, returned_on, eur_to_chf, vat_pct, gross_weight_kg, origin, prices_chf_ttc, customs_labels')
     .eq('id', id)
     .maybeSingle();
 
@@ -49,7 +51,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     return NextResponse.json({ error: 'Ce passage ne contient aucune ligne' }, { status: 400 });
   }
 
-  const html = renderPassage(passage as PassageRow, items);
+  const html = renderPassage(passage as PassageRow, items, { onlySummary });
 
   return new NextResponse(html, {
     status: 200,

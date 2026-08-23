@@ -51,6 +51,13 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   if (typeof body.reference === 'string') patch.reference = body.reference;
   if (typeof body.origin === 'string' && body.origin) patch.origin = body.origin;
   if (typeof body.departedOn === 'string') patch.departed_on = body.departedOn;
+  if (body.customsLabels && typeof body.customsLabels === 'object') {
+    const clean: Record<string, string> = {};
+    for (const [k, v] of Object.entries(body.customsLabels as Record<string, unknown>)) {
+      if (typeof v === 'string' && v.trim()) clean[k] = v.trim();
+    }
+    patch.customs_labels = clean;
+  }
   if (body.pricesChfTtc && typeof body.pricesChfTtc === 'object') {
     const clean: Record<string, number> = {};
     for (const [k, v] of Object.entries(body.pricesChfTtc as Record<string, unknown>)) {

@@ -22,6 +22,8 @@ export interface PassageRow {
   gross_weight_kg: number | null;
   origin: string;
   prices_chf_ttc: Record<string, number>;
+  /** Libelle douanier par type : { "Le Confort": "T-shirt coton" }. */
+  customs_labels?: Record<string, string>;
 }
 
 export interface PassageItem {
@@ -77,11 +79,18 @@ const CSS = `
  @media print { .noprint { display: none; } }
 `;
 
-export function renderPassage(passage: PassageRow, items: PassageItem[]): string {
+export function renderPassage(
+  passage: PassageRow,
+  items: PassageItem[],
+  options: { onlySummary?: boolean } = {},
+): string {
   const closed = passage.status === 'closed';
   const rate = Number(passage.eur_to_chf);
   const vatDiv = 1 + Number(passage.vat_pct) / 100;
   const prices = passage.prices_chf_ttc ?? {};
+  const labels = passage.customs_labels ?? {};
+  /** Ce que le douanier lit : le libelle saisi, a defaut le nom du type. */
+  const labelOf = (type: string) => labels[type] || type;
 
   const num = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
   const kg = (g: number) => (g / 1000).toFixed(3);
@@ -175,15 +184,15 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
 
 <h2>Détail par type de produit</h2>
 <table><thead><tr>
- <th class="l">Type</th><th>Quantité</th><th>Poids net (kg)</th><th>Poids brut (kg)</th>
- <th>Valeur douanière CHF HT</th><th>équiv. EUR</th><th>TVA import CHF</th>
+ <th class="l">Objet</th><th class="l">Type Ivy</th><th>Quantité</th><th>Poids net (kg)</th><th>Poids brut (kg)</th>
+ <th>Valeur douanière au départ<br>CHF HT</th><th>équiv. EUR</th><th>TVA import CHF</th>
  ${closed ? '<th>Revenues</th><th>Vendues</th><th>Poids revenu</th><th>Valeur revenue CHF</th><th>Valeur vendue CHF</th>' : '<th>Qté vendue</th><th>Qté restante</th><th>Poids vendu</th><th>Valeur vendue</th>'}
 </tr></thead><tbody>`;
 
   for (const [type, t] of [...byType.entries()].sort((a, b) => b[1].qty - a[1].qty)) {
     const gross = grossRatio !== null ? (t.netG / 1000) * grossRatio : null;
     const unitHt = t.qty > 0 ? t.chf / t.qty : 0;
-    html += `<tr><td class="l">${esc(type)}</td><td>${t.qty}</td><td>${kg(t.netG)}</td>` +
+    html += `<tr><td class="l"><b>${esc(labelOf(type))}</b></td><td class="l">${esc(type)}</td><td>${t.qty}</td><td>${kg(t.netG)}</td>` +
       `<td>${gross !== null ? gross.toFixed(3) : '—'}</td>` +
       `<td>${num(t.chf)}</td><td>${num(t.chf / rate)}</td><td>${num(vatOnImport(t.chf))}</td>` +
       (closed
@@ -193,7 +202,7 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
       `</tr>`;
   }
 
-  html += `</tbody><tfoot><tr><td class="l">TOTAL</td><td>${pieces}</td><td>${kg(netG)}</td>` +
+  html += `</tbody><tfoot><tr><td class="l" colspan="2">TOTAL</td><td>${pieces}</td><td>${kg(netG)}</td>` +
     `<td>${grossKg !== null ? grossKg.toFixed(3) : '—'}</td>` +
     `<td>${num(customsChf)}</td><td>${num(customsChf / rate)}</td><td>${num(vatOnImport(customsChf))}</td>` +
     (closed ? `<td>${returned}</td><td>${sold}</td><td></td><td></td><td></td>` : `<td></td><td></td><td></td><td></td>`) +
@@ -219,6 +228,9 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
   }
   html += `</div>`;
 
+  // La feuille de resume seule : c'est ce que la douane demande en tete de dossier.
+  if (options.onlySummary) return html + `</body></html>`;
+
   // ---------- Une feuille par produit ----------
   const sheets = [...byProduct.values()].sort(
     (a, b) => (a.type ?? '').localeCompare(b.type ?? '') || a.title.localeCompare(b.title),
@@ -232,7 +244,7 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
 
     html += `<div class="sheet${s.rows.length > 24 ? ' dense' : ''}">
 <div class="prodhead">${s.image ? `<img src="${esc(s.image)}" alt="">` : ''}<div><h2>${esc(s.title)}</h2></div></div>
-<div class="meta"><b style="min-width:auto">Type</b> ${esc(s.type ?? '—')} &nbsp;·&nbsp;
+<div class="meta"><b style="min-width:auto">Objet</b> ${esc(labelOf(s.type ?? '—'))} &nbsp;·&nbsp;
  <b style="min-width:auto">Origine</b> ${esc(passage.origin)} &nbsp;·&nbsp;
  <b style="min-width:auto">Taux</b> 1 EUR = ${rate} CHF &nbsp;·&nbsp;
  <b style="min-width:auto">Emplacement</b> ${esc(passage.location_name)} &nbsp;·&nbsp; ${esc(passage.departed_on)}</div>

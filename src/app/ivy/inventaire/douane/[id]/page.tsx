@@ -27,6 +27,7 @@ interface Passage {
   gross_weight_kg: number | null;
   origin: string;
   prices_chf_ttc: Record<string, number>;
+  customs_labels: Record<string, string>;
   departure_snapshot_at: string;
   returned_on: string | null;
   return_snapshot_at: string | null;
@@ -60,6 +61,8 @@ interface FormState {
   grossWeightKg: number | '';
   reference: string;
   pricesChfTtc: Record<string, number | ''>;
+  /** Libellé douanier par type : « T-shirt » pour « Le Confort ». */
+  customsLabels: Record<string, string>;
 }
 
 function formatDate(d: string | null): string {
@@ -95,6 +98,7 @@ export default function DouanePassageDetailPage() {
     grossWeightKg: '',
     reference: '',
     pricesChfTtc: {},
+    customsLabels: {},
   });
 
   const fetchPassage = useCallback(async () => {
@@ -116,12 +120,17 @@ export default function DouanePassageDetailPage() {
           const n = Number(v);
           if (Number.isFinite(n)) prices[k] = n;
         }
+        const labels: Record<string, string> = {};
+        for (const [k, v] of Object.entries((data.passage?.customs_labels ?? {}) as Record<string, unknown>)) {
+          if (typeof v === 'string') labels[k] = v;
+        }
         setForm({
           eurToChf: data.passage?.eur_to_chf ?? '',
           vatPct: data.passage?.vat_pct ?? '',
           grossWeightKg: data.passage?.gross_weight_kg ?? '',
           reference: data.passage?.reference ?? '',
           pricesChfTtc: prices,
+          customsLabels: labels,
         });
         hydratedRef.current = true;
       }
@@ -150,6 +159,7 @@ export default function DouanePassageDetailPage() {
         reference: next.reference,
         grossWeightKg: next.grossWeightKg === '' ? null : Number(next.grossWeightKg),
         pricesChfTtc,
+        customsLabels: next.customsLabels,
       };
       if (typeof next.eurToChf === 'number' && next.eurToChf > 0) body.eurToChf = next.eurToChf;
       if (typeof next.vatPct === 'number' && next.vatPct >= 0) body.vatPct = next.vatPct;
@@ -192,6 +202,19 @@ export default function DouanePassageDetailPage() {
       return next;
     });
   }, [debouncedSave]);
+
+  // Saisie libre : on met à jour l'affichage sans rien envoyer. L'enregistrement
+  // part à la sortie du champ — taper ne doit jamais déclencher de requête.
+  const updateLabel = useCallback((type: string, value: string) => {
+    setForm((prev) => ({ ...prev, customsLabels: { ...prev.customsLabels, [type]: value } }));
+  }, []);
+
+  const commitLabels = useCallback(() => {
+    setForm((prev) => {
+      savePatch(prev);
+      return prev;
+    });
+  }, [savePatch]);
 
   // --- Types de produits présents dans l'instantané ---
   const productTypes = useMemo(() => {
@@ -242,7 +265,37 @@ export default function DouanePassageDetailPage() {
       importVat,
       lines,
     };
-  }, [items, form, passage]);
+    // Volontairement fin : les libellés douaniers n'entrent dans aucun calcul.
+    // Les inclure ferait recalculer 489 lignes à chaque frappe.
+  }, [items, form.eurToChf, form.vatPct, form.grossWeightKg, form.pricesChfTtc, passage]);
+
+  // --- Synthese par type : ce que la douane lit en tete de dossier ---
+  const summary = useMemo(() => {
+    const rows = new Map<string, { qty: number; netG: number; customs: number }>();
+    for (const it of computed.lines) {
+      const type = it.product_type ?? '(sans type)';
+      const r = rows.get(type) ?? { qty: 0, netG: 0, customs: 0 };
+      r.qty += it.qty_departed;
+      r.netG += it.lineWeightGrams;
+      r.customs += it.lineCustomsValue;
+      rows.set(type, r);
+    }
+    const totalNetG = [...rows.values()].reduce((n, r) => n + r.netG, 0);
+    // Le poids brut saisi (caisses comprises) est reparti au prorata du poids net.
+    const ratio = computed.grossWeightKg !== null && totalNetG > 0
+      ? computed.grossWeightKg / (totalNetG / 1000)
+      : null;
+    return {
+      ratio,
+      rows: [...rows.entries()]
+        .map(([type, r]) => ({
+          type,
+          ...r,
+          grossKg: ratio !== null ? (r.netG / 1000) * ratio : null,
+        }))
+        .sort((a, b) => b.qty - a.qty),
+    };
+  }, [computed]);
 
   const missing = useMemo(() => {
     let weight = 0;
@@ -453,6 +506,93 @@ export default function DouanePassageDetailPage() {
               ))}
             </SimpleGrid>
           </>
+        )}
+      </Paper>
+
+      <Paper className={styles.panel} radius="md" mb="md">
+        <div className={styles.panelHead}>
+          <h3 className={styles.panelTitle}>Synthèse douanière</h3>
+          <Button
+            variant="light"
+            color="moss"
+            size="xs"
+            leftSection={<IconPrinter size={14} />}
+            onClick={() => window.open(`/api/customs/passages/${id}/document?only=resume`, '_blank')}
+          >
+            Imprimer cette feuille
+          </Button>
+        </div>
+        <Text size="xs" c="dimmed" mb="sm">
+          La colonne <b>Objet</b> est ce que lira le douanier : mets-y un mot courant
+          (« T-shirt », « Sweat-shirt »), pas le nom commercial. Elle est enregistrée avec le passage.
+        </Text>
+        <Table striped highlightOnHover withTableBorder>
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th style={{ minWidth: 180 }}>Objet (libellé douanier)</Table.Th>
+              <Table.Th>Type Ivy</Table.Th>
+              <Table.Th style={{ textAlign: 'right' }}>Qté de départ</Table.Th>
+              <Table.Th style={{ textAlign: 'right' }}>Poids net</Table.Th>
+              <Table.Th style={{ textAlign: 'right' }}>Poids brut</Table.Th>
+              <Table.Th style={{ textAlign: 'right' }}>Valeur douanière au départ (HT)</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {summary.rows.map((r) => (
+              <Table.Tr key={r.type}>
+                <Table.Td>
+                  <TextInput
+                    size="xs"
+                    placeholder={r.type}
+                    value={form.customsLabels[r.type] ?? ''}
+                    onChange={(e) => updateLabel(r.type, e.currentTarget.value)}
+                    onBlur={commitLabels}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.currentTarget.blur();
+                    }}
+                  />
+                </Table.Td>
+                <Table.Td><Text size="xs" c="dimmed">{r.type}</Text></Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}>{r.qty}</Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}>
+                  {(r.netG / 1000).toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg
+                </Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}>
+                  {r.grossKg !== null
+                    ? `${r.grossKg.toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg`
+                    : '—'}
+                </Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}>{formatChf(r.customs)}</Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+          <Table.Tfoot>
+            <Table.Tr>
+              <Table.Td colSpan={2}><b>TOTAL</b></Table.Td>
+              <Table.Td style={{ textAlign: 'right' }}><b>{computed.pieces}</b></Table.Td>
+              <Table.Td style={{ textAlign: 'right' }}>
+                <b>{computed.netWeightKg.toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg</b>
+              </Table.Td>
+              <Table.Td style={{ textAlign: 'right' }}>
+                <b>{computed.grossWeightKg !== null
+                  ? `${computed.grossWeightKg.toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg`
+                  : '—'}</b>
+              </Table.Td>
+              <Table.Td style={{ textAlign: 'right' }}><b>{formatChf(computed.customsValue)}</b></Table.Td>
+            </Table.Tr>
+          </Table.Tfoot>
+        </Table>
+        {computed.grossWeightKg !== null && computed.grossWeightKg < computed.netWeightKg && (
+          <Alert color="rust" icon={<IconAlertTriangle size={16} />} mt="xs">
+            Le poids brut saisi ({computed.grossWeightKg} kg) est <b>inférieur au poids net</b>
+            ({computed.netWeightKg.toFixed(3)} kg). Le brut comprend le net plus les caisses :
+            il ne peut pas être plus petit. Vérifie ta pesée dans les paramètres.
+          </Alert>
+        )}
+        {summary.ratio === null && (
+          <Text size="xs" c="dimmed" mt="xs">
+            Renseigne le poids brut dans les paramètres pour qu&apos;il se répartisse par type.
+          </Text>
         )}
       </Paper>
 
