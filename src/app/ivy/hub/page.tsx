@@ -104,12 +104,40 @@ export default function CaissePage() {
         throw new Error('Erreur lors de la mise à jour du stock');
       }
 
-      const total = tracker.totalOut + tracker.totalReturn;
-      notifications.show({
-        title: 'Stock mis à jour',
-        message: `${total} mouvement${total > 1 ? 's' : ''} enregistré${total > 1 ? 's' : ''}`,
-        color: 'moss',
-      });
+      const data = (await response.json()) as {
+        success: boolean;
+        results?: { label?: string; variantId: string; success: boolean; error?: string; shopifyFailed?: boolean }[];
+        shopifyFailedCount?: number;
+      };
+      const failed = (data.results ?? []).filter(r => !r.success);
+
+      if (failed.length > 0) {
+        // Alerte persistante : un ajustement non synchronisé fait diverger Ivy et
+        // Shopify en silence. On nomme les lignes en échec pour pouvoir les rejouer.
+        const detail = failed
+          .map(r => `• ${r.label ?? r.variantId} — ${r.error ?? 'échec'}`)
+          .join('\n');
+        notifications.show({
+          title: `⚠️ ${failed.length} ajustement${failed.length > 1 ? 's' : ''} non synchronisé${failed.length > 1 ? 's' : ''}`,
+          message:
+            (data.shopifyFailedCount
+              ? "La synchro Shopify a échoué. Le stock local n'a PAS été modifié pour ces lignes — à ressaisir.\n\n"
+              : '') + detail,
+          color: 'red',
+          autoClose: false,
+          withCloseButton: true,
+          style: { whiteSpace: 'pre-line' },
+        });
+      }
+
+      const okCount = (data.results ?? []).length - failed.length;
+      if (okCount > 0) {
+        notifications.show({
+          title: 'Stock mis à jour',
+          message: `${okCount} mouvement${okCount > 1 ? 's' : ''} enregistré${okCount > 1 ? 's' : ''}`,
+          color: 'moss',
+        });
+      }
 
       tracker.clearMovements();
       ps.refreshInventory();

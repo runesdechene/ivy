@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { resolveVariantId, resolveLocationUuid, resolveLocationShopifyId, isUuid } from '@/lib/supabase/resolve';
+import { resolveVariantId, resolveLocationUuid, resolveLocationShopifyId } from '@/lib/supabase/resolve';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -12,6 +12,20 @@ interface StockAdjustment {
   quantity: number; // Negative to decrease, positive to increase
   productTitle?: string;
   variantTitle?: string;
+}
+
+interface ItemResult {
+  variantId: string;
+  success: boolean;
+  /** Libellé lisible pour l'alerte côté UI (produit — variante). */
+  label?: string;
+  error?: string;
+  /** true quand l'échec vient de la synchro Shopify (et non du local). */
+  shopifyFailed?: boolean;
+}
+
+function itemLabel(item: StockAdjustment): string {
+  return [item.productTitle, item.variantTitle].filter(Boolean).join(' — ') || item.variantId;
 }
 
 export async function POST(request: NextRequest) {
@@ -30,15 +44,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Resolve locationId → Supabase UUID for stock_movements logging.
-    // The HUB de stand passes a Shopify numeric ID (string), but
-    // stock_movements.location_id is UUID FK → locations(id). Without this
-    // resolution, every insert silently fails (type mismatch + FK violation),
-    // leaving the table empty and breaking the Festival dashboard / study zones.
-    // inventory_levels.location_id stays Shopify ID — it's a different schema.
+    // Un même locationId entrant peut être un UUID Supabase OU un ID Shopify
+    // numérique (le HUB de stand passe celui du LocationContext, donc Shopify).
+    // Les deux formes sont nécessaires, sur des tables différentes :
+    //   • stock_movements.location_id  → UUID FK → locations(id)
+    //   • inventory_levels.location_id → TEXT, ID Shopify
+    // Cf. gotcha "Locations - 2 colonnes location_id divergentes".
     let locationUuid: string | null = null;
+    let locationShopifyId: string | null = null;
     if (locationId) {
       locationUuid = await resolveLocationUuid(supabase, locationId);
+      locationShopifyId = await resolveLocationShopifyId(supabase, locationId);
     }
 
     // Get shop for Shopify credentials
@@ -55,7 +71,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const results: { variantId: string; success: boolean; error?: string }[] = [];
+    const results: ItemResult[] = [];
+    const today = new Date().toISOString().split('T')[0];
     const movementsToLog: {
       shop_id: string;
       location_id: string | null;
@@ -66,47 +83,124 @@ export async function POST(request: NextRequest) {
     }[] = [];
 
     for (const item of items) {
+      const label = itemLabel(item);
       try {
         // Resolve variant ID (could be Shopify ID)
         const resolvedVariantId = await resolveVariantId(supabase, item.variantId);
         if (!resolvedVariantId) {
-          results.push({ variantId: item.variantId, success: false, error: 'Variant not found' });
+          results.push({ variantId: item.variantId, label, success: false, error: 'Variante introuvable' });
           continue;
         }
 
         // Get variant with inventory_item_id
         const { data: variant, error: variantError } = await supabase
           .from('product_variants')
-          .select('id, inventory_item_id')
+          .select('id, inventory_item_id, shopify_active')
           .eq('id', resolvedVariantId)
           .single();
 
         if (variantError || !variant) {
           results.push({
             variantId: item.variantId,
+            label,
             success: false,
-            error: 'Variant not found',
+            error: 'Variante introuvable',
           });
           continue;
         }
 
-        // Update local inventory
-        if (locationId) {
-          // Get current inventory level
+        // Shopify AVANT le local : si la synchro échoue, on n'a pas déjà bougé
+        // le stock local (sinon Ivy et Shopify divergent en silence).
+        //
+        // Skip Shopify pour les variantes purement locales :
+        //   • pas d'inventory_item_id (n'a jamais existé sur Shopify)
+        //   • shopify_active=false (supprimée côté Shopify, l'inventory_item_id
+        //     stocké est stale → "inventory item could not be found")
+        if (variant.inventory_item_id && variant.shopify_active !== false && locationShopifyId) {
+          // POST /inventory_levels/adjust.json (REST) est déprécié et renvoie 404
+          // depuis l'API 2024+. On passe par la mutation GraphQL.
+          const graphqlEndpoint = `https://${shop.shopify_url}/admin/api/2026-01/graphql.json`;
+          const mutation = `
+            mutation inventoryAdjustQuantities($input: InventoryAdjustQuantitiesInput!) {
+              inventoryAdjustQuantities(input: $input) {
+                userErrors { field message }
+                inventoryAdjustmentGroup { id }
+              }
+            }
+          `;
+
+          const variables = {
+            input: {
+              reason: 'correction',
+              name: 'available',
+              referenceDocumentUri: `logistics://ivy/pos-adjust/${shopId}/${today}`,
+              changes: [
+                {
+                  delta: item.quantity,
+                  inventoryItemId: `gid://shopify/InventoryItem/${variant.inventory_item_id}`,
+                  locationId: `gid://shopify/Location/${locationShopifyId}`,
+                },
+              ],
+            },
+          };
+
+          const shopifyResponse = await fetch(graphqlEndpoint, {
+            method: 'POST',
+            headers: {
+              'X-Shopify-Access-Token': shop.shopify_token,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ query: mutation, variables }),
+          });
+
+          const shopifyData = await shopifyResponse.json().catch(() => null);
+
+          if (!shopifyResponse.ok || shopifyData?.errors) {
+            console.error('[POS adjust] Shopify GraphQL failed:', {
+              status: shopifyResponse.status,
+              errors: shopifyData?.errors,
+              variantId: resolvedVariantId,
+            });
+            results.push({
+              variantId: item.variantId,
+              label,
+              success: false,
+              shopifyFailed: true,
+              error: `Shopify a refusé l'ajustement (HTTP ${shopifyResponse.status})`,
+            });
+            continue;
+          }
+
+          const userErrors = shopifyData?.data?.inventoryAdjustQuantities?.userErrors ?? [];
+          if (userErrors.length > 0) {
+            console.error('[POS adjust] Shopify userErrors:', userErrors, { variantId: resolvedVariantId });
+            results.push({
+              variantId: item.variantId,
+              label,
+              success: false,
+              shopifyFailed: true,
+              error: `Shopify : ${userErrors.map((e: { message: string }) => e.message).join(' / ')}`,
+            });
+            continue;
+          }
+        }
+
+        // Update local inventory (inventory_levels.location_id = ID Shopify)
+        if (locationShopifyId) {
           const { data: currentLevel } = await supabase
             .from('inventory_levels')
             .select('quantity')
             .eq('variant_id', resolvedVariantId)
-            .eq('location_id', locationId)
-            .single();
+            .eq('location_id', locationShopifyId)
+            .maybeSingle();
 
-          const newQuantity = (currentLevel?.quantity || 0) + item.quantity;
+          const newQuantity = (currentLevel?.quantity ?? 0) + item.quantity;
 
           const { error: updateError } = await supabase
             .from('inventory_levels')
             .upsert({
               variant_id: resolvedVariantId,
-              location_id: locationId,
+              location_id: locationShopifyId,
               quantity: newQuantity,
               updated_at: new Date().toISOString(),
             }, {
@@ -114,44 +208,14 @@ export async function POST(request: NextRequest) {
             });
 
           if (updateError) {
-            console.error('Error updating local inventory:', updateError);
-          }
-        }
-
-        // Sync with Shopify
-        if (variant.inventory_item_id && locationId) {
-          let shopifyLocationId = locationId;
-          if (isUuid(locationId)) {
-            shopifyLocationId = (await resolveLocationShopifyId(supabase, locationId)) ?? locationId;
-          }
-
-          if (shopifyLocationId) {
-            const shopifyResponse = await fetch(
-              `https://${shop.shopify_url}/admin/api/2024-01/inventory_levels/adjust.json`,
-              {
-                method: 'POST',
-                headers: {
-                  'X-Shopify-Access-Token': shop.shopify_token,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  location_id: shopifyLocationId,
-                  inventory_item_id: variant.inventory_item_id,
-                  available_adjustment: item.quantity,
-                }),
-              }
-            );
-
-            if (!shopifyResponse.ok) {
-              const errorData = await shopifyResponse.json();
-              console.error('Shopify inventory adjust error:', errorData);
-              results.push({
-                variantId: item.variantId,
-                success: false,
-                error: `Shopify sync failed: ${shopifyResponse.status}`,
-              });
-              continue;
-            }
+            console.error('[POS adjust] inventory_levels upsert failed:', updateError);
+            results.push({
+              variantId: item.variantId,
+              label,
+              success: false,
+              error: 'Mise à jour du stock local impossible',
+            });
+            continue;
           }
         }
 
@@ -169,15 +233,17 @@ export async function POST(request: NextRequest) {
 
         results.push({
           variantId: item.variantId,
+          label,
           success: true,
         });
 
       } catch (itemError) {
-        console.error('Error processing item:', itemError);
+        console.error('[POS adjust] Error processing item:', itemError);
         results.push({
           variantId: item.variantId,
+          label,
           success: false,
-          error: 'Processing error',
+          error: 'Erreur de traitement',
         });
       }
     }
@@ -197,8 +263,6 @@ export async function POST(request: NextRequest) {
 
       // Upsert: if a row already exists for this variant + today, add to it
       for (const movement of aggregated.values()) {
-        const today = new Date().toISOString().split('T')[0];
-
         let existingQuery = supabase
           .from('stock_movements')
           .select('id, quantity')
@@ -234,13 +298,16 @@ export async function POST(request: NextRequest) {
 
     }
 
-    const allSuccess = results.every(r => r.success);
-    const successCount = results.filter(r => r.success).length;
+    const failed = results.filter(r => !r.success);
+    const allSuccess = failed.length === 0;
+    const successCount = results.length - failed.length;
 
     return NextResponse.json({
       success: allSuccess,
       message: `${successCount}/${items.length} ajustements effectués`,
       results,
+      // Remonté à l'UI pour l'alerte : combien d'items n'ont PAS atteint Shopify.
+      shopifyFailedCount: failed.filter(r => r.shopifyFailed).length,
     });
 
   } catch (error) {
