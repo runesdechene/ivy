@@ -92,7 +92,7 @@ COMMENT ON COLUMN product_variants.weight_grams IS
 `NULL` = poids inconnu, à distinguer d'un vrai zéro. C'est ce `NULL` qui déclenche le
 blocage dans l'écran de contrôle.
 
-### Migration `051_customs_declarations.sql`
+### Migration `052_customs_declarations.sql`
 
 ```sql
 CREATE TABLE customs_declarations (
@@ -239,7 +239,10 @@ Exemple, Le Confort, référence M = 250 g, variation 8 % :
 
 | XS | S | M | L | XL | XXL | 3XL |
 |---|---|---|---|---|---|---|
-| 214 | 230 | **250** | 270 | 292 | 315 | 340 |
+| 214 | 231 | **250** | 270 | 292 | 315 | 340 |
+
+Descendre d'un cran **divise** par `1 + step/100` (exposant négatif), ce qui rend la
+courbe symétrique : monter puis redescendre retombe sur le poids de départ.
 
 L'écart en grammes grandit avec la taille, ce qui colle à la réalité du textile.
 
@@ -247,7 +250,7 @@ L'écart en grammes grandit avec la taille, ce qui colle à la réalité du text
 `XXS, XS, S, M, L, XL, XXL, 3XL, 4XL, 5XL`, avec les synonymes courants (`2XL` = `XXL`).
 Une taille hors échelle ne se déduit pas : la variante bascule dans la liste d'exceptions.
 
-### Table `weight_type_rules` (migration `052`)
+### Table `weight_type_rules` (migration `051`)
 
 ```sql
 CREATE TABLE weight_type_rules (
