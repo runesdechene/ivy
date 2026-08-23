@@ -74,7 +74,13 @@ const CSS = `
  .sheet:last-child { page-break-after: auto; }
  .meta { margin-bottom: 4mm; }
  .meta b { display: inline-block; min-width: 46mm; }
- table { border-collapse: collapse; width: 100%; page-break-inside: avoid; }
+ /* Le tableau doit pouvoir COMMENCER sur la page en cours et se poursuivre :
+    avec page-break-inside:avoid il partait en bloc a la page suivante, laissant
+    un grand vide. On empeche seulement la coupure au milieu d'une ligne. */
+ table { border-collapse: collapse; width: 100%; page-break-inside: auto; }
+ tr { page-break-inside: avoid; page-break-after: auto; }
+ thead { display: table-header-group; }
+ tfoot { display: table-row-group; }
  th, td { border: 1px solid #999; padding: 1.2mm 1.6mm; text-align: right; }
  th { background: #eee; text-align: center; font-size: 8pt; }
  td.l, th.l { text-align: left; }
