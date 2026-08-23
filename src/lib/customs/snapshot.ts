@@ -26,6 +26,13 @@ export interface SnapshotItem {
 }
 
 const SIZE_NAMES = ['taille', 'size'];
+/** Echelle des tailles : sert a valider qu'une valeur EST bien une taille. */
+const SIZE_VALUES = new Set([
+  'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', '3XL', '4XL', '5XL',
+  'TU', 'UNIQUE', 'TAILLE UNIQUE',
+]);
+const looksLikeSize = (v: string | null): boolean =>
+  !!v && SIZE_VALUES.has(v.trim().toUpperCase());
 const COLOR_NAMES = ['couleur', 'color', 'coloris'];
 
 interface VariantRow {
@@ -264,7 +271,10 @@ export async function buildSnapshot(
       product_type: p.product_type,
       image_url: p.image_url,
       variant_title: v.title,
-      size: optionOf(v, p, SIZE_NAMES) ?? v.option2,
+      // Le repli sur option2 ne vaut que si la valeur ressemble vraiment a une
+      // taille : sinon on y ecrivait une couleur, qui ressortait ensuite dans la
+      // repartition par taille des annexes.
+      size: optionOf(v, p, SIZE_NAMES) ?? (looksLikeSize(v.option2) ? v.option2 : null),
       color: optionOf(v, p, COLOR_NAMES) ?? v.option1,
       qty_departed: lvl.quantity,
       weight_grams: v.weight_grams,

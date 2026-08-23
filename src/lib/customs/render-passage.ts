@@ -95,6 +95,7 @@ const CSS = `
  th.retour, td.retour { border-left: 2px solid #444; }
  /* Colonnes du retour, imprimees vides a l'aller pour etre remplies a la main. */
  td.tofill { background: #fafafa; }
+ td.tailles { font-size: 7.5pt; color: #333; line-height: 1.25; }
  th.tofill { color: #666; font-style: italic; }
  /* Ces colonnes se remplissent a la cloture, par comparaison des deux instantanes. */
  .noprint { margin: 0 0 5mm; padding: 3mm; background: #eef4ee; border: 1px solid #9ab; }
@@ -358,6 +359,8 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
   // douanier de verifier un carton sans qu'on l'y invite.
   const parObjet = new Map<string, Map<string, {
     titre: string; image: string | null; qty: number; netG: number; chf: number;
+    /** Repartition par taille : permet de verifier un carton sans l'ouvrir en entier. */
+    tailles: Map<string, number>;
   }>>();
   for (const it of items) {
     const type = it.product_type ?? '(sans type)';
@@ -365,11 +368,14 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
     const m = parObjet.get(type)!;
     const r = m.get(it.product_title) ?? {
       titre: it.product_title, image: it.image_url, qty: 0, netG: 0, chf: 0,
+      tailles: new Map<string, number>(),
     };
     r.qty += it.qty_departed;
     r.netG += (it.weight_grams ?? 0) * it.qty_departed;
     r.chf += customsChfOf(it) * it.qty_departed;
     if (!r.image && it.image_url) r.image = it.image_url;
+    const taille = (it.size ?? '').trim() || '—';
+    r.tailles.set(taille, (r.tailles.get(taille) ?? 0) + it.qty_departed);
     m.set(it.product_title, r);
   }
 
@@ -391,17 +397,22 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
  <b style="min-width:auto">Emplacement</b> ${esc(passage.location_name)} &nbsp;·&nbsp; ${esc(passage.departed_on)}
 </div>
 <table><thead><tr>
- <th class="l">Photo</th><th class="l">Modèle</th><th>Quantité</th><th>Poids net (kg)</th>
+ <th class="l">Photo</th><th class="l">Modèle</th><th>Quantité</th>
+ <th class="l">Répartition par taille</th><th>Poids net (kg)</th>
  <th>Valeur HT (EUR)</th><th>Valeur HT (CHF)</th>
 </tr></thead><tbody>${lignes.map(l => `<tr>
  <td class="l">${l.image ? `<img src="${esc(l.image)}" alt="">` : ''}</td>
  <td class="l">${esc(l.titre)}</td>
- <td>${l.qty}</td><td>${kg(l.netG)}</td>
+ <td>${l.qty}</td>
+ <td class="l tailles">${[...l.tailles.entries()]
+   .sort((a, b) => sizeRank(a[0]) - sizeRank(b[0]) || a[0].localeCompare(b[0]))
+   .map(([t, n]) => `${esc(t)}&nbsp;${n}`).join(' · ')}</td>
+ <td>${kg(l.netG)}</td>
  <td>${num(l.chf / rate)}</td><td>${num(l.chf)}</td>
 </tr>`).join('')}</tbody>
 <tfoot><tr>
  <td class="l" colspan="2">TOTAL — ${esc(labelOf(objet))}</td>
- <td>${t.qty}</td><td>${kg(t.netG)}</td>
+ <td>${t.qty}</td><td></td><td>${kg(t.netG)}</td>
  <td>${num(t.chf / rate)}</td><td>${num(t.chf)}</td>
 </tr></tfoot></table></div>`;
   }
