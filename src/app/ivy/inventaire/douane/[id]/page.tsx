@@ -545,7 +545,13 @@ export default function DouanePassageDetailPage() {
     if (weight > 0) parts.push(`${weight} sans poids`);
     if (rule > 0) parts.push(`${rule} sans règle de prix`);
     if (price > 0) parts.push(`${price} sans prix de vente`);
-    return { weight, rule, price, total: items.filter((i) => i.incomplete).length, label: parts.join(' · ') };
+    // Recalcule a chaque rendu : le drapeau `incomplete` fige a la creation de
+    // l'instantane reste vrai apres correction des donnees, et affichait des
+    // lignes en defaut alors que plus rien ne manquait.
+    const total = items.filter(
+      (i) => !i.weight_grams || i.unit_cost_textile === null || !i.unit_price_eur,
+    ).length;
+    return { weight, rule, price, total, label: parts.join(' · ') };
   }, [items]);
 
   const groups = useMemo(() => {
@@ -1012,7 +1018,14 @@ export default function DouanePassageDetailPage() {
                     <Table.Td colSpan={9}>{group.title} · {group.totalQty} pièce(s)</Table.Td>
                   </Table.Tr>
                   {group.items.map((it) => (
-                    <Table.Tr key={it.id} className={it.incomplete ? styles.incompleteRow : undefined}>
+                    <Table.Tr
+                      key={it.id}
+                      className={
+                        !it.weight_grams || it.unit_cost_textile === null || !it.unit_price_eur
+                          ? styles.incompleteRow
+                          : undefined
+                      }
+                    >
                       <Table.Td>{it.size || '—'}</Table.Td>
                       <Table.Td>{it.color || '—'}</Table.Td>
                       <Table.Td style={{ textAlign: 'right' }}>{it.qty_departed}</Table.Td>

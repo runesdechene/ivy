@@ -114,6 +114,15 @@ export function renderPassage(
   const labels = passage.customs_labels ?? {};
   /** Ce que le douanier lit : le libelle saisi, a defaut le nom du type. */
   const labelOf = (type: string) => labels[type] || type;
+  /**
+   * Une ligne est incomplete si une donnee lui manque VRAIMENT, recalcule a
+   * chaque rendu. Le drapeau `incomplete` fige a la creation de l'instantane
+   * devenait faux des qu'on corrigeait une donnee : il affichait encore
+   * 54 lignes en defaut alors que plus rien ne manquait.
+   */
+  const estIncomplete = (it: PassageItem) =>
+    !it.weight_grams || it.unit_cost_textile === null || !it.unit_price_eur;
+
   const packaging = passage.packaging_kg ?? {};
   const tariffs = passage.tariff_by_type ?? {};
   const shOf = (type: string) => tariffs[type]?.position ?? '';
