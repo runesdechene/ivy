@@ -26,6 +26,9 @@ export interface PassageRow {
   customs_labels?: Record<string, string>;
   /** Poids des caisses par type, en kg. */
   packaging_kg?: Record<string, number>;
+  /** Titre et sous-titre libres de la feuille imprimee. */
+  doc_titre?: string | null;
+  doc_sous_titre?: string | null;
 }
 
 export interface PassageItem {
@@ -77,6 +80,7 @@ const CSS = `
  .warn { border: 1px solid #b00; background: #fff3f3; padding: 3mm; margin: 4mm 0; }
  .warn h3 { margin: 0 0 1mm; font-size: 10pt; color: #b00; }
  .big { font-size: 11pt; }
+ .soustitre { font-size: 10pt; color: #444; margin: -1mm 0 3mm; }
  th.retour, td.retour { border-left: 2px solid #444; }
  /* Colonnes du retour, imprimees vides a l'aller pour etre remplies a la main. */
  td.tofill { background: #fafafa; }
@@ -182,7 +186,9 @@ export function renderPassage(
 Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent visibles. Ce bandeau ne s'imprime pas.</div>`;
 
   // ---------- Feuille de résumé ----------
-  html += `<div class="sheet"><h1>${titre}</h1>
+  html += `<div class="sheet">
+<h1>${esc(passage.doc_titre) || titre}</h1>
+${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}</p>` : ''}
 <div class="meta">
  <b>Emplacement</b> ${esc(passage.location_name)}<br>
  <b>Date de départ</b> ${esc(passage.departed_on)}<br>
@@ -220,8 +226,8 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
  <th class="l">Objet</th><th class="l">Type Ivy</th><th>Quantité</th><th>Poids net (kg)</th><th>Caisses (kg)</th><th>Poids brut (kg)</th>
  <th>Valeur douanière au départ<br>HT (EUR)</th><th>Valeur douanière au départ<br>HT (CHF)</th><th>TVA import CHF</th>
  ${closed
-    ? '<th>Qté restante</th><th>Qté vendue</th><th>Poids restant (kg)</th><th>Poids vendu (kg)</th><th>Valeur restante CHF</th><th>Valeur vendue CHF</th>'
-    : '<th class="tofill">Qté restante</th><th class="tofill">Qté vendue</th><th class="tofill">Poids restant</th><th class="tofill">Poids vendu</th><th class="tofill">Valeur restante</th><th class="tofill">Valeur vendue</th>'}
+    ? '<th class="retour">Qté restante</th><th>Qté vendue</th><th>Poids restant (kg)</th><th>Poids vendu (kg)</th><th>Valeur restante (CHF)</th><th>Valeur vendue (CHF)</th>'
+    : '<th class="tofill retour">Qté restante</th><th class="tofill">Qté vendue</th><th class="tofill">Poids restant (kg)</th><th class="tofill">Poids vendu (kg)</th><th class="tofill">Valeur restante (CHF)</th><th class="tofill">Valeur vendue (CHF)</th>'}
 </tr></thead><tbody>`;
 
   for (const [type, t] of [...byType.entries()].sort((a, b) => b[1].qty - a[1].qty)) {
@@ -317,10 +323,11 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
 
     html += `<h2>Détail par produit</h2>
 <table><thead>
-<tr><th colspan="5">Départ</th><th colspan="5" class="retour">Retour</th></tr>
+<tr><th colspan="6">Départ</th><th colspan="5" class="retour">Retour</th></tr>
 <tr>
- <th class="l">Produit</th><th class="l">Type</th><th>Qté de départ</th><th>Poids net (kg)</th><th>Valeur douanière (CHF)</th>
- <th class="retour">Qté restante</th><th>Qté vendue</th><th>Poids restant (kg)</th><th>Valeur restante</th><th>Valeur vendue</th>
+ <th class="l">Produit</th><th class="l">Type</th><th>Qté de départ</th><th>Poids net (kg)</th>
+ <th>Valeur douanière HT (EUR)</th><th>Valeur douanière HT (CHF)</th>
+ <th class="retour">Qté restante</th><th>Qté vendue</th><th>Poids restant (kg)</th><th>Valeur restante (CHF)</th><th>Valeur vendue (CHF)</th>
 </tr></thead><tbody>${prods.map(r => {
       const vendu = Math.max(0, r.qty - r.ret);
       const unitG = r.qty > 0 ? r.netG / r.qty : 0;
@@ -328,7 +335,7 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
       const vide = '<td class="tofill"></td>';
       return `<tr>
  <td class="l">${esc(r.titre)}</td><td class="l">${esc(r.type ?? '—')}</td>
- <td>${r.qty}</td><td>${kg(r.netG)}</td><td>${num(r.chf)}</td>
+ <td>${r.qty}</td><td>${kg(r.netG)}</td><td>${num(r.chf / rate)}</td><td>${num(r.chf)}</td>
  ${closed
    ? `<td class="retour">${r.ret}</td><td>${vendu}</td><td>${kg(unitG * r.ret)}</td>` +
      `<td>${num(unitHt * r.ret)}</td><td>${num(unitHt * vendu)}</td>`
@@ -336,7 +343,7 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
 </tr>`;
     }).join('')}</tbody>
 <tfoot><tr>
- <td class="l" colspan="2">TOTAL</td><td>${pieces}</td><td>${kg(netG)}</td><td>${num(customsChf)}</td>
+ <td class="l" colspan="2">TOTAL</td><td>${pieces}</td><td>${kg(netG)}</td><td>${num(customsChf / rate)}</td><td>${num(customsChf)}</td>
  ${closed
    ? (() => {
        const venduTotal = Math.max(0, pieces - returned);

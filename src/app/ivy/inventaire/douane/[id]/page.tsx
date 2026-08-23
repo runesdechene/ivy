@@ -28,6 +28,8 @@ interface Passage {
   origin: string;
   prices_chf_ttc: Record<string, number>;
   customs_labels: Record<string, string>;
+  doc_titre: string | null;
+  doc_sous_titre: string | null;
   packaging_kg: Record<string, number>;
   departure_snapshot_at: string;
   returned_on: string | null;
@@ -66,6 +68,9 @@ interface FormState {
   customsLabels: Record<string, string>;
   /** Poids des caisses par type, en kg. */
   packagingKg: Record<string, number | ''>;
+  /** Titre et sous-titre de la feuille imprimée. */
+  docTitre: string;
+  docSousTitre: string;
 }
 
 /**
@@ -155,6 +160,8 @@ export default function DouanePassageDetailPage() {
     pricesChfTtc: {},
     customsLabels: {},
     packagingKg: {},
+    docTitre: '',
+    docSousTitre: '',
   });
 
   const fetchPassage = useCallback(async () => {
@@ -193,6 +200,8 @@ export default function DouanePassageDetailPage() {
           pricesChfTtc: prices,
           customsLabels: labels,
           packagingKg: packs,
+          docTitre: data.passage?.doc_titre ?? '',
+          docSousTitre: data.passage?.doc_sous_titre ?? '',
         });
         hydratedRef.current = true;
       }
@@ -222,6 +231,8 @@ export default function DouanePassageDetailPage() {
         grossWeightKg: next.grossWeightKg === '' ? null : Number(next.grossWeightKg),
         pricesChfTtc,
         customsLabels: next.customsLabels,
+        docTitre: next.docTitre,
+        docSousTitre: next.docSousTitre,
         packagingKg: Object.fromEntries(
           Object.entries(next.packagingKg).filter(([, v]) => typeof v === 'number'),
         ),
@@ -273,6 +284,14 @@ export default function DouanePassageDetailPage() {
   const commitLabel = useCallback((type: string, value: string) => {
     setForm((prev) => {
       const next = { ...prev, customsLabels: { ...prev.customsLabels, [type]: value } };
+      savePatch(next);
+      return next;
+    });
+  }, [savePatch]);
+
+  const commitDocField = useCallback((field: 'docTitre' | 'docSousTitre', value: string) => {
+    setForm((prev) => {
+      const next = { ...prev, [field]: value };
       savePatch(next);
       return next;
     });
@@ -418,17 +437,18 @@ export default function DouanePassageDetailPage() {
   const parProduit = useMemo(() => {
     const rows = new Map<string, {
       titre: string; type: string | null;
-      qty: number; netG: number; customs: number; ret: number;
+      qty: number; netG: number; customs: number; customsEur: number; ret: number;
     }>();
     for (const it of computed.lines) {
       const key = it.product_title;
       const r = rows.get(key) ?? {
         titre: it.product_title, type: it.product_type,
-        qty: 0, netG: 0, customs: 0, ret: 0,
+        qty: 0, netG: 0, customs: 0, customsEur: 0, ret: 0,
       };
       r.qty += it.qty_departed;
       r.netG += it.lineWeightGrams;
       r.customs += it.lineCustomsValue;
+      r.customsEur += it.lineCustomsEur;
       r.ret += it.qty_returned ?? 0;
       rows.set(key, r);
     }
@@ -674,6 +694,22 @@ export default function DouanePassageDetailPage() {
             Imprimer cette feuille
           </Button>
         </div>
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm" mb="sm">
+          <LabelCell
+            initial={form.docTitre}
+            placeholder="Titre de la feuille imprimée"
+            onCommit={(v) => commitDocField('docTitre', v)}
+          />
+          <LabelCell
+            initial={form.docSousTitre}
+            placeholder="Sous-titre"
+            onCommit={(v) => commitDocField('docSousTitre', v)}
+          />
+        </SimpleGrid>
+        <Text size="xs" c="dimmed" mb="sm">
+          Ces deux champs remplacent le titre par défaut du document imprimé.
+          Laissés vides, le titre réglementaire s&apos;affiche.
+        </Text>
         <Text size="xs" c="dimmed" mb="sm">
           La colonne <b>Objet</b> est ce que lira le douanier : mets-y un mot courant
           (« T-shirt », « Sweat-shirt »), pas le nom commercial. Elle est enregistrée avec le passage.
@@ -681,7 +717,7 @@ export default function DouanePassageDetailPage() {
         <Table striped highlightOnHover withTableBorder>
           <Table.Thead>
             <Table.Tr>
-              <Table.Th colSpan={7} style={{ textAlign: 'center' }}>Départ</Table.Th>
+              <Table.Th colSpan={8} style={{ textAlign: 'center' }}>Départ</Table.Th>
               <Table.Th colSpan={6} style={{ textAlign: 'center', borderLeft: '2px solid var(--mantine-color-gray-4)' }}>
                 Retour
               </Table.Th>
@@ -697,7 +733,7 @@ export default function DouanePassageDetailPage() {
               <Table.Th style={{ textAlign: 'right' }}>Valeur douanière HT (CHF)</Table.Th>
               {/* Toujours affichées : à l'aller elles s'impriment vides, pour être
                   remplies à la main au festival. */}
-              {['Qté restante', 'Qté vendue', 'Poids restant', 'Poids vendu', 'Valeur restante', 'Valeur vendue'].map((h) => (
+              {['Qté restante', 'Qté vendue', 'Poids restant (kg)', 'Poids vendu (kg)', 'Valeur restante (CHF)', 'Valeur vendue (CHF)'].map((h) => (
                 <Table.Th
                   key={h}
                   style={{ textAlign: 'right', color: isClosed ? undefined : 'var(--mantine-color-dimmed)' }}
@@ -781,7 +817,7 @@ export default function DouanePassageDetailPage() {
         <Table striped highlightOnHover withTableBorder>
           <Table.Thead>
             <Table.Tr>
-              <Table.Th colSpan={5} style={{ textAlign: 'center' }}>Départ</Table.Th>
+              <Table.Th colSpan={6} style={{ textAlign: 'center' }}>Départ</Table.Th>
               <Table.Th colSpan={5} style={{ textAlign: 'center', borderLeft: '2px solid var(--mantine-color-gray-4)' }}>
                 Retour
               </Table.Th>
@@ -791,14 +827,15 @@ export default function DouanePassageDetailPage() {
               <Table.Th>Type</Table.Th>
               <Table.Th style={{ textAlign: 'right' }}>Qté de départ</Table.Th>
               <Table.Th style={{ textAlign: 'right' }}>Poids net (kg)</Table.Th>
-              <Table.Th style={{ textAlign: 'right' }}>Valeur douanière (CHF)</Table.Th>
+              <Table.Th style={{ textAlign: 'right' }}>Valeur douanière HT (EUR)</Table.Th>
+              <Table.Th style={{ textAlign: 'right' }}>Valeur douanière HT (CHF)</Table.Th>
               <Table.Th style={{ textAlign: 'right', borderLeft: '2px solid var(--mantine-color-gray-4)' }}>
                 Qté restante
               </Table.Th>
               <Table.Th style={{ textAlign: 'right' }}>Qté vendue</Table.Th>
               <Table.Th style={{ textAlign: 'right' }}>Poids restant (kg)</Table.Th>
-              <Table.Th style={{ textAlign: 'right' }}>Valeur restante</Table.Th>
-              <Table.Th style={{ textAlign: 'right' }}>Valeur vendue</Table.Th>
+              <Table.Th style={{ textAlign: 'right' }}>Valeur restante (CHF)</Table.Th>
+              <Table.Th style={{ textAlign: 'right' }}>Valeur vendue (CHF)</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -808,6 +845,7 @@ export default function DouanePassageDetailPage() {
                 <Table.Td><Text size="xs" c="dimmed">{r.type ?? '—'}</Text></Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>{r.qty}</Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>{(r.netG / 1000).toFixed(1)}</Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}>{formatEur(r.customsEur)}</Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>{formatChf(r.customs)}</Table.Td>
                 <Table.Td style={{ textAlign: 'right', borderLeft: '2px solid var(--mantine-color-gray-4)' }}>
                   {isClosed ? r.ret : '—'}
@@ -824,6 +862,7 @@ export default function DouanePassageDetailPage() {
               <Table.Td colSpan={2}><b>TOTAL</b></Table.Td>
               <Table.Td style={{ textAlign: 'right' }}><b>{computed.pieces}</b></Table.Td>
               <Table.Td style={{ textAlign: 'right' }}><b>{computed.netWeightKg.toFixed(1)}</b></Table.Td>
+              <Table.Td style={{ textAlign: 'right' }}><b>{formatEur(computed.customsValueEur)}</b></Table.Td>
               <Table.Td style={{ textAlign: 'right' }}><b>{formatChf(computed.customsValue)}</b></Table.Td>
               <Table.Td style={{ textAlign: 'right', borderLeft: '2px solid var(--mantine-color-gray-4)' }}>
                 <b>{isClosed ? summary.totalReste : '—'}</b>
