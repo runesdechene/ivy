@@ -255,6 +255,7 @@ export default function DouanePassageDetailPage() {
     let pieces = 0;
     let netWeightGrams = 0;
     let customsValue = 0;
+    let customsValueEur = 0;
     let importVat = 0;
 
     const lines = items.map((it) => {
@@ -262,7 +263,11 @@ export default function DouanePassageDetailPage() {
       const priceTtc = typeof typedPrice === 'number' && typedPrice > 0
         ? typedPrice
         : (it.unit_price_eur ?? 0) * eurToChf;
-      const unitCustomsValue = vatPct > 0 ? priceTtc / (1 + vatPct / 100) : priceTtc;
+      // Valeur en douane = prix d'ACHAT (textile + impression), déjà hors taxe.
+      // Le prix de vente ne sert qu'à situer la marchandise, il n'entre pas ici.
+      const unitCustomsEur = (it.unit_cost_textile ?? 0) + (it.unit_cost_print ?? 0);
+      const unitCustomsValue = unitCustomsEur * eurToChf;
+      const lineCustomsEur = unitCustomsEur * it.qty_departed;
       const lineCustomsValue = unitCustomsValue * it.qty_departed;
       // TVA reclamee par la douane a l'entree, assise sur la valeur douaniere HT
       const lineImportVat = lineCustomsValue * (vatPct / 100);
@@ -271,9 +276,10 @@ export default function DouanePassageDetailPage() {
       pieces += it.qty_departed;
       netWeightGrams += lineWeightGrams;
       customsValue += lineCustomsValue;
+      customsValueEur += lineCustomsEur;
       importVat += lineImportVat;
 
-      return { ...it, unitCustomsValue, lineCustomsValue, lineImportVat, lineWeightGrams };
+      return { ...it, priceTtc, unitCustomsEur, unitCustomsValue, lineCustomsEur, lineCustomsValue, lineImportVat, lineWeightGrams };
     });
 
     return {
@@ -283,6 +289,7 @@ export default function DouanePassageDetailPage() {
       pieces,
       netWeightKg: netWeightGrams / 1000,
       customsValue,
+      customsValueEur,
       importVat,
       lines,
     };
@@ -294,13 +301,14 @@ export default function DouanePassageDetailPage() {
 
   // --- Synthese par type : ce que la douane lit en tete de dossier ---
   const summary = useMemo(() => {
-    const rows = new Map<string, { qty: number; netG: number; customs: number; ret: number }>();
+    const rows = new Map<string, { qty: number; netG: number; customs: number; customsEur: number; ret: number }>();
     for (const it of computed.lines) {
       const type = it.product_type ?? '(sans type)';
-      const r = rows.get(type) ?? { qty: 0, netG: 0, customs: 0, ret: 0 };
+      const r = rows.get(type) ?? { qty: 0, netG: 0, customs: 0, customsEur: 0, ret: 0 };
       r.qty += it.qty_departed;
       r.netG += it.lineWeightGrams;
       r.customs += it.lineCustomsValue;
+      r.customsEur += it.lineCustomsEur;
       r.ret += it.qty_returned ?? 0;
       rows.set(type, r);
     }
@@ -497,8 +505,9 @@ export default function DouanePassageDetailPage() {
           </div>
         </div>
         <div className={styles.metricCard}>
-          <div className={styles.metricLabel}>Valeur douanière</div>
+          <div className={styles.metricLabel}>Valeur douanière (prix d&apos;achat)</div>
           <div className={styles.metricValue}>{formatChf(computed.customsValue)}</div>
+          <Text size="xs" c="dimmed" mt={4}>{formatEur(computed.customsValueEur)} HT</Text>
         </div>
         <div className={styles.metricCard}>
           <div className={styles.metricLabel}>TVA à l&apos;import ({computed.vatPct} %)</div>
@@ -595,7 +604,8 @@ export default function DouanePassageDetailPage() {
               <Table.Th style={{ textAlign: 'right' }}>Poids net</Table.Th>
               <Table.Th style={{ textAlign: 'right', minWidth: 110 }}>Caisses (kg)</Table.Th>
               <Table.Th style={{ textAlign: 'right' }}>Poids brut</Table.Th>
-              <Table.Th style={{ textAlign: 'right' }}>Valeur douanière au départ (HT)</Table.Th>
+              <Table.Th style={{ textAlign: 'right' }}>Valeur douanière HT (EUR)</Table.Th>
+              <Table.Th style={{ textAlign: 'right' }}>Valeur douanière HT (CHF)</Table.Th>
               {/* Toujours affichées : à l'aller elles s'impriment vides, pour être
                   remplies à la main au festival. */}
               {['Qté restante', 'Qté vendue', 'Poids restant', 'Poids vendu', 'Valeur restante', 'Valeur vendue'].map((h) => (
@@ -643,6 +653,7 @@ export default function DouanePassageDetailPage() {
                 <Table.Td style={{ textAlign: 'right' }}>
                   {r.grossKg.toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg
                 </Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}>{formatEur(r.customsEur)}</Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>{formatChf(r.customs)}</Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>{isClosed ? r.ret : '—'}</Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>{isClosed ? r.vendu : '—'}</Table.Td>
@@ -666,6 +677,7 @@ export default function DouanePassageDetailPage() {
               <Table.Td style={{ textAlign: 'right' }}>
                 <b>{summary.totalGrossKg.toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg</b>
               </Table.Td>
+              <Table.Td style={{ textAlign: 'right' }}><b>{formatEur(computed.customsValueEur)}</b></Table.Td>
               <Table.Td style={{ textAlign: 'right' }}><b>{formatChf(computed.customsValue)}</b></Table.Td>
               <Table.Td style={{ textAlign: 'right' }}><b>{isClosed ? summary.totalReste : '—'}</b></Table.Td>
               <Table.Td style={{ textAlign: 'right' }}><b>{isClosed ? summary.totalVendu : '—'}</b></Table.Td>
@@ -714,7 +726,8 @@ export default function DouanePassageDetailPage() {
                 <Table.Th style={{ textAlign: 'right' }}>Poids</Table.Th>
                 <Table.Th style={{ textAlign: 'right' }}>Coût textile</Table.Th>
                 <Table.Th style={{ textAlign: 'right' }}>Coût impression</Table.Th>
-                <Table.Th style={{ textAlign: 'right' }}>Valeur douanière</Table.Th>
+                <Table.Th style={{ textAlign: 'right' }}>Valeur douanière (EUR)</Table.Th>
+                <Table.Th style={{ textAlign: 'right' }}>Valeur douanière (CHF)</Table.Th>
                 <Table.Th style={{ textAlign: 'right' }}>TVA à l&apos;import</Table.Th>
               </Table.Tr>
             </Table.Thead>
@@ -722,7 +735,7 @@ export default function DouanePassageDetailPage() {
               {groups.map((group) => (
                 <Fragment key={group.title}>
                   <Table.Tr className={styles.groupRow}>
-                    <Table.Td colSpan={8}>{group.title} · {group.totalQty} pièce(s)</Table.Td>
+                    <Table.Td colSpan={9}>{group.title} · {group.totalQty} pièce(s)</Table.Td>
                   </Table.Tr>
                   {group.items.map((it) => (
                     <Table.Tr key={it.id} className={it.incomplete ? styles.incompleteRow : undefined}>
@@ -738,6 +751,7 @@ export default function DouanePassageDetailPage() {
                       <Table.Td style={{ textAlign: 'right' }}>
                         {it.unit_cost_print != null ? formatEur(it.unit_cost_print) : '—'}
                       </Table.Td>
+                      <Table.Td style={{ textAlign: 'right' }}>{formatEur(it.lineCustomsEur)}</Table.Td>
                       <Table.Td style={{ textAlign: 'right' }}>{formatChf(it.lineCustomsValue)}</Table.Td>
                       <Table.Td style={{ textAlign: 'right' }}>{formatChf(it.lineImportVat)}</Table.Td>
                     </Table.Tr>
@@ -746,7 +760,7 @@ export default function DouanePassageDetailPage() {
               ))}
               {groups.length === 0 && (
                 <Table.Tr>
-                  <Table.Td colSpan={8}>
+                  <Table.Td colSpan={9}>
                     <Text c="dimmed" ta="center" py="md">Aucune ligne dans cet instantané.</Text>
                   </Table.Td>
                 </Table.Tr>

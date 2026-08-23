@@ -109,6 +109,14 @@ export function renderPassage(
     return saisi && saisi > 0 ? saisi : (Number(it.unit_price_eur) || 0) * rate;
   };
   const htOf = (it: PassageItem) => ttcOf(it) / vatDiv;
+  /**
+   * Valeur en douane : le prix d'ACHAT, pas le prix de vente. C'est le coût du
+   * textile plus celui de l'impression — déjà hors taxe, rien à retirer.
+   * Exprimée en euros ; la colonne CHF applique le taux du passage.
+   */
+  const customsEurOf = (it: PassageItem) =>
+    (Number(it.unit_cost_textile) || 0) + (Number(it.unit_cost_print) || 0);
+  const customsChfOf = (it: PassageItem) => customsEurOf(it) * rate;
   /** TVA due a l'importation en Suisse : elle se calcule sur la valeur douaniere HT. */
   const vatOnImport = (ht: number) => ht * (Number(passage.vat_pct) / 100);
 
@@ -123,7 +131,7 @@ export function renderPassage(
     const g = it.weight_grams ?? 0;
     pieces += it.qty_departed;
     netG += g * it.qty_departed;
-    customsChf += htOf(it) * it.qty_departed;
+    customsChf += customsChfOf(it) * it.qty_departed;
     if (closed) {
       returned += it.qty_returned ?? 0;
       sold += it.qty_sold_recorded ?? 0;
@@ -137,7 +145,7 @@ export function renderPassage(
     const agg = byType.get(t) ?? { qty: 0, netG: 0, chf: 0, ret: 0, sold: 0 };
     agg.qty += it.qty_departed;
     agg.netG += g * it.qty_departed;
-    agg.chf += htOf(it) * it.qty_departed;
+    agg.chf += customsChfOf(it) * it.qty_departed;
     agg.ret += it.qty_returned ?? 0;
     agg.sold += it.qty_sold_recorded ?? 0;
     byType.set(t, agg);
@@ -183,11 +191,13 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
  <b>Poids brut total</b> ${grossKg !== null ? grossKg.toFixed(3) + ' kg' + (hasPackaging ? ' (net + caisses)' : ' (pesé)') : '— à compléter'}<br>
  <b>Pièces déclarées</b> <span class="big">${pieces}</span><br>
  ${closed ? `<b>Revenues</b> <span class="big">${returned}</span> &nbsp;·&nbsp; <b style="min-width:auto">vendues (caisse)</b> <span class="big">${sold}</span><br>` : ''}
- <b>Valeur douanière totale</b> <span class="big">${num(customsChf)} CHF HT &nbsp;/&nbsp; ${num(customsChf / rate)} EUR</span><br>
+ <b>Valeur douanière totale</b> <span class="big">${num(customsChf / rate)} EUR &nbsp;/&nbsp; ${num(customsChf)} CHF</span><br>
  <b>TVA à l'import (${passage.vat_pct} %)</b> <span class="big">${num(vatOnImport(customsChf))} CHF</span>
 </div>
 <p style="font-size:8pt;color:#555;margin:-2mm 0 3mm">
- Valeur douanière = prix de vente TTC pratiqué en Suisse ÷ ${vatDiv.toFixed(3)} (TVA ${passage.vat_pct} %). Elle est donc <b>hors taxe</b>.
+ <b>Valeur en douane = prix d'achat</b> (coût du textile + coût de l'impression), hors taxe par nature.
+ Conversion en francs au taux de ${rate}. Les prix de vente ci-dessous ne servent qu'à situer la marchandise ;
+ ils n'entrent pas dans la valeur déclarée.
 </p>
 
 <h2>Prix de vente pratiqués en Suisse</h2>
@@ -202,7 +212,7 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
 <h2>Détail par type de produit</h2>
 <table><thead><tr>
  <th class="l">Objet</th><th class="l">Type Ivy</th><th>Quantité</th><th>Poids net (kg)</th><th>Caisses (kg)</th><th>Poids brut (kg)</th>
- <th>Valeur douanière au départ<br>CHF HT</th><th>équiv. EUR</th><th>TVA import CHF</th>
+ <th>Valeur douanière au départ<br>HT (EUR)</th><th>Valeur douanière au départ<br>HT (CHF)</th><th>TVA import CHF</th>
  ${closed
     ? '<th>Qté restante</th><th>Qté vendue</th><th>Poids restant (kg)</th><th>Poids vendu (kg)</th><th>Valeur restante CHF</th><th>Valeur vendue CHF</th>'
     : '<th class="tofill">Qté restante</th><th class="tofill">Qté vendue</th><th class="tofill">Poids restant</th><th class="tofill">Poids vendu</th><th class="tofill">Valeur restante</th><th class="tofill">Valeur vendue</th>'}
@@ -214,7 +224,7 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
     html += `<tr><td class="l"><b>${esc(labelOf(type))}</b></td><td class="l">${esc(type)}</td><td>${t.qty}</td><td>${kg(t.netG)}</td>` +
       `<td>${hasPackaging ? packagingOf(type).toFixed(3) : '—'}</td>` +
       `<td>${gross !== null ? gross.toFixed(3) : '—'}</td>` +
-      `<td>${num(t.chf)}</td><td>${num(t.chf / rate)}</td><td>${num(vatOnImport(t.chf))}</td>` +
+      `<td>${num(t.chf / rate)}</td><td>${num(t.chf)}</td><td>${num(vatOnImport(t.chf))}</td>` +
       (closed
         ? (() => {
             // « Vendu » au sens douanier : ce qui est physiquement resté en Suisse,
@@ -233,7 +243,7 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
   html += `</tbody><tfoot><tr><td class="l" colspan="2">TOTAL</td><td>${pieces}</td><td>${kg(netG)}</td>` +
     `<td>${hasPackaging ? totalPackaging.toFixed(3) : '—'}</td>` +
     `<td>${grossKg !== null ? grossKg.toFixed(3) : '—'}</td>` +
-    `<td>${num(customsChf)}</td><td>${num(customsChf / rate)}</td><td>${num(vatOnImport(customsChf))}</td>` +
+    `<td>${num(customsChf / rate)}</td><td>${num(customsChf)}</td><td>${num(vatOnImport(customsChf))}</td>` +
     (closed
       ? (() => {
           const venduTotal = Math.max(0, pieces - returned);
@@ -289,7 +299,7 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
     s.rows.sort((a, b) => (a.color ?? '').localeCompare(b.color ?? '') || sizeRank(a.size) - sizeRank(b.size));
     const sQty = s.rows.reduce((n, r) => n + r.qty_departed, 0);
     const sNet = s.rows.reduce((n, r) => n + (r.weight_grams ?? 0) * r.qty_departed, 0);
-    const sHt = s.rows.reduce((n, r) => n + htOf(r) * r.qty_departed, 0);
+    const sHt = s.rows.reduce((n, r) => n + customsChfOf(r) * r.qty_departed, 0);
 
     html += `<div class="sheet${s.rows.length > 24 ? ' dense' : ''}">
 <div class="prodhead">${s.image ? `<img src="${esc(s.image)}" alt="">` : ''}<div><h2>${esc(s.title)}</h2></div></div>
@@ -301,7 +311,7 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
  <th class="l">Taille</th><th class="l">Couleur</th><th>Qté apportée</th>
  ${closed ? '<th>Revenue</th><th>Vendue</th><th>Écart</th>' : '<th>Vendu</th>'}
  <th>Poids unit. (kg)</th><th>Textile HT €</th><th>Impression HT €</th>
- <th>Vente CHF TTC</th><th>Valeur douanière CHF HT</th><th>TVA import CHF</th><th class="l">Origine</th>
+ <th>Vente CHF TTC<br><i>(indicatif)</i></th><th>Valeur douanière<br>HT (EUR)</th><th>Valeur douanière<br>HT (CHF)</th><th>TVA import CHF</th><th class="l">Origine</th>
 </tr></thead><tbody>`;
 
     for (const r of s.rows) {
@@ -315,14 +325,16 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
         `<td>${r.weight_grams ? kg(r.weight_grams) : '<b>?</b>'}</td>` +
         `<td>${r.unit_cost_textile !== null ? num(r.unit_cost_textile) : '<b>?</b>'}</td>` +
         `<td>${r.unit_cost_print !== null ? num(r.unit_cost_print) : '<b>?</b>'}</td>` +
-        `<td>${num(ttcOf(r))}</td><td><b>${num(htOf(r))}</b></td>` +
-        `<td>${num(vatOnImport(htOf(r)))}</td>` +
+        `<td>${num(ttcOf(r))}</td>` +
+        `<td><b>${num(customsEurOf(r))}</b></td><td><b>${num(customsChfOf(r))}</b></td>` +
+        `<td>${num(vatOnImport(customsChfOf(r)))}</td>` +
         `<td class="l">${esc(passage.origin)}</td></tr>`;
     }
 
     html += `</tbody><tfoot><tr><td class="l" colspan="2">Sous-total — ${esc(s.title)}</td><td>${sQty}</td>` +
       (closed ? `<td colspan="3"></td>` : `<td></td>`) +
-      `<td>${kg(sNet)}</td><td colspan="2"></td><td></td><td><b>${num(sHt)}</b></td>` +
+      `<td>${kg(sNet)}</td><td colspan="2"></td><td></td>` +
+      `<td><b>${num(sHt / rate)}</b></td><td><b>${num(sHt)}</b></td>` +
       `<td><b>${num(vatOnImport(sHt))}</b></td><td></td>` +
       `</tr></tfoot></table></div>`;
   }
