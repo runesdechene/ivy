@@ -179,6 +179,24 @@ export async function POST(request: Request) {
     const inventoryItemIds: number[] = [];
     const inventoryItemToVariantShopifyId: Record<string, string> = {};
 
+    // Poids déjà connus, indexés par (product_id, shopify_id).
+    // Sans ça, l'upsert écraserait un poids saisi à la main par un zéro venu de Shopify.
+    const existingWeights = new Map<string, number>();
+    {
+      const productUuids = Object.values(productIdMap);
+      for (let i = 0; i < productUuids.length; i += 200) {
+        const chunk = productUuids.slice(i, i + 200);
+        const { data: rows } = await supabase
+          .from('product_variants')
+          .select('product_id, shopify_id, weight_grams')
+          .in('product_id', chunk)
+          .not('weight_grams', 'is', null);
+        for (const r of rows ?? []) {
+          existingWeights.set(`${r.product_id}:${r.shopify_id}`, r.weight_grams as number);
+        }
+      }
+    }
+
     for (const product of filteredProducts) {
       const productId = productIdMap[product.id.toString()];
       if (!productId) continue;
@@ -194,6 +212,13 @@ export async function POST(request: Request) {
           option3: variant.option3,
           inventory_item_id: variant.inventory_item_id?.toString(),
           cost: variant.cost ? parseFloat(variant.cost) : 0,
+          // Shopify fait foi quand il a une valeur. Un 0 ou une absence ne doit
+          // JAMAIS effacer un poids saisi dans Ivy (96 pièces à Uriel Boxer sont
+          // sur des variantes supprimées de Shopify : Ivy est leur seule source).
+          weight_grams:
+            variant.grams && variant.grams > 0
+              ? variant.grams
+              : existingWeights.get(`${productId}:${variant.id.toString()}`) ?? null,
           shopify_active: true,
         });
 
