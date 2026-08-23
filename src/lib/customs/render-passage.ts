@@ -92,6 +92,15 @@ const CSS = `
  .warn h3 { margin: 0 0 1mm; font-size: 10pt; color: #b00; }
  .big { font-size: 11pt; }
  .soustitre { font-size: 10pt; color: #444; margin: -1mm 0 3mm; }
+ /* En-tete en pastilles : treize lignes empilees poussaient le tableau sur
+    une seconde page. Sur une ou deux lignes, tout tient. */
+ .chips { display: flex; flex-wrap: wrap; gap: 1.2mm; margin-bottom: 2.5mm; }
+ .chip { border: 1px solid #c4c4c4; border-radius: 1.5mm; padding: 0.7mm 2mm;
+         font-size: 7.4pt; background: #fbfbfb; white-space: nowrap; }
+ .chip b { color: #666; font-weight: 600; margin-right: 1mm; }
+ .totaux .chip { font-size: 8.6pt; padding: 1mm 2.4mm; background: #f0f0ea;
+                 border-color: #999; }
+ .totaux .chip b { color: #444; }
  th.retour, td.retour { border-left: 2px solid #444; }
  /* Colonnes du retour, imprimees vides a l'aller pour etre remplies a la main. */
  td.tofill { background: #fafafa; }
@@ -225,26 +234,32 @@ Coche « Graphiques d'arrière-plan » pour que les lignes signalées restent vi
   html += `<div class="sheet">
 <h1>${esc(passage.doc_titre) || titre}</h1>
 ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}</p>` : ''}
-<div class="meta">
- <b>Raison sociale</b> ${esc(passage.raison_sociale) || '—'}<br>
- <b>Nom et prénom</b> ${esc(passage.nom_prenom) || '—'}<br>
- <b>Siège social (France)</b> ${esc(passage.adresse_siege) || '—'}<br>
- <b>Lieu d'exposition</b> ${esc(passage.adresse_exposition) || '—'}<br>
- <b>Dates d'exposition</b> ${esc(passage.date_exposition) || '—'}<br>
- <b>Date d'entrée sur le territoire</b> ${esc(passage.departed_on)}<br>
- <b>Date de retour prévue</b> ${esc(passage.date_retour_prevue) || '—'}<br>
- ${passage.date_apurement ? `<b>Date d'apurement</b> ${esc(passage.date_apurement)}<br>` : ''}
- ${closed ? `<b>Date de retour</b> ${esc(passage.returned_on ?? '—')}<br>` : ''}
- <b>Référence 1187</b> ${esc(passage.reference) || '—'}<br>
- <b>Taux appliqué</b> 1 EUR = ${rate} CHF<br>
- <b>TVA suisse déduite</b> ${passage.vat_pct} %<br>
- <b>Origine des marchandises</b> ${esc(passage.origin)}<br>
- <b>Poids net total</b> ${kgv(netG / 1000)} kg<br>
- <b>Poids brut total</b> ${grossKg !== null ? kgv(grossKg) + ' kg' + (hasPackaging ? ' (net + caisses)' : ' (pesé)') : '— à compléter'}<br>
- <b>Pièces déclarées</b> <span class="big">${pieces}</span><br>
- ${closed ? `<b>Revenues</b> <span class="big">${returned}</span> &nbsp;·&nbsp; <b style="min-width:auto">vendues (caisse)</b> <span class="big">${sold}</span><br>` : ''}
- <b>Valeur douanière totale</b> <span class="big">${num(customsChf / rate)} EUR &nbsp;/&nbsp; ${num(customsChf)} CHF</span><br>
- <b>TVA à l'import (${passage.vat_pct} %)</b> <span class="big">${num(vatOnImport(customsChf))} CHF</span>
+<div class="chips">
+ ${[
+   ['Raison sociale', esc(passage.raison_sociale)],
+   ['Nom et prénom', esc(passage.nom_prenom)],
+   ['Siège social (France)', esc(passage.adresse_siege)],
+   ["Lieu d'exposition", esc(passage.adresse_exposition)],
+   ["Dates d'exposition", esc(passage.date_exposition)],
+   ["Entrée sur le territoire", esc(passage.departed_on)],
+   ['Retour prévu', esc(passage.date_retour_prevue)],
+   ...(passage.date_apurement ? [["Apurement", esc(passage.date_apurement)]] : []),
+   ...(closed ? [['Retour effectif', esc(passage.returned_on)]] : []),
+   ['Référence 1187', esc(passage.reference)],
+   ['Taux', `1 EUR = ${rate} CHF`],
+   ['TVA suisse', `${passage.vat_pct} %`],
+   ['Origine', esc(passage.origin)],
+ ].filter(([, v]) => v).map(([k, v]) => `<span class="chip"><b>${k}</b> ${v}</span>`).join('')}
+</div>
+
+<div class="chips totaux">
+ <span class="chip fort"><b>Pièces déclarées</b> ${pieces}</span>
+ <span class="chip fort"><b>Poids net</b> ${kgv(netG / 1000)} kg</span>
+ <span class="chip fort"><b>Poids brut</b> ${grossKg !== null ? kgv(grossKg) + ' kg' : '— à compléter'}</span>
+ <span class="chip fort"><b>Valeur en douane</b> ${num(customsChf / rate)} EUR &nbsp;/&nbsp; ${num(customsChf)} CHF</span>
+ <span class="chip fort"><b>TVA à l'import</b> ${num(vatOnImport(customsChf))} CHF</span>
+ ${closed ? `<span class="chip fort"><b>Revenues</b> ${returned}</span><span class="chip fort"><b>Vendues (caisse)</b> ${sold}</span>` : ''}
+</div>
 </div>
 <p style="font-size:8pt;color:#555;margin:-2mm 0 3mm">
  <b>Valeur en douane = prix d'achat</b> (coût du textile + coût de l'impression), hors taxe par nature.
