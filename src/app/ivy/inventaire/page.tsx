@@ -75,7 +75,7 @@ export default function InventaireDashboardPage() {
   const [douaneRate, setDouaneRate] = useState<number | ''>('');
   const [douaneGross, setDouaneGross] = useState<number | ''>('');
   const [douaneRef, setDouaneRef] = useState('');
-  const [douaneMarkup, setDouaneMarkup] = useState<number | ''>(0);
+  const [douanePrices, setDouanePrices] = useState<Record<string, number | ''>>({});
   const [douaneVat, setDouaneVat] = useState<number | ''>(8.1);
 
   const handleDouane = useCallback(() => {
@@ -95,12 +95,16 @@ export default function InventaireDashboardPage() {
     });
     if (douaneGross) params.append('gross', String(douaneGross));
     if (douaneRef.trim()) params.append('ref', douaneRef.trim());
-    params.append('markup', String(douaneMarkup || 0));
+    const prices: Record<string, number> = {};
+    for (const [type, v] of Object.entries(douanePrices)) {
+      if (typeof v === 'number' && v > 0) prices[type] = v;
+    }
+    if (Object.keys(prices).length > 0) params.append('prices', JSON.stringify(prices));
     params.append('vat', String(douaneVat === '' ? 8.1 : douaneVat));
     // Nouvel onglet : le document s'imprime depuis le navigateur (Ctrl+P).
     window.open(`/api/customs/declaration?${params}`, '_blank');
     douane.close();
-  }, [currentShop, currentLocation, douaneRate, douaneGross, douaneRef, douaneMarkup, douaneVat, douane]);
+  }, [currentShop, currentLocation, douaneRate, douaneGross, douaneRef, douanePrices, douaneVat, douane]);
 
   const handleExportCsv = useCallback(async () => {
     if (!currentShop) return;
@@ -329,6 +333,8 @@ export default function InventaireDashboardPage() {
         title="Déclaration douanière suisse — formulaire 1187"
         radius="md"
         size="md"
+        scrollAreaComponent={undefined}
+        styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}
       >
         <Stack gap="sm">
           <Text size="sm" c="dimmed">
@@ -355,16 +361,30 @@ export default function InventaireDashboardPage() {
             step={1}
             min={0}
           />
-          <NumberInput
-            label="Majoration Suisse (%)"
-            description="Tes prix suisses par rapport aux prix Ivy. 0 = mêmes prix."
-            value={douaneMarkup}
-            onChange={(v) => setDouaneMarkup(typeof v === 'number' ? v : '')}
-            suffix=" %"
-            decimalScale={2}
-            step={5}
-            min={0}
-          />
+          <div>
+            <Text size="sm" fw={500}>Prix de vente en Suisse, TTC (CHF)</Text>
+            <Text size="xs" c="dimmed" mb={6}>
+              Tes prix pratiqués au stand. La valeur douanière en sera déduite hors taxe.
+              Un type laissé vide utilise le prix Ivy converti au taux.
+            </Text>
+            <Stack gap={6}>
+              {Object.keys(stats?.byProductType ?? {}).sort().map((type) => (
+                <NumberInput
+                  key={type}
+                  label={type}
+                  value={douanePrices[type] ?? ''}
+                  onChange={(v) =>
+                    setDouanePrices((prev) => ({ ...prev, [type]: typeof v === 'number' ? v : '' }))
+                  }
+                  suffix=" CHF"
+                  decimalScale={2}
+                  step={5}
+                  min={0}
+                  size="xs"
+                />
+              ))}
+            </Stack>
+          </div>
           <NumberInput
             label="TVA suisse (%)"
             description="Déduite du prix majoré : la valeur douanière est hors taxe. 8,1 % en 2026."

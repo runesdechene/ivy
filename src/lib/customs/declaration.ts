@@ -24,9 +24,12 @@ export interface CustomsParams {
   /** Code d'origine des marchandises. */
   origin: string;
   /**
-   * Majoration appliquee aux prix pour la vente en Suisse, en %.
-   * 0 = on vend au meme prix qu'en France.
+   * Prix de vente en Suisse, TTC, en CHF, par type de produit.
+   * C'est la source la plus fiable : ce sont les prix reellement pratiques au
+   * stand, saisis a la main. Un type absent retombe sur le prix Ivy converti.
    */
+  pricesChfTtcByType: Record<string, number>;
+  /** Majoration de repli, en %, pour les types sans prix saisi. */
   markupPct: number;
   /**
    * TVA suisse, en % (8.1 au 2026-01). Le prix majore est un prix TTC :
@@ -315,8 +318,11 @@ export async function buildCustomsDeclaration(
   //   prix TTC / (1 + TVA) = valeur douaniere CHF HT
   const markup = 1 + (params.markupPct || 0) / 100;
   const vatDiv = 1 + (params.vatPct || 0) / 100;
-  const toSellChfTtc = (priceEur: number) => priceEur * params.rate * markup;
-  const toCustomsChfHt = (priceEur: number) => toSellChfTtc(priceEur) / vatDiv;
+  const priceOf = (type: string, priceEur: number) => {
+    const saisi = params.pricesChfTtcByType[type];
+    // Le prix saisi fait foi. Sinon on convertit le prix Ivy et on majore.
+    return saisi && saisi > 0 ? saisi : priceEur * params.rate * markup;
+  };
 
   const byProduct = new Map<string, { product: ProductRow; rows: Line[] }>();
   const byType = new Map<string, { qty: number; netG: number; customsChf: number }>();
@@ -343,10 +349,12 @@ export async function buildCustomsDeclaration(
     else if (b.mismatch) problems.mismatch++;
     if (!price) problems.noPrice++;
 
+    const lineType = p.product_type ?? '(sans type)';
+    const sellChfTtc = priceOf(lineType, price);
     const line: Line = {
-      type: p.product_type ?? '(sans type)',
-      sellChfTtc: toSellChfTtc(price),
-      customsChfHt: toCustomsChfHt(price),
+      type: lineType,
+      sellChfTtc,
+      customsChfHt: sellChfTtc / vatDiv,
       image: p.image_url,
       ref: p.title,
       size: optionOf(v, p, 'size') || v.option2 || '',
@@ -443,9 +451,20 @@ export async function buildCustomsDeclaration(
  <b>Valeur douanière totale</b> <span class="big">${chfRaw(totalCustomsChf)} CHF HT &nbsp;/&nbsp; ${eurFromChf(totalCustomsChf)} EUR</span>
 </div>
 <p style="font-size:8pt;color:#555;margin:-2mm 0 3mm">
- Valeur douanière = prix de vente Ivy × ${rate} (taux)${markupPct > 0 ? ` × ${(1 + markupPct / 100).toFixed(4)} (majoration ${markupPct} %)` : ''}
- ÷ ${(1 + vatPct / 100).toFixed(3)} (TVA ${vatPct} %). Elle est donc <b>hors taxe</b>.
+ Valeur douanière = prix de vente TTC en Suisse ÷ ${(1 + vatPct / 100).toFixed(3)} (TVA ${vatPct} %).
+ Elle est donc <b>hors taxe</b>. Les prix TTC sont ceux pratiqués au stand, par type de produit.
 </p>
+<h2>Prix de vente pratiqués en Suisse</h2>
+<table style="width:auto;margin-bottom:4mm"><thead><tr>
+ <th class="l">Type</th><th>Prix TTC (CHF)</th><th>dont TVA ${vatPct} %</th><th>Prix HT (CHF)</th>
+</tr></thead><tbody>${
+  [...byType.keys()].sort().map(t => {
+    const ttc = params.pricesChfTtcByType[t];
+    if (!ttc) return `<tr><td class="l">${esc(t)}</td><td colspan="3">converti depuis le prix Ivy</td></tr>`;
+    const ht = ttc / vatDiv;
+    return `<tr><td class="l">${esc(t)}</td><td>${chfRaw(ttc)}</td><td>${chfRaw(ttc - ht)}</td><td><b>${chfRaw(ht)}</b></td></tr>`;
+  }).join('')
+}</tbody></table>
 <h2>Détail par type de produit</h2>
 <table><thead><tr>
  <th class="l">Type</th><th>Quantité</th><th>Poids net (kg)</th><th>Poids brut (kg)</th>

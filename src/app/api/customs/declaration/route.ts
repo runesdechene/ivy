@@ -26,6 +26,22 @@ export async function GET(request: NextRequest) {
   // Majoration appliquee aux prix pour la vente en Suisse, et TVA suisse a deduire
   // pour obtenir une valeur douaniere hors taxe. 8.1 % est le taux normal en 2026.
   const markupPct = Number(sp.get('markup') ?? 0) || 0;
+  // Prix de vente TTC en CHF par type de produit, encodes en JSON.
+  let pricesChfTtcByType: Record<string, number> = {};
+  const rawPrices = sp.get('prices');
+  if (rawPrices) {
+    try {
+      const parsed: unknown = JSON.parse(rawPrices);
+      if (parsed && typeof parsed === 'object') {
+        for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+          const n = Number(v);
+          if (Number.isFinite(n) && n > 0) pricesChfTtcByType[k] = n;
+        }
+      }
+    } catch {
+      return NextResponse.json({ error: 'Prix par type illisibles' }, { status: 400 });
+    }
+  }
   const vatPct = sp.get('vat') !== null ? Number(sp.get('vat')) : 8.1;
 
   if (!shopId || !locationId) {
@@ -43,6 +59,7 @@ export async function GET(request: NextRequest) {
       grossKg,
       reference,
       origin,
+      pricesChfTtcByType,
       markupPct,
       vatPct: Number.isFinite(vatPct) ? vatPct : 8.1,
     });
