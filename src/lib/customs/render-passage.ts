@@ -245,13 +245,16 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
 
 <h2>Détail par type de produit</h2>
 <table><thead>
-<tr><th colspan="10">Départ</th><th colspan="6" class="retour">Retour</th></tr>
+<tr><th colspan="11">Départ</th><th colspan="7" class="retour">Retour</th></tr>
 <tr>
  <th class="l">Objet</th><th class="l">Code SH</th><th class="l">Type Ivy</th><th>Quantité</th><th>Poids net (kg)</th><th>Caisses (kg)</th><th>Poids brut (kg)</th>
  <th>Valeur douanière au départ<br>HT (EUR)</th><th>Valeur douanière au départ<br>HT (CHF)</th><th>TVA import CHF</th>
+ <th>Prix de vente unitaire<br>CHF TTC</th>
  ${closed
-    ? '<th class="retour">Qté restante</th><th>Qté vendue</th><th>Poids restant (kg)</th><th>Poids vendu (kg)</th><th>Valeur restante (CHF)</th><th>Valeur vendue (CHF)</th>'
-    : '<th class="tofill retour">Qté restante</th><th class="tofill">Qté vendue</th><th class="tofill">Poids restant (kg)</th><th class="tofill">Poids vendu (kg)</th><th class="tofill">Valeur restante (CHF)</th><th class="tofill">Valeur vendue (CHF)</th>'}
+    ? '<th class="retour">Qté restante</th><th>Qté vendue</th><th>Poids restant (kg)</th>' +
+      '<th>Valeur restante en douane (CHF)</th><th>CA vendu TTC (CHF)</th><th>Base imposable HT (CHF)</th><th>TVA due (CHF)</th>'
+    : '<th class="tofill retour">Qté restante</th><th class="tofill">Qté vendue</th><th class="tofill">Poids restant (kg)</th>' +
+      '<th class="tofill">Valeur restante en douane (CHF)</th><th class="tofill">CA vendu TTC (CHF)</th><th class="tofill">Base imposable HT (CHF)</th><th class="tofill">TVA due (CHF)</th>'}
 </tr></thead><tbody>`;
 
   for (const [objet, o] of [...byObjet.entries()].sort((a, b) => b[1].qty - a[1].qty)) {
@@ -261,34 +264,58 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
     const vendu = Math.max(0, o.qty - o.ret);
     const unitG = o.qty > 0 ? o.netG / o.qty : 0;
     const unitHt = o.qty > 0 ? o.chf / o.qty : 0;
+    // Prix de vente pratique en Suisse pour ce type. A defaut, le prix Ivy converti.
+    const prixVenteTtc = (() => {
+      const saisi = prices[objet];
+      if (saisi && saisi > 0) return saisi;
+      const lignes = items.filter(i => (i.product_type ?? '(sans type)') === objet);
+      const q = lignes.reduce((n, i) => n + i.qty_departed, 0);
+      const somme = lignes.reduce((n, i) => n + (Number(i.unit_price_eur) || 0) * i.qty_departed, 0);
+      return q > 0 ? (somme / q) * rate : 0;
+    })();
     html += `<tr><td class="l"><b>${esc(labelOf(objet))}</b></td>` +
       `<td class="l">${shOf(objet) || '<b style="color:#b00">—</b>'}</td>` +
       `<td class="l">${esc(objet)}</td><td>${o.qty}</td><td>${kg(o.netG)}</td>` +
       `<td>${hasPackaging ? kgv(pack) : '—'}</td>` +
       `<td>${brut !== null ? kgv(brut) : '—'}</td>` +
       `<td>${num(o.chf / rate)}</td><td>${num(o.chf)}</td><td>${num(vatOnImport(o.chf))}</td>` +
+      `<td>${prixVenteTtc > 0 ? num(prixVenteTtc) : '<b style="color:#b00">—</b>'}</td>` +
       (closed
-        ? `<td class="retour">${reste}</td><td>${vendu}</td>` +
-          `<td>${kg(unitG * reste)}</td><td>${kg(unitG * vendu)}</td>` +
-          `<td>${num(unitHt * reste)}</td><td>${num(unitHt * vendu)}</td>`
-        : `<td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
+        ? (() => {
+            // Au retour, la TVA suisse porte sur la CONTRE-PRESTATION encaissee,
+            // pas sur le prix d'achat : base = CA TTC / (1 + TVA).
+            const caTtc = prixVenteTtc * vendu;
+            const base = caTtc / vatDiv;
+            return `<td class="retour">${reste}</td><td>${vendu}</td>` +
+              `<td>${kg(unitG * reste)}</td>` +
+              `<td>${num(unitHt * reste)}</td>` +
+              `<td>${num(caTtc)}</td><td>${num(base)}</td><td>${num(caTtc - base)}</td>`;
+          })()
+        : `<td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
       `</tr>`;
   }
 
   html += `</tbody><tfoot><tr><td class="l" colspan="3">TOTAL</td><td>${pieces}</td><td>${kg(netG)}</td>` +
     `<td>${hasPackaging ? kgv(totalPackaging) : '—'}</td>` +
     `<td>${grossKg !== null ? kgv(grossKg) : '—'}</td>` +
-    `<td>${num(customsChf / rate)}</td><td>${num(customsChf)}</td><td>${num(vatOnImport(customsChf))}</td>` +
+    `<td>${num(customsChf / rate)}</td><td>${num(customsChf)}</td><td>${num(vatOnImport(customsChf))}</td><td></td>` +
     (closed
       ? (() => {
           const venduTotal = Math.max(0, pieces - returned);
           const unitG = pieces > 0 ? netG / pieces : 0;
           const unitHt = pieces > 0 ? customsChf / pieces : 0;
-          return `<td>${returned}</td><td>${venduTotal}</td>` +
-            `<td>${kg(unitG * returned)}</td><td>${kg(unitG * venduTotal)}</td>` +
-            `<td>${num(unitHt * returned)}</td><td>${num(unitHt * venduTotal)}</td>`;
+          let caTtc = 0;
+          for (const [type, t] of byType) {
+            const p = prices[type] ?? 0;
+            caTtc += p * Math.max(0, t.qty - t.ret);
+          }
+          const base = caTtc / vatDiv;
+          return `<td class="retour">${returned}</td><td>${venduTotal}</td>` +
+            `<td>${kg(unitG * returned)}</td>` +
+            `<td>${num(unitHt * returned)}</td>` +
+            `<td>${num(caTtc)}</td><td>${num(base)}</td><td>${num(caTtc - base)}</td>`;
         })()
-      : `<td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
+      : `<td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
     `</tr></tfoot></table>`;
 
   if (!closed) {
