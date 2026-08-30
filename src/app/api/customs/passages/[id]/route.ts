@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { buildSnapshot } from '@/lib/customs/snapshot';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
+
+/** Nombre d'UUID par filtre `in.(…)` : 482 identifiants dans une URL, c'est 18 ko. */
+const ID_CHUNK = 100;
 
 /** GET — le passage et son instantané. */
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -167,8 +169,30 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const { items: current } = await buildSnapshot(supabase, passage.shop_id, passage.location_id);
-  const backByVariant = new Map(current.map(i => [i.variant_id, i.qty_departed]));
+
+  // Ce qui est encore à l'emplacement, c'est ce qui repasse la frontière. On lit
+  // `inventory_levels` directement : tout le descriptif (produit, coûts, poids) a
+  // déjà été figé au départ, et le rejouer via `buildSnapshot` coûtait une dizaine
+  // d'allers-retours dont un balayage des 6000 variantes — pour rien.
+  const backByVariant = new Map<string, number>();
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from('inventory_levels')
+      .select('variant_id, quantity')
+      .eq('location_id', passage.location_id)
+      .gt('quantity', 0)
+      .order('variant_id')
+      .range(from, from + 999);
+    if (error) {
+      console.error('clôture, lecture du stock:', error);
+      return NextResponse.json({ error: 'Lecture du stock impossible' }, { status: 500 });
+    }
+    if (!data || data.length === 0) break;
+    for (const l of data as { variant_id: string; quantity: number }[]) {
+      backByVariant.set(l.variant_id, l.quantity);
+    }
+    if (data.length < 1000) break;
+  }
 
   // Ventes enregistrées au stand sur la période, depuis stock_movements.
   // La colonne location_id y est un UUID, pas l'ID Shopify.
@@ -212,16 +236,31 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
     if (data.length < 1000) break;
   }
 
+  // Un UPDATE par couple (revenu, vendu), pas un par ligne. Écrire les 482 lignes
+  // une à une demandait autant d'allers-retours séquentiels : la fonction mourait
+  // en vol vers la moitié, laissant le passage ouvert avec des lignes à demi
+  // remplies. Les quantités se répètent énormément — une poignée de lots suffit.
+  const groups = new Map<string, string[]>();
   for (const it of items) {
     const returned = it.variant_id ? backByVariant.get(it.variant_id) ?? 0 : 0;
     const sold = it.variant_id ? soldByVariant.get(it.variant_id) ?? 0 : 0;
-    const { error } = await supabase
-      .from('customs_declaration_items')
-      .update({ qty_returned: returned, qty_sold_recorded: sold })
-      .eq('id', it.id);
-    if (error) {
-      console.error('clôture, ligne', it.id, error);
-      return NextResponse.json({ error: 'La clôture a échoué en cours de route' }, { status: 500 });
+    const key = `${returned}|${sold}`;
+    const bucket = groups.get(key) ?? [];
+    bucket.push(it.id);
+    groups.set(key, bucket);
+  }
+
+  for (const [key, ids] of groups) {
+    const [returned, sold] = key.split('|').map(Number);
+    for (let i = 0; i < ids.length; i += ID_CHUNK) {
+      const { error } = await supabase
+        .from('customs_declaration_items')
+        .update({ qty_returned: returned, qty_sold_recorded: sold })
+        .in('id', ids.slice(i, i + ID_CHUNK));
+      if (error) {
+        console.error('clôture, lot', key, error);
+        return NextResponse.json({ error: 'La clôture a échoué en cours de route' }, { status: 500 });
+      }
     }
   }
 
