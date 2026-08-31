@@ -422,8 +422,7 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
      <p style="margin:0 0 1mm">Sur ces lignes, « parti − revenu » ne correspond pas aux ventes enregistrées à la caisse.
      ${manquantes.length ? `<b>En moins</b> : casse, cadeau, ou pièce partie sans passer en caisse.` : ''}
      ${surnumeraires.length ? `<b>En plus</b> : pièce entrée en stock pendant l'exposition — retour d'un client,
-       réassort — donc absente de l'instantané de départ.` : ''}
-     Les lignes concernées sont surlignées dans les annexes.</p>
+       réassort — donc absente de l'instantané de départ.` : ''}</p>
      <ul style="margin:0;padding-left:4mm">${ecartLignes
        .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
        .slice(0, 12).map(nommer).join('')}</ul>
