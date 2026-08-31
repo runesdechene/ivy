@@ -239,6 +239,21 @@ export function renderPassage(
     ? 'Réexportation après vente incertaine — formulaire 11.74'
     : 'Importation temporaire pour vente incertaine — formulaire 1187';
 
+  /**
+   * Apurement. Ce qui n'est pas réexporté reste en Suisse : la TVA due porte sur
+   * la CONTRE-PRESTATION encaissée, jamais sur la valeur d'entrée. Calculé une
+   * seule fois — les pastilles du haut, le total du tableau et le paragraphe de
+   * conclusion doivent annoncer le même montant, sinon le document se contredit
+   * lui-même sous les yeux du douanier.
+   */
+  const venduTotal = Math.max(0, pieces - returned);
+  let caTtcTotal = 0;
+  for (const [type, t] of byType) {
+    caTtcTotal += (prices[type] ?? 0) * Math.max(0, t.qty - t.ret);
+  }
+  const baseTotale = caTtcTotal / vatDiv;
+  const tvaDue = caTtcTotal - baseTotale;
+
   let html = `<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <title>${esc(passage.doc_titre) || 'Douane suisse'} — ${esc(passage.departed_on)}</title>
 <style>${CSS}</style></head><body>
@@ -273,12 +288,24 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
  <span class="chip fort"><b>Poids brut</b> ${grossKg !== null ? kgv(grossKg) + ' kg' : '— à compléter'}</span>
  <span class="chip fort"><b>Valeur en douane</b> ${num(customsChf / rate)} EUR &nbsp;/&nbsp; ${num(customsChf)} CHF</span>
  <span class="chip fort"><b>TVA à l'import</b> ${num(vatOnImport(customsChf))} CHF</span>
- ${closed ? `<span class="chip fort"><b>Revenues</b> ${returned}</span><span class="chip fort"><b>Vendues (caisse)</b> ${sold}</span>` : ''}
+ ${closed
+   ? `<span class="chip fort"><b>Revenues</b> ${returned}</span>` +
+     `<span class="chip fort"><b>Vendues (caisse)</b> ${sold}</span>` +
+     `<span class="chip fort"><b>CA encaissé</b> ${num(caTtcTotal)} CHF</span>` +
+     `<span class="chip fort"><b>Base imposable</b> ${num(baseTotale)} CHF</span>` +
+     `<span class="chip fort"><b>TVA due</b> ${num(tvaDue)} CHF</span>`
+   : ''}
 </div>
 <p style="font-size:6.8pt;color:#333;margin:0 0 2mm">
  <b>Valeur en douane = prix d'achat</b> (coût du textile + coût de l'impression), hors taxe par nature.
- Conversion en francs au taux de ${rate}. Les prix de vente ci-dessous ne servent qu'à situer la marchandise ;
- ils n'entrent pas dans la valeur déclarée.
+ Conversion en francs au taux de ${rate}.
+ ${closed
+   ? `Les prix de vente ci-dessous sont des <b>moyennes pondérées par type, remises comprises</b> :
+      la contre-prestation réellement encaissée, ramenée à l'unité. Ils n'entrent pas dans la valeur
+      en douane — qui reste le prix d'achat — mais ce sont eux qui déterminent la base imposable et
+      la TVA due à l'apurement.`
+   : `Les prix de vente ci-dessous ne servent qu'à situer la marchandise ;
+      ils n'entrent pas dans la valeur déclarée.`}
 </p>
 
 <h2>Détail par type de produit</h2>
@@ -287,7 +314,7 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
 <tr>
  <th class="l">Objet</th><th class="l">Code SH</th><th class="l">Type Ivy</th><th>Quantité</th><th>Poids net (kg)</th><th>Caisses (kg)</th><th>Poids brut (kg)</th>
  <th>Valeur douanière au départ<br>HT (EUR)</th><th>Valeur douanière au départ<br>HT (CHF)</th><th>TVA import CHF</th>
- <th>Prix de vente unitaire<br>CHF TTC</th>
+ <th>${closed ? 'Prix de vente moyen pondéré<br>CHF TTC' : 'Prix de vente unitaire<br>CHF TTC'}</th>
  ${closed
     ? '<th class="retour">Qté restante</th><th>Qté vendue</th><th>Poids restant (kg)</th>' +
       '<th>Valeur restante en douane (CHF)</th><th>CA vendu TTC (CHF)</th><th>Base imposable HT (CHF)</th><th>TVA due (CHF)</th>'
@@ -339,19 +366,12 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
     `<td>${num(customsChf / rate)}</td><td>${num(customsChf)}</td><td>${num(vatOnImport(customsChf))}</td><td></td>` +
     (closed
       ? (() => {
-          const venduTotal = Math.max(0, pieces - returned);
           const unitG = pieces > 0 ? netG / pieces : 0;
           const unitHt = pieces > 0 ? customsChf / pieces : 0;
-          let caTtc = 0;
-          for (const [type, t] of byType) {
-            const p = prices[type] ?? 0;
-            caTtc += p * Math.max(0, t.qty - t.ret);
-          }
-          const base = caTtc / vatDiv;
           return `<td class="retour">${returned}</td><td>${venduTotal}</td>` +
             `<td>${kg(unitG * returned)}</td>` +
             `<td>${num(unitHt * returned)}</td>` +
-            `<td>${num(caTtc)}</td><td>${num(base)}</td><td>${num(caTtc - base)}</td>`;
+            `<td>${num(caTtcTotal)}</td><td>${num(baseTotale)}</td><td>${num(tvaDue)}</td>`;
         })()
       : `<td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
     `</tr></tfoot></table>`;
@@ -362,17 +382,6 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
      en comparant l'instantané de départ au stock constaté au retour. Rien n'est à saisir à la main.
      Le poids brut par type est réparti au prorata du poids net.</p>`;
   } else if (closed) {
-    const venduTotal = Math.max(0, pieces - returned);
-    const unitHt = pieces > 0 ? customsChf / pieces : 0;
-    // La TVA reellement due porte sur la CONTRE-PRESTATION encaissee, comme la
-    // colonne « TVA due » du tableau : les deux doivent donner le meme montant,
-    // sinon le document se contredit lui-meme.
-    let caTtcTotal = 0;
-    for (const [type, t] of byType) {
-      caTtcTotal += (prices[type] ?? 0) * Math.max(0, t.qty - t.ret);
-    }
-    const baseTotale = caTtcTotal / vatDiv;
-    const tvaDue = caTtcTotal - baseTotale;
     html += `<p style="font-size:7.5pt;color:#333;margin-top:2mm">
      <b>TVA réellement due</b> : elle porte sur la contre-prestation encaissée en Suisse,
      soit <b>${venduTotal}</b> pièce(s) vendues pour <b>${num(caTtcTotal)} CHF TTC</b>,
@@ -383,7 +392,9 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
   if (closed && ecarts > 0) {
     html += `<div class="warn"><h3>${ecarts} ligne(s) avec un écart</h3>
      <p style="margin:0">Sur ces lignes, « parti − revenu » ne correspond pas aux ventes enregistrées à la caisse.
-     L'écart correspond à de la casse, un cadeau, ou une pièce partie sans passer en caisse. Les lignes concernées sont surlignées.</p></div>`;
+     <b>En moins</b> : casse, cadeau, ou pièce partie sans passer en caisse.
+     <b>En plus</b> : pièce entrée en stock pendant l'exposition — retour d'un client, réassort — donc absente
+     de l'instantané de départ. Les lignes concernées sont surlignées.</p></div>`;
   }
 
   const anyProblem = problems.noWeight || problems.noRule || problems.noPrice;
