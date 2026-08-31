@@ -177,7 +177,13 @@ export function renderPassage(
 
   // Agrégats
   let pieces = 0, netG = 0, customsChf = 0;
-  let returned = 0, sold = 0, ecarts = 0;
+  let returned = 0, sold = 0;
+  /**
+   * Les lignes en ecart, avec leur SENS. Un ecart positif et un ecart negatif
+   * n'ont pas la meme cause : servir les deux explications a chaque fois oblige
+   * le douanier a deviner laquelle s'applique.
+   */
+  const ecartLignes: { titre: string; taille: string | null; couleur: string | null; delta: number }[] = [];
   const byType = new Map<string, { qty: number; netG: number; chf: number; ret: number; sold: number }>();
   const byProduct = new Map<string, { title: string; image: string | null; type: string | null; rows: PassageItem[] }>();
   const problems = { noWeight: 0, noRule: 0, noPrice: 0 };
@@ -190,7 +196,10 @@ export function renderPassage(
     if (closed) {
       returned += it.qty_returned ?? 0;
       sold += it.qty_sold_recorded ?? 0;
-      if (it.qty_departed - (it.qty_returned ?? 0) - (it.qty_sold_recorded ?? 0) !== 0) ecarts++;
+      const delta = it.qty_departed - (it.qty_returned ?? 0) - (it.qty_sold_recorded ?? 0);
+      if (delta !== 0) {
+        ecartLignes.push({ titre: it.product_title, taille: it.size, couleur: it.color, delta });
+      }
     }
     if (!it.weight_grams) problems.noWeight++;
     if (it.unit_cost_textile === null) problems.noRule++;
@@ -310,15 +319,20 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
 
 <h2>Détail par type de produit</h2>
 <table><thead>
-<tr><th colspan="11">Départ</th><th colspan="7" class="retour">Retour</th></tr>
+<tr><th colspan="${closed ? 10 : 11}">Départ</th><th colspan="${closed ? 8 : 7}" class="retour">Retour</th></tr>
 <tr>
  <th class="l">Objet</th><th class="l">Code SH</th><th class="l">Type Ivy</th><th>Quantité</th><th>Poids net (kg)</th><th>Caisses (kg)</th><th>Poids brut (kg)</th>
  <th>Valeur douanière au départ<br>HT (EUR)</th><th>Valeur douanière au départ<br>HT (CHF)</th><th>TVA import CHF</th>
- <th>${closed ? 'Prix de vente moyen pondéré<br>CHF TTC' : 'Prix de vente unitaire<br>CHF TTC'}</th>
  ${closed
+    // Une fois cloture, le prix pratique n'est plus une indication de depart :
+    // c'est la contre-prestation encaissee, donc une donnee de RETOUR. Il se lit
+    // juste avant le CA qu'il produit — quantite vendue x prix = CA.
     ? '<th class="retour">Qté restante</th><th>Qté vendue</th><th>Poids restant (kg)</th>' +
-      '<th>Valeur restante en douane (CHF)</th><th>CA vendu TTC (CHF)</th><th>Base imposable HT (CHF)</th><th>TVA due (CHF)</th>'
-    : '<th class="tofill retour">Qté restante</th><th class="tofill">Qté vendue</th><th class="tofill">Poids restant (kg)</th>' +
+      '<th>Valeur restante en douane (CHF)</th>' +
+      '<th>Prix de vente moyen<br>pondéré CHF TTC</th>' +
+      '<th>CA vendu TTC (CHF)</th><th>Base imposable HT (CHF)</th><th>TVA due (CHF)</th>'
+    : '<th>Prix de vente unitaire<br>CHF TTC</th>' +
+      '<th class="tofill retour">Qté restante</th><th class="tofill">Qté vendue</th><th class="tofill">Poids restant (kg)</th>' +
       '<th class="tofill">Valeur restante en douane (CHF)</th><th class="tofill">CA vendu TTC (CHF)</th><th class="tofill">Base imposable HT (CHF)</th><th class="tofill">TVA due (CHF)</th>'}
 </tr></thead><tbody>`;
 
@@ -344,7 +358,6 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
       `<td>${hasPackaging ? kgv(pack) : '—'}</td>` +
       `<td>${brut !== null ? kgv(brut) : '—'}</td>` +
       `<td>${num(o.chf / rate)}</td><td>${num(o.chf)}</td><td>${num(vatOnImport(o.chf))}</td>` +
-      `<td>${prixVenteTtc > 0 ? num(prixVenteTtc) : '<b style="color:#b00">—</b>'}</td>` +
       (closed
         ? (() => {
             // Au retour, la TVA suisse porte sur la CONTRE-PRESTATION encaissee,
@@ -354,31 +367,37 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
             return `<td class="retour">${reste}</td><td>${vendu}</td>` +
               `<td>${kg(unitG * reste)}</td>` +
               `<td>${num(unitHt * reste)}</td>` +
+              `<td>${prixVenteTtc > 0 ? num(prixVenteTtc) : '<b style="color:#b00">—</b>'}</td>` +
               `<td>${num(caTtc)}</td><td>${num(base)}</td><td>${num(caTtc - base)}</td>`;
           })()
-        : `<td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
+        : `<td>${prixVenteTtc > 0 ? num(prixVenteTtc) : '<b style="color:#b00">—</b>'}</td>` +
+          `<td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
       `</tr>`;
   }
 
   html += `</tbody><tfoot><tr><td class="l" colspan="3">TOTAL</td><td>${pieces}</td><td>${kg(netG)}</td>` +
     `<td>${hasPackaging ? kgv(totalPackaging) : '—'}</td>` +
     `<td>${grossKg !== null ? kgv(grossKg) : '—'}</td>` +
-    `<td>${num(customsChf / rate)}</td><td>${num(customsChf)}</td><td>${num(vatOnImport(customsChf))}</td><td></td>` +
+    `<td>${num(customsChf / rate)}</td><td>${num(customsChf)}</td><td>${num(vatOnImport(customsChf))}</td>` +
     (closed
       ? (() => {
           const unitG = pieces > 0 ? netG / pieces : 0;
           const unitHt = pieces > 0 ? customsChf / pieces : 0;
+          // Prix moyen toutes lignes confondues : le CA rapporte aux pieces
+          // vendues. C'est la moyenne que le douanier refera de tete.
+          const prixMoyen = venduTotal > 0 ? caTtcTotal / venduTotal : 0;
           return `<td class="retour">${returned}</td><td>${venduTotal}</td>` +
             `<td>${kg(unitG * returned)}</td>` +
             `<td>${num(unitHt * returned)}</td>` +
+            `<td>${num(prixMoyen)}</td>` +
             `<td>${num(caTtcTotal)}</td><td>${num(baseTotale)}</td><td>${num(tvaDue)}</td>`;
         })()
-      : `<td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
+      : `<td></td><td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
     `</tr></tfoot></table>`;
 
   if (!closed) {
     html += `<p style="font-size:7.5pt;color:#333;margin-top:2mm">
-     Les six colonnes de droite se remplissent automatiquement à la clôture du passage,
+     Les sept colonnes de droite se remplissent automatiquement à la clôture du passage,
      en comparant l'instantané de départ au stock constaté au retour. Rien n'est à saisir à la main.
      Le poids brut par type est réparti au prorata du poids net.</p>`;
   } else if (closed) {
@@ -387,14 +406,28 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
      soit <b>${venduTotal}</b> pièce(s) vendues pour <b>${num(caTtcTotal)} CHF TTC</b>,
      dont <b>${num(baseTotale)} CHF</b> de base imposable et <b>${num(tvaDue)} CHF</b> de TVA —
      à opposer aux ${num(vatOnImport(customsChf))} CHF avancés à l'entrée.
-     « Vendu » vaut ici « parti − revenu » ; le chiffre de la caisse figure sur les feuilles produit.</p>`;
+     « Vendu » vaut ici « parti − revenu », ce qui a réellement quitté le stock ; le relevé de caisse,
+     lui, totalise ${sold} pièce(s).</p>`;
   }
-  if (closed && ecarts > 0) {
-    html += `<div class="warn"><h3>${ecarts} ligne(s) avec un écart</h3>
-     <p style="margin:0">Sur ces lignes, « parti − revenu » ne correspond pas aux ventes enregistrées à la caisse.
-     <b>En moins</b> : casse, cadeau, ou pièce partie sans passer en caisse.
-     <b>En plus</b> : pièce entrée en stock pendant l'exposition — retour d'un client, réassort — donc absente
-     de l'instantané de départ. Les lignes concernées sont surlignées.</p></div>`;
+  if (closed && ecartLignes.length > 0) {
+    // On n'explique que le sens observe. Servir les deux causes a chaque fois
+    // obligeait le douanier a deviner laquelle s'appliquait a la ligne devant lui.
+    const manquantes = ecartLignes.filter(e => e.delta > 0);
+    const surnumeraires = ecartLignes.filter(e => e.delta < 0);
+    const nommer = (e: typeof ecartLignes[number]) =>
+      `<li><b>${esc(e.titre)}</b>${e.taille ? ` / ${esc(e.taille)}` : ''}${e.couleur ? ` / ${esc(e.couleur)}` : ''} — ` +
+      `${Math.abs(e.delta)} pièce(s) ${e.delta > 0 ? 'manquante(s)' : 'de plus qu\'au départ'}</li>`;
+
+    html += `<div class="warn"><h3>${ecartLignes.length} ligne(s) avec un écart</h3>
+     <p style="margin:0 0 1mm">Sur ces lignes, « parti − revenu » ne correspond pas aux ventes enregistrées à la caisse.
+     ${manquantes.length ? `<b>En moins</b> : casse, cadeau, ou pièce partie sans passer en caisse.` : ''}
+     ${surnumeraires.length ? `<b>En plus</b> : pièce entrée en stock pendant l'exposition — retour d'un client,
+       réassort — donc absente de l'instantané de départ.` : ''}
+     Les lignes concernées sont surlignées dans les annexes.</p>
+     <ul style="margin:0;padding-left:4mm">${ecartLignes
+       .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+       .slice(0, 12).map(nommer).join('')}</ul>
+     ${ecartLignes.length > 12 ? `<p style="margin:1mm 0 0">… et ${ecartLignes.length - 12} autre(s).</p>` : ''}</div>`;
   }
 
   const anyProblem = problems.noWeight || problems.noRule || problems.noPrice;
