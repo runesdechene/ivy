@@ -416,17 +416,28 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
     const surnumeraires = ecartLignes.filter(e => e.delta < 0);
     const nommer = (e: typeof ecartLignes[number]) =>
       `<li><b>${esc(e.titre)}</b>${e.taille ? ` / ${esc(e.taille)}` : ''}${e.couleur ? ` / ${esc(e.couleur)}` : ''} — ` +
-      `${Math.abs(e.delta)} pièce(s) ${e.delta > 0 ? 'manquante(s)' : 'de plus qu\'au départ'}</li>`;
+      `${Math.abs(e.delta)} pièce(s) manquante(s)</li>`;
 
-    html += `<div class="warn"><h3>${ecartLignes.length} ligne(s) avec un écart</h3>
-     <p style="margin:0 0 1mm">Sur ces lignes, « parti − revenu » ne correspond pas aux ventes enregistrées à la caisse.
-     ${manquantes.length ? `<b>En moins</b> : casse, cadeau, ou pièce partie sans passer en caisse.` : ''}
-     ${surnumeraires.length ? `<b>En plus</b> : pièce entrée en stock pendant l'exposition — retour d'un client,
-       réassort — donc absente de l'instantané de départ.` : ''}</p>
-     <ul style="margin:0;padding-left:4mm">${ecartLignes
-       .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
-       .slice(0, 12).map(nommer).join('')}</ul>
-     ${ecartLignes.length > 12 ? `<p style="margin:1mm 0 0">… et ${ecartLignes.length - 12} autre(s).</p>` : ''}</div>`;
+    // Une piece MANQUANTE appelle une justification : elle a quitte le stock sans
+    // passer en caisse. Une piece EN PLUS n'est pas une anomalie douaniere — elle
+    // est declaree et elle ressort du territoire. L'encadre d'alerte, qui attire
+    // l'oeil et appelle la question, ne sert donc que pour le premier cas.
+    if (manquantes.length > 0) {
+      html += `<div class="warn"><h3>${manquantes.length} ligne(s) avec un manque</h3>
+       <p style="margin:0 0 1mm">Sur ces lignes, « parti − revenu » dépasse les ventes enregistrées à la
+       caisse : casse, cadeau, ou pièce partie sans passer en caisse.</p>
+       <ul style="margin:0;padding-left:4mm">${manquantes
+         .sort((a, b) => b.delta - a.delta).slice(0, 12).map(nommer).join('')}</ul>
+       ${manquantes.length > 12 ? `<p style="margin:1mm 0 0">… et ${manquantes.length - 12} autre(s).</p>` : ''}</div>`;
+    }
+
+    if (surnumeraires.length > 0) {
+      const n = surnumeraires.reduce((s, e) => s + Math.abs(e.delta), 0);
+      html += `<p style="font-size:7.5pt;color:#333;margin-top:2mm">
+       L'instantané de retour comprend <b>${n} pièce(s)</b> rapportée(s) par un client pendant l'exposition,
+       donc absente(s) de l'instantané de départ. Elle(s) sont déclarée(s) au retour et comptée(s) dans les
+       ${returned} pièces réexportées.</p>`;
+    }
   }
 
   const anyProblem = problems.noWeight || problems.noRule || problems.noPrice;
