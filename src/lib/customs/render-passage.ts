@@ -179,12 +179,25 @@ export function renderPassage(
   let pieces = 0, netG = 0, customsChf = 0;
   let returned = 0, sold = 0;
   /**
+   * Poids et valeur de ce qui revient VRAIMENT, cumules ligne a ligne.
+   *
+   * Le total se calculait en multipliant la moyenne du DEPART par le nombre de
+   * pieces revenues. Faux des que la composition du retour differe de celle du
+   * depart : ce sont les articles legers et bon marche qui se vendent le mieux,
+   * donc ce qui repart pese et vaut plus cher a la piece que la moyenne du lot.
+   */
+  let netRetG = 0, chfRet = 0;
+  /**
    * Les lignes en ecart, avec leur SENS. Un ecart positif et un ecart negatif
    * n'ont pas la meme cause : servir les deux explications a chaque fois oblige
    * le douanier a deviner laquelle s'applique.
    */
   const ecartLignes: { titre: string; taille: string | null; couleur: string | null; delta: number }[] = [];
-  const byType = new Map<string, { qty: number; netG: number; chf: number; ret: number; sold: number }>();
+  const byType = new Map<string, {
+    qty: number; netG: number; chf: number; ret: number; sold: number;
+    /** Poids et valeur effectivement revenus, cumules ligne a ligne. */
+    netRetG: number; chfRet: number;
+  }>();
   const byProduct = new Map<string, { title: string; image: string | null; type: string | null; rows: PassageItem[] }>();
   const problems = { noWeight: 0, noRule: 0, noPrice: 0 };
 
@@ -196,6 +209,8 @@ export function renderPassage(
     if (closed) {
       returned += it.qty_returned ?? 0;
       sold += it.qty_sold_recorded ?? 0;
+      netRetG += g * (it.qty_returned ?? 0);
+      chfRet += customsChfOf(it) * (it.qty_returned ?? 0);
       const delta = it.qty_departed - (it.qty_returned ?? 0) - (it.qty_sold_recorded ?? 0);
       if (delta !== 0) {
         ecartLignes.push({ titre: it.product_title, taille: it.size, couleur: it.color, delta });
@@ -206,12 +221,14 @@ export function renderPassage(
     if (!it.unit_price_eur) problems.noPrice++;
 
     const t = it.product_type ?? '(sans type)';
-    const agg = byType.get(t) ?? { qty: 0, netG: 0, chf: 0, ret: 0, sold: 0 };
+    const agg = byType.get(t) ?? { qty: 0, netG: 0, chf: 0, ret: 0, sold: 0, netRetG: 0, chfRet: 0 };
     agg.qty += it.qty_departed;
     agg.netG += g * it.qty_departed;
     agg.chf += customsChfOf(it) * it.qty_departed;
     agg.ret += it.qty_returned ?? 0;
     agg.sold += it.qty_sold_recorded ?? 0;
+    agg.netRetG += g * (it.qty_returned ?? 0);
+    agg.chfRet += customsChfOf(it) * (it.qty_returned ?? 0);
     byType.set(t, agg);
 
     const key = it.product_title;
@@ -228,15 +245,29 @@ export function renderPassage(
   const grossKg = hasPackaging ? netG / 1000 + totalPackaging : globalGross;
   const grossRatio = !hasPackaging && globalGross !== null && netG > 0 ? globalGross / (netG / 1000) : null;
   /**
+   * Poids brut au retour. Les caisses reviennent ENTIERES — elles ne se vendent
+   * pas — donc leur poids s'ajoute tel quel au net restant, sans prorata.
+   * C'est ce chiffre que reclame la declaration de reexportation.
+   */
+  const grossRetKg = !closed
+    ? null
+    : hasPackaging
+      ? netRetG / 1000 + totalPackaging
+      : grossRatio !== null ? (netRetG / 1000) * grossRatio : null;
+  /**
    * Une ligne par TYPE Ivy. On ne fusionne jamais sur le libellé : un t-shirt
    * classique et un 240 g coton brossé peuvent porter le même mot courant, ce
    * sont deux articles distincts, de prix et de poids différents.
    */
   const byObjet = new Map<string, {
     qty: number; netG: number; chf: number; ret: number; types: string[];
+    netRetG: number; chfRet: number;
   }>();
   for (const [type, t] of byType) {
-    byObjet.set(type, { qty: t.qty, netG: t.netG, chf: t.chf, ret: t.ret, types: [type] });
+    byObjet.set(type, {
+      qty: t.qty, netG: t.netG, chf: t.chf, ret: t.ret, types: [type],
+      netRetG: t.netRetG, chfRet: t.chfRet,
+    });
   }
   const packagingOfObjet = (types: string[]) => types.reduce((n, t) => n + packagingOf(t), 0);
 
@@ -299,6 +330,8 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
  <span class="chip fort"><b>TVA à l'import</b> ${num(vatOnImport(customsChf))} CHF</span>
  ${closed
    ? `<span class="chip fort"><b>Revenues</b> ${returned}</span>` +
+     `<span class="chip fort"><b>Poids net au retour</b> ${kg(netRetG)} kg</span>` +
+     (grossRetKg !== null ? `<span class="chip fort"><b>Poids brut au retour</b> ${kgv(grossRetKg)} kg</span>` : '') +
      `<span class="chip fort"><b>Vendues (caisse)</b> ${sold}</span>` +
      `<span class="chip fort"><b>CA encaissé</b> ${num(caTtcTotal)} CHF</span>` +
      `<span class="chip fort"><b>Base imposable</b> ${num(baseTotale)} CHF</span>` +
@@ -365,8 +398,8 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
             const caTtc = prixVenteTtc * vendu;
             const base = caTtc / vatDiv;
             return `<td class="retour">${reste}</td><td>${vendu}</td>` +
-              `<td>${kg(unitG * reste)}</td>` +
-              `<td>${num(unitHt * reste)}</td>` +
+              `<td>${kg(o.netRetG)}</td>` +
+              `<td>${num(o.chfRet)}</td>` +
               `<td>${prixVenteTtc > 0 ? num(prixVenteTtc) : '<b style="color:#b00">—</b>'}</td>` +
               `<td>${num(caTtc)}</td><td>${num(base)}</td><td>${num(caTtc - base)}</td>`;
           })()
@@ -381,14 +414,12 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
     `<td>${num(customsChf / rate)}</td><td>${num(customsChf)}</td><td>${num(vatOnImport(customsChf))}</td>` +
     (closed
       ? (() => {
-          const unitG = pieces > 0 ? netG / pieces : 0;
-          const unitHt = pieces > 0 ? customsChf / pieces : 0;
           // Prix moyen toutes lignes confondues : le CA rapporte aux pieces
           // vendues. C'est la moyenne que le douanier refera de tete.
           const prixMoyen = venduTotal > 0 ? caTtcTotal / venduTotal : 0;
           return `<td class="retour">${returned}</td><td>${venduTotal}</td>` +
-            `<td>${kg(unitG * returned)}</td>` +
-            `<td>${num(unitHt * returned)}</td>` +
+            `<td>${kg(netRetG)}</td>` +
+            `<td>${num(chfRet)}</td>` +
             `<td>${num(prixMoyen)}</td>` +
             `<td>${num(caTtcTotal)}</td><td>${num(baseTotale)}</td><td>${num(tvaDue)}</td>`;
         })()
