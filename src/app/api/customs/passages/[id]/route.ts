@@ -68,9 +68,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   ] as const) {
     if (typeof body[key] === 'string') patch[col] = body[key];
   }
+  // Pas de date d'apurement saisie : c'est la date du retour effectif, fixée à la clôture.
   for (const [key, col] of [
     ['dateRetourPrevue', 'date_retour_prevue'],
-    ['dateApurement', 'date_apurement'],
   ] as const) {
     if (typeof body[key] === 'string' || body[key] === null) patch[col] = body[key] || null;
   }

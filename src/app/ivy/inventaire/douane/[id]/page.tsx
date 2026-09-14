@@ -47,7 +47,6 @@ interface Passage {
   adresse_exposition: string | null;
   date_exposition: string | null;
   date_retour_prevue: string | null;
-  date_apurement: string | null;
   tariff_by_type: Record<string, { position?: string; origine?: string; tva?: number }>;
   doc_sous_titre: string | null;
   packaging_kg: Record<string, number>;
@@ -109,7 +108,6 @@ interface FormState {
   adresseExposition: string;
   dateExposition: string;
   dateRetourPrevue: string;
-  dateApurement: string;
   /** Cases fixes du 11.74 : 10, 15, 17, 20. Et l'origine du textile, distincte. */
   origineDeclaree: string;
   bureauDouane: string;
@@ -187,7 +185,6 @@ export default function DouanePassageDetailPage() {
     adresseExposition: '',
     dateExposition: '',
     dateRetourPrevue: '',
-    dateApurement: '',
     origineDeclaree: '',
     bureauDouane: '',
     designationFormulaire: '',
@@ -229,7 +226,6 @@ export default function DouanePassageDetailPage() {
           adresseExposition: data.passage?.adresse_exposition ?? '',
           dateExposition: data.passage?.date_exposition ?? '',
           dateRetourPrevue: data.passage?.date_retour_prevue ?? '',
-          dateApurement: data.passage?.date_apurement ?? '',
           origineDeclaree: data.passage?.origine_declaree ?? '',
           bureauDouane: data.passage?.bureau_douane ?? '',
           designationFormulaire: data.passage?.designation_formulaire ?? '',
@@ -274,7 +270,6 @@ export default function DouanePassageDetailPage() {
         adresseExposition: next.adresseExposition,
         dateExposition: next.dateExposition,
         dateRetourPrevue: next.dateRetourPrevue || null,
-        dateApurement: next.dateApurement || null,
         bureauDouane: next.bureauDouane,
         designationFormulaire: next.designationFormulaire,
         tarifFormulaire: next.tarifFormulaire,
@@ -331,7 +326,7 @@ export default function DouanePassageDetailPage() {
   // finale, à la sortie du champ : un seul rendu, une seule requête.
   const commitDocField = useCallback((
     field: 'docTitre' | 'docSousTitre' | 'departedOn' | 'raisonSociale' | 'nomPrenom' | 'adresseSiege'
-      | 'adresseExposition' | 'dateExposition' | 'dateRetourPrevue' | 'dateApurement'
+      | 'adresseExposition' | 'dateExposition' | 'dateRetourPrevue'
       | 'origineDeclaree' | 'bureauDouane' | 'designationFormulaire' | 'tarifFormulaire' | 'origin',
     value: string,
   ) => {
@@ -1005,7 +1000,6 @@ export default function DouanePassageDetailPage() {
             ['adresseExposition', "Adresse d'exposition"],
             ['dateExposition', "Dates d'exposition"],
             ['dateRetourPrevue', 'Date de retour prévue'],
-            ['dateApurement', "Date d'apurement"],
           ] as const).map(([champ, label]) => (
             <div key={champ}>
               <Text size="xs" c="dimmed" mb={2}>{label}</Text>

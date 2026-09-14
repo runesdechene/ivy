@@ -42,7 +42,6 @@ export interface PassageRow {
   adresse_exposition?: string | null;
   date_exposition?: string | null;
   date_retour_prevue?: string | null;
-  date_apurement?: string | null;
   /** Matériel d'exposition : hors marchandise, réexporté intégralement. */
   materiel?: ObjetMateriel[];
   /** Faux : le matériel reste enregistré mais ne s'imprime pas. */
@@ -335,7 +334,6 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
    ["Dates d'exposition", esc(passage.date_exposition)],
    ["Entrée sur le territoire", esc(passage.departed_on)],
    ['Retour prévu', esc(passage.date_retour_prevue)],
-   ...(passage.date_apurement ? [["Apurement", esc(passage.date_apurement)]] : []),
    ...(closed ? [['Retour effectif', esc(passage.returned_on)]] : []),
    ['N° 11.74', esc(passage.reference)],
    ['Taux', `1 EUR = ${rate} CHF`],
