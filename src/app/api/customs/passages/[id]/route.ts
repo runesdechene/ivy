@@ -68,7 +68,13 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   }
   if (typeof body.docTitre === 'string') patch.doc_titre = body.docTitre;
   if (typeof body.docSousTitre === 'string') patch.doc_sous_titre = body.docSousTitre;
-  if (typeof body.origin === 'string' && body.origin) patch.origin = body.origin;
+  if (typeof body.origin === 'string' && body.origin) patch.origin = body.origin.trim().toUpperCase();
+  if (typeof body.origineDeclaree === 'string' && body.origineDeclaree) {
+    patch.origine_declaree = body.origineDeclaree.trim().toUpperCase();
+  }
+  // Cases 17 et 20 du 11.74
+  if (typeof body.designationFormulaire === 'string') patch.designation_formulaire = body.designationFormulaire.trim() || null;
+  if (typeof body.tarifFormulaire === 'string') patch.tarif_formulaire = body.tarifFormulaire.trim() || null;
   if (typeof body.departedOn === 'string') patch.departed_on = body.departedOn;
   if (body.customsLabels && typeof body.customsLabels === 'object') {
     const clean: Record<string, string> = {};

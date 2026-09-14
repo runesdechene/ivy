@@ -25,7 +25,13 @@ interface Passage {
   eur_to_chf: number;
   vat_pct: number;
   gross_weight_kg: number | null;
+  /** Origine du textile (BD). */
   origin: string;
+  /** Pays d'origine en case 10 du 11.74 (FR). */
+  origine_declaree: string | null;
+  designation_formulaire: string | null;
+  tarif_formulaire: string | null;
+  bureau_douane: string | null;
   prices_chf_ttc: Record<string, number>;
   customs_labels: Record<string, string>;
   doc_titre: string | null;
@@ -89,6 +95,12 @@ interface FormState {
   dateApurement: string;
   /** Code SH par type de produit. */
   shByType: Record<string, string>;
+  /** Cases fixes du 11.74 : 10, 15, 17, 20. Et l'origine du textile, distincte. */
+  origineDeclaree: string;
+  bureauDouane: string;
+  designationFormulaire: string;
+  tarifFormulaire: string;
+  origin: string;
 }
 
 /**
@@ -189,6 +201,11 @@ export default function DouanePassageDetailPage() {
     dateRetourPrevue: '',
     dateApurement: '',
     shByType: {},
+    origineDeclaree: '',
+    bureauDouane: '',
+    designationFormulaire: '',
+    tarifFormulaire: '',
+    origin: '',
   });
 
   const fetchPassage = useCallback(async () => {
@@ -241,6 +258,11 @@ export default function DouanePassageDetailPage() {
             Object.entries((data.passage?.tariff_by_type ?? {}) as Record<string, { position?: string }>)
               .map(([k, v]) => [k, v?.position ?? '']),
           ),
+          origineDeclaree: data.passage?.origine_declaree ?? '',
+          bureauDouane: data.passage?.bureau_douane ?? '',
+          designationFormulaire: data.passage?.designation_formulaire ?? '',
+          tarifFormulaire: data.passage?.tarif_formulaire ?? '',
+          origin: data.passage?.origin ?? '',
         });
         hydratedRef.current = true;
       }
@@ -288,7 +310,13 @@ export default function DouanePassageDetailPage() {
         packagingKg: Object.fromEntries(
           Object.entries(next.packagingKg).filter(([, v]) => typeof v === 'number'),
         ),
+        bureauDouane: next.bureauDouane,
+        designationFormulaire: next.designationFormulaire,
+        tarifFormulaire: next.tarifFormulaire,
       };
+      // Une origine vide ne s'enregistre pas : la colonne est obligatoire.
+      if (next.origineDeclaree.trim()) body.origineDeclaree = next.origineDeclaree;
+      if (next.origin.trim()) body.origin = next.origin;
       if (typeof next.eurToChf === 'number' && next.eurToChf > 0) body.eurToChf = next.eurToChf;
       if (typeof next.vatPct === 'number' && next.vatPct >= 0) body.vatPct = next.vatPct;
 
@@ -351,7 +379,8 @@ export default function DouanePassageDetailPage() {
 
   const commitDocField = useCallback((
     field: 'docTitre' | 'docSousTitre' | 'departedOn' | 'raisonSociale' | 'nomPrenom' | 'adresseSiege'
-      | 'adresseExposition' | 'dateExposition' | 'dateRetourPrevue' | 'dateApurement',
+      | 'adresseExposition' | 'dateExposition' | 'dateRetourPrevue' | 'dateApurement'
+      | 'origineDeclaree' | 'bureauDouane' | 'designationFormulaire' | 'tarifFormulaire' | 'origin',
     value: string,
   ) => {
     setForm((prev) => {
@@ -497,6 +526,51 @@ export default function DouanePassageDetailPage() {
     };
   }, [computed, form.packagingKg]);
 
+  /**
+   * Poids brut du passage, avec la même règle que le document imprimé : net plus
+   * caisses dès qu'une caisse est renseignée, sinon le poids brut global saisi.
+   */
+  const hasPackaging = summary.totalPackaging > 0;
+  const grossKg = hasPackaging ? summary.totalGrossKg : computed.grossWeightKg;
+
+  /**
+   * Les chiffres à recopier sur le 11.74, case par case.
+   *
+   * La valeur se déclare au franc, et la TVA se calcule sur CETTE valeur arrondie :
+   * c'est le calcul que refait le système de la douane. La calculer sur les
+   * centimes produirait un écart d'un centime entre la case 31 et leur écran.
+   */
+  const formulaire = useMemo(() => {
+    const vat = computed.vatPct / 100;
+    const ligne = (pieces: number, netKg: number, brutKg: number | null, valeurChf: number) => {
+      const valeur = Math.round(valeurChf);
+      return { pieces, netKg, brutKg, valeur, tva: Math.round(valeur * vat * 100) / 100 };
+    };
+    const total = ligne(computed.pieces, computed.netWeightKg, grossKg, computed.customsValue);
+
+    // Une ligne par code SH, si le douanier demande la ventilation.
+    const parCode = new Map<string, { types: string[]; pieces: number; netG: number; packKg: number; chf: number }>();
+    for (const r of summary.rows) {
+      const code = form.shByType[r.type]?.trim() || 'sans code SH';
+      const g = parCode.get(code) ?? { types: [], pieces: 0, netG: 0, packKg: 0, chf: 0 };
+      g.types.push(form.customsLabels[r.type] || r.type);
+      g.pieces += r.qty;
+      g.netG += r.netG;
+      g.packKg += r.packagingKg;
+      g.chf += r.customs;
+      parCode.set(code, g);
+    }
+    const lignes = [...parCode.entries()]
+      .map(([code, g]) => ({
+        code,
+        types: g.types,
+        ...ligne(g.pieces, g.netG / 1000, hasPackaging ? g.netG / 1000 + g.packKg : null, g.chf),
+      }))
+      .sort((a, b) => b.valeur - a.valeur);
+
+    return { total, lignes };
+  }, [computed, summary, grossKg, hasPackaging, form.shByType, form.customsLabels]);
+
   // --- Detail par produit : Avalon, Yggdrasil... ---
   const parProduit = useMemo(() => {
     const rows = new Map<string, {
@@ -536,10 +610,13 @@ export default function DouanePassageDetailPage() {
     let weight = 0;
     let rule = 0;
     let price = 0;
+    // A l'entree, seul le prix d'achat se declare : un prix de vente absent n'y
+    // est pas un defaut. Il ne compte qu'une fois le passage cloture.
+    const sansPrix = (i: DeclarationItem) => isClosed && !i.unit_price_eur;
     for (const it of items) {
       if (!it.weight_grams) weight++;
       if (it.unit_cost_textile === null) rule++;
-      if (!it.unit_price_eur) price++;
+      if (sansPrix(it)) price++;
     }
     const parts: string[] = [];
     if (weight > 0) parts.push(`${weight} sans poids`);
@@ -549,10 +626,10 @@ export default function DouanePassageDetailPage() {
     // l'instantane reste vrai apres correction des donnees, et affichait des
     // lignes en defaut alors que plus rien ne manquait.
     const total = items.filter(
-      (i) => !i.weight_grams || i.unit_cost_textile === null || !i.unit_price_eur,
+      (i) => !i.weight_grams || i.unit_cost_textile === null || sansPrix(i),
     ).length;
     return { weight, rule, price, total, label: parts.join(' · ') };
-  }, [items]);
+  }, [items, isClosed]);
 
   const groups = useMemo(() => {
     const map = new Map<string, { title: string; totalQty: number; items: typeof computed.lines }>();
@@ -632,7 +709,7 @@ export default function DouanePassageDetailPage() {
               {passage.reference && (
                 <>
                   <span className={styles.subSep}>·</span>
-                  <span>Réf. {passage.reference}</span>
+                  <span>N° 11.74 : {passage.reference}</span>
                 </>
               )}
             </div>
@@ -641,13 +718,22 @@ export default function DouanePassageDetailPage() {
       </div>
 
       <Group gap="xs" className={styles.actions}>
+        {/* La feuille de résumé est la seule que la douane demande. Les annexes
+            par produit restent disponibles, sans être imposées. */}
         <Button
           variant="light"
           color="slate"
           leftSection={<IconPrinter size={16} />}
+          onClick={() => window.open(`/api/customs/passages/${id}/document?only=resume`, '_blank')}
+        >
+          Imprimer la feuille de résumé
+        </Button>
+        <Button
+          variant="subtle"
+          color="slate"
           onClick={() => window.open(`/api/customs/passages/${id}/document`, '_blank')}
         >
-          Imprimer le document
+          Avec les annexes par produit
         </Button>
         {passage.status === 'open' && (
           <Button color="rust" leftSection={<IconLock size={16} />} onClick={closeModal.open}>
@@ -671,8 +757,8 @@ export default function DouanePassageDetailPage() {
         <div className={styles.metricCard}>
           <div className={styles.metricLabel}>Poids brut</div>
           <div className={styles.metricValue}>
-            {computed.grossWeightKg != null
-              ? computed.grossWeightKg.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+            {grossKg != null
+              ? grossKg.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
               : '—'}
             <span className={styles.metricUnit}>kg</span>
           </div>
@@ -690,6 +776,97 @@ export default function DouanePassageDetailPage() {
           </Text>
         </div>
       </SimpleGrid>
+
+      <Paper className={styles.panel} radius="md">
+        <div className={styles.panelHead}>
+          <h3 className={styles.panelTitle}>À recopier sur le 11.74</h3>
+        </div>
+        <Text size="xs" c="dimmed" mb="sm">
+          Case par case, pour la ligne unique du formulaire. Les quatre champs se reprennent
+          d&apos;un passage à l&apos;autre ; les six chiffres du dessous se calculent depuis
+          l&apos;instantané. Rien de ce cadre ne s&apos;imprime.
+        </Text>
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm" mb="sm">
+          {([
+            ['origineDeclaree', "10 · Pays d'origine", 'FR'],
+            ['bureauDouane', "15 · Bureau de douane d'apurement", 'Bardonnex'],
+            ['designationFormulaire', '17 · Désignation exacte de la marchandise', 'T-shirts et sweatshirts en coton de la marque…'],
+            ['tarifFormulaire', '20 · N° de tarif', '6110.2000'],
+          ] as const).map(([champ, label, placeholder]) => (
+            <div key={champ}>
+              <Text size="xs" fw={600} mb={2}>{label}</Text>
+              <LabelCell
+                initial={form[champ]}
+                placeholder={placeholder}
+                onCommit={(v) => commitDocField(champ, v)}
+              />
+            </div>
+          ))}
+        </SimpleGrid>
+        <SimpleGrid cols={{ base: 2, sm: 3, md: 6 }} spacing="xs">
+          {([
+            ['22 · Masse nette', `${formulaire.total.netKg.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg`],
+            ['23 · Unités supplémentaires', `${formulaire.total.pieces}`],
+            ['24 · Masse brute', formulaire.total.brutKg != null
+              ? `${formulaire.total.brutKg.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg`
+              : '— à compléter'],
+            ['25 · Valeur statistique', `${formulaire.total.valeur.toLocaleString('fr-CH')} CHF`],
+            ['31 · Valeur TVA', `${formulaire.total.valeur.toLocaleString('fr-CH')} CHF`],
+            [`31 · TVA ${computed.vatPct} %`, formatChf(formulaire.total.tva)],
+          ] as const).map(([label, value]) => (
+            <div key={label} className={styles.metricCard}>
+              <div className={styles.metricLabel}>{label}</div>
+              <div className={styles.metricValue}>{value}</div>
+            </div>
+          ))}
+        </SimpleGrid>
+
+        {formulaire.lignes.length > 1 && (
+          <>
+            <Text size="xs" fw={600} mt="md" mb={4}>Si le douanier demande une ligne par code SH</Text>
+            <Table withTableBorder striped>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>20 · Tarif</Table.Th>
+                  <Table.Th>Objets</Table.Th>
+                  <Table.Th style={{ textAlign: 'right' }}>22 · Nette</Table.Th>
+                  <Table.Th style={{ textAlign: 'right' }}>23 · Unités</Table.Th>
+                  <Table.Th style={{ textAlign: 'right' }}>24 · Brute</Table.Th>
+                  <Table.Th style={{ textAlign: 'right' }}>25 · Valeur CHF</Table.Th>
+                  <Table.Th style={{ textAlign: 'right' }}>TVA</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {formulaire.lignes.map((l) => (
+                  <Table.Tr key={l.code}>
+                    <Table.Td>{l.code}</Table.Td>
+                    <Table.Td><Text size="xs">{[...new Set(l.types)].join(', ')}</Text></Table.Td>
+                    <Table.Td style={{ textAlign: 'right' }}>{l.netKg.toFixed(1)} kg</Table.Td>
+                    <Table.Td style={{ textAlign: 'right' }}>{l.pieces}</Table.Td>
+                    <Table.Td style={{ textAlign: 'right' }}>{l.brutKg != null ? `${l.brutKg.toFixed(1)} kg` : '—'}</Table.Td>
+                    <Table.Td style={{ textAlign: 'right' }}>{l.valeur.toLocaleString('fr-CH')}</Table.Td>
+                    <Table.Td style={{ textAlign: 'right' }}>{formatChf(l.tva)}</Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+            <Text size="xs" c="dimmed" mt={4}>
+              Chaque ligne est arrondie au franc : leur somme peut s&apos;écarter d&apos;un franc ou deux de la ligne unique.
+            </Text>
+          </>
+        )}
+
+        <Text size="xs" c="dimmed" mt="sm">
+          Origine du textile (imprimée sur la feuille de résumé, distincte de la case 10) :
+        </Text>
+        <div style={{ maxWidth: 120 }}>
+          <LabelCell
+            initial={form.origin}
+            placeholder="BD"
+            onCommit={(v) => commitDocField('origin', v)}
+          />
+        </div>
+      </Paper>
 
       <Paper className={styles.panel} radius="md">
         <div className={styles.panelHead}>
@@ -715,21 +892,26 @@ export default function DouanePassageDetailPage() {
             min={0}
           />
           <NumberInput
-            label="Poids brut (kg)"
+            label="Poids brut global (kg)"
+            description={hasPackaging ? 'Ignoré : les caisses par type font foi.' : 'Utilisé faute de caisses par type.'}
             value={form.grossWeightKg}
             onChange={(v) => updateForm({ grossWeightKg: typeof v === 'number' ? v : '' })}
             decimalScale={3}
             step={1}
             min={0}
+            disabled={hasPackaging}
           />
           <TextInput
-            label="Référence 1187"
+            label="N° du 11.74"
+            description="Attribué par la douane au guichet."
             value={form.reference}
             onChange={(e) => updateForm({ reference: e.currentTarget.value })}
           />
         </SimpleGrid>
 
-        {productTypes.length > 0 && (
+        {/* Le prix de vente ne se déclare pas à l'entrée. Le document du passage
+            clôturé s'en sert encore, en attendant la refonte du retour. */}
+        {isClosed && productTypes.length > 0 && (
           <>
             <div className={styles.subLabel}>Prix de vente TTC par type (CHF)</div>
             <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="xs">
@@ -1021,7 +1203,7 @@ export default function DouanePassageDetailPage() {
                     <Table.Tr
                       key={it.id}
                       className={
-                        !it.weight_grams || it.unit_cost_textile === null || !it.unit_price_eur
+                        !it.weight_grams || it.unit_cost_textile === null || (isClosed && !it.unit_price_eur)
                           ? styles.incompleteRow
                           : undefined
                       }

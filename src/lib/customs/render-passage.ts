@@ -6,8 +6,9 @@
  * prix, poids brut) viennent du passage et restent modifiables ; l'instantané,
  * lui, ne bouge jamais.
  *
- * Passage ouvert  → formulaire 1187 (importation temporaire).
- * Passage clôturé → 11.74, avec la réconciliation parti / vendu / revenu.
+ * Passage ouvert  → formulaire 11.74 (admission temporaire, à l'entrée).
+ * Passage clôturé → 11.87 (apurement, au retour), avec la réconciliation
+ * parti / vendu / revenu. Les ventes, elles, se déclarent ensuite sur WebDec.
  */
 
 export interface PassageRow {
@@ -20,7 +21,10 @@ export interface PassageRow {
   eur_to_chf: number;
   vat_pct: number;
   gross_weight_kg: number | null;
+  /** Origine du textile (BD). */
   origin: string;
+  /** Pays d'origine inscrit en case 10 du 11.74 (FR). */
+  origine_declaree?: string | null;
   prices_chf_ttc: Record<string, number>;
   /** Libelle douanier par type : { "Le Confort": "T-shirt coton" }. */
   customs_labels?: Record<string, string>;
@@ -218,7 +222,9 @@ export function renderPassage(
     }
     if (!it.weight_grams) problems.noWeight++;
     if (it.unit_cost_textile === null) problems.noRule++;
-    if (!it.unit_price_eur) problems.noPrice++;
+    // Le prix de vente n'a rien a faire a l'entree : seul le prix d'achat se
+    // declare. Son absence ne compte donc qu'au retour.
+    if (closed && !it.unit_price_eur) problems.noPrice++;
 
     const t = it.product_type ?? '(sans type)';
     const agg = byType.get(t) ?? { qty: 0, netG: 0, chf: 0, ret: 0, sold: 0, netRetG: 0, chfRet: 0 };
@@ -276,8 +282,8 @@ export function renderPassage(
       ? typeNetG / 1000 + packagingOf(type)
       : grossRatio !== null ? (typeNetG / 1000) * grossRatio : null;
   const titre = closed
-    ? 'Réexportation après vente incertaine — formulaire 11.74'
-    : 'Importation temporaire pour vente incertaine — formulaire 1187';
+    ? "Apurement de l'admission temporaire — formulaire 11.87"
+    : 'Admission temporaire pour vente incertaine — formulaire 11.74';
 
   /**
    * Apurement. Ce qui n'est pas réexporté reste en Suisse : la TVA due porte sur
@@ -315,10 +321,13 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
    ['Retour prévu', esc(passage.date_retour_prevue)],
    ...(passage.date_apurement ? [["Apurement", esc(passage.date_apurement)]] : []),
    ...(closed ? [['Retour effectif', esc(passage.returned_on)]] : []),
-   ['Référence 1187', esc(passage.reference)],
+   ['N° 11.74', esc(passage.reference)],
    ['Taux', `1 EUR = ${rate} CHF`],
    ['TVA suisse', `${passage.vat_pct} %`],
-   ['Origine', esc(passage.origin)],
+   // Deux informations distinctes : le pays inscrit en case 10 du formulaire,
+   // et le pays ou le textile a ete fabrique.
+   ["Pays d'origine", esc(passage.origine_declaree)],
+   ['Origine textile', esc(passage.origin)],
  ].filter(([, v]) => v).map(([k, v]) => `<span class="chip"><b>${k}</b> ${v}</span>`).join('')}
 </div>
 
@@ -346,13 +355,12 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
       la contre-prestation réellement encaissée, ramenée à l'unité. Ils n'entrent pas dans la valeur
       en douane — qui reste le prix d'achat — mais ce sont eux qui déterminent la base imposable et
       la TVA due à l'apurement.`
-   : `Les prix de vente ci-dessous ne servent qu'à situer la marchandise ;
-      ils n'entrent pas dans la valeur déclarée.`}
+   : ''}
 </p>
 
 <h2>Détail par type de produit</h2>
 <table><thead>
-<tr><th colspan="${closed ? 10 : 11}">Départ</th><th colspan="${closed ? 8 : 7}" class="retour">Retour</th></tr>
+<tr><th colspan="10">Départ</th><th colspan="${closed ? 8 : 4}" class="retour">Retour</th></tr>
 <tr>
  <th class="l">Objet</th><th class="l">Code SH</th><th class="l">Type Ivy</th><th>Quantité</th><th>Poids net (kg)</th><th>Caisses (kg)</th><th>Poids brut (kg)</th>
  <th>Valeur douanière au départ<br>HT (EUR)</th><th>Valeur douanière au départ<br>HT (CHF)</th><th>TVA import CHF</th>
@@ -364,9 +372,10 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
       '<th>Valeur restante en douane (CHF)</th>' +
       '<th>Prix de vente moyen<br>pondéré CHF TTC</th>' +
       '<th>CA vendu TTC (CHF)</th><th>Base imposable HT (CHF)</th><th>TVA due (CHF)</th>'
-    : '<th>Prix de vente unitaire<br>CHF TTC</th>' +
-      '<th class="tofill retour">Qté restante</th><th class="tofill">Qté vendue</th><th class="tofill">Poids restant (kg)</th>' +
-      '<th class="tofill">Valeur restante en douane (CHF)</th><th class="tofill">CA vendu TTC (CHF)</th><th class="tofill">Base imposable HT (CHF)</th><th class="tofill">TVA due (CHF)</th>'}
+    // A l'entree, aucun prix de vente : seul le prix d'achat se declare. Les
+    // ventes se declarent apres le retour, sur WebDec.
+    : '<th class="tofill retour">Qté restante</th><th class="tofill">Qté vendue</th><th class="tofill">Poids restant (kg)</th>' +
+      '<th class="tofill">Valeur restante en douane (CHF)</th>'}
 </tr></thead><tbody>`;
 
   for (const [objet, o] of [...byObjet.entries()].sort((a, b) => b[1].qty - a[1].qty)) {
@@ -403,8 +412,7 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
               `<td>${prixVenteTtc > 0 ? num(prixVenteTtc) : '<b style="color:#b00">—</b>'}</td>` +
               `<td>${num(caTtc)}</td><td>${num(base)}</td><td>${num(caTtc - base)}</td>`;
           })()
-        : `<td>${prixVenteTtc > 0 ? num(prixVenteTtc) : '<b style="color:#b00">—</b>'}</td>` +
-          `<td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
+        : `<td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
       `</tr>`;
   }
 
@@ -414,23 +422,28 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
     `<td>${num(customsChf / rate)}</td><td>${num(customsChf)}</td><td>${num(vatOnImport(customsChf))}</td>` +
     (closed
       ? (() => {
-          // Prix moyen toutes lignes confondues : le CA rapporte aux pieces
-          // vendues. C'est la moyenne que le douanier refera de tete.
-          const prixMoyen = venduTotal > 0 ? caTtcTotal / venduTotal : 0;
+          // PAS de prix moyen sur la ligne TOTAL. Une moyenne n'est pas une somme :
+          // remultipliee par la quantite vendue, elle ne redonne jamais le CA. La
+          // case affichait 40.10 pour 125 pieces, soit 5012.50, face a un CA de
+          // 5012.00 — et un douanier qui refait ce calcul conclut que le document
+          // ne tient pas debout. Toute case de cette ligne doit etre une somme
+          // verifiable, ou rester vide.
           return `<td class="retour">${returned}</td><td>${venduTotal}</td>` +
             `<td>${kg(netRetG)}</td>` +
             `<td>${num(chfRet)}</td>` +
-            `<td>${num(prixMoyen)}</td>` +
+            `<td></td>` +
             `<td>${num(caTtcTotal)}</td><td>${num(baseTotale)}</td><td>${num(tvaDue)}</td>`;
         })()
-      : `<td></td><td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
+      : `<td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
     `</tr></tfoot></table>`;
 
   if (!closed) {
     html += `<p style="font-size:7.5pt;color:#333;margin-top:2mm">
-     Les sept colonnes de droite se remplissent automatiquement à la clôture du passage,
+     Les quatre colonnes de droite se remplissent automatiquement à la clôture du passage,
      en comparant l'instantané de départ au stock constaté au retour. Rien n'est à saisir à la main.
-     Le poids brut par type est réparti au prorata du poids net.</p>`;
+     ${hasPackaging
+       ? 'Le poids brut d\'un type vaut son poids net plus le poids de ses caisses.'
+       : 'Le poids brut par type est réparti au prorata du poids net.'}</p>`;
   } else if (closed) {
     html += `<p style="font-size:7.5pt;color:#333;margin-top:2mm">
      <b>TVA réellement due</b> : elle porte sur la contre-prestation encaissée en Suisse,

@@ -45,7 +45,9 @@ export async function GET(request: NextRequest) {
  * POST /api/customs/passages — ouvre un passage et FIGE l'instantané de départ.
  *
  * body: { shopId, locationId, locationName, eurToChf, vatPct?, grossWeightKg?,
- *         reference?, origin?, pricesChfTtc? }
+ *         reference?, origin? }
+ *
+ * Aucun prix de vente à l'entrée : seul le prix d'achat se déclare sur le 11.74.
  */
 export async function POST(request: NextRequest) {
   const body = (await request.json()) as {
@@ -57,7 +59,6 @@ export async function POST(request: NextRequest) {
     grossWeightKg?: number | null;
     reference?: string;
     origin?: string;
-    pricesChfTtc?: Record<string, number>;
   };
 
   const { shopId, locationId, locationName, eurToChf } = body;
@@ -93,6 +94,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Aucun stock à cet emplacement' }, { status: 400 });
   }
 
+  // Ce qui ne change pas d'un voyage a l'autre se reprend du passage precedent :
+  // identite, libelles, codes SH, caisses, cases fixes du 11.74. Sans ca, tout
+  // etait a ressaisir le jour du passage, au guichet. Ce qui est propre au
+  // voyage (dates, titre du festival, adresse d'exposition, n° 11.74) repart vide.
+  const { data: previous } = await supabase
+    .from('customs_declarations')
+    .select('vat_pct, origin, origine_declaree, customs_labels, packaging_kg, tariff_by_type, doc_sous_titre, raison_sociale, nom_prenom, adresse_siege, bureau_douane, regime_valeur, methode_repartition, designation_formulaire, tarif_formulaire')
+    .eq('shop_id', shopId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  // Des cles mal encodees (« Le Zipp� ») trainent dans d'anciens libelles : on
+  // ne les propage pas.
+  const sansCorruption = <T,>(obj: Record<string, T> | null | undefined): Record<string, T> =>
+    Object.fromEntries(Object.entries(obj ?? {}).filter(([k]) => !k.includes('\uFFFD')));
+
   const { data: passage, error } = await supabase
     .from('customs_declarations')
     .insert({
@@ -100,11 +118,24 @@ export async function POST(request: NextRequest) {
       location_id: locationId,
       location_name: locationName,
       eur_to_chf: eurToChf,
-      vat_pct: body.vatPct ?? 8.1,
+      vat_pct: body.vatPct ?? previous?.vat_pct ?? 8.1,
       gross_weight_kg: body.grossWeightKg ?? null,
       reference: body.reference ?? null,
-      origin: body.origin || 'BD',
-      prices_chf_ttc: body.pricesChfTtc ?? {},
+      origin: body.origin || previous?.origin || 'BD',
+      origine_declaree: previous?.origine_declaree || 'FR',
+      prices_chf_ttc: {},
+      customs_labels: sansCorruption(previous?.customs_labels as Record<string, string> | null),
+      packaging_kg: sansCorruption(previous?.packaging_kg as Record<string, number> | null),
+      tariff_by_type: sansCorruption(previous?.tariff_by_type as Record<string, unknown> | null),
+      doc_sous_titre: previous?.doc_sous_titre ?? null,
+      raison_sociale: previous?.raison_sociale ?? null,
+      nom_prenom: previous?.nom_prenom ?? null,
+      adresse_siege: previous?.adresse_siege ?? null,
+      bureau_douane: previous?.bureau_douane ?? null,
+      regime_valeur: previous?.regime_valeur ?? 'NEGOCE',
+      methode_repartition: previous?.methode_repartition ?? 'VALEUR',
+      designation_formulaire: previous?.designation_formulaire ?? null,
+      tarif_formulaire: previous?.tarif_formulaire ?? null,
     })
     .select('id')
     .single();
