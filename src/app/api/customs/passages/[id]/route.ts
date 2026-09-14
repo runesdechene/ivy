@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { loadReferentiel, tarifsDuPassage } from '@/lib/customs/tariffs';
+import { validerMateriel } from '@/lib/customs/materiel';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -137,6 +138,12 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     }
     patch.packaging_kg = clean;
   }
+  if (body.materiel !== undefined) {
+    const materiel = validerMateriel(body.materiel);
+    if ('erreur' in materiel) return NextResponse.json({ error: materiel.erreur }, { status: 400 });
+    patch.materiel = materiel.materiel;
+  }
+  if (typeof body.materielImprime === 'boolean') patch.materiel_imprime = body.materielImprime;
   if (body.pricesChfTtc && typeof body.pricesChfTtc === 'object') {
     const clean: Record<string, number> = {};
     for (const [k, v] of Object.entries(body.pricesChfTtc as Record<string, unknown>)) {

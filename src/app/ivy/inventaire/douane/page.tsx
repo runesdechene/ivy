@@ -150,6 +150,14 @@ export default function DouanePage() {
         message: `${data.pieces} pièce(s) figée(s) dans l'instantané de départ.`,
         color: 'green',
       });
+      if (data.sansModele) {
+        notifications.show({
+          title: 'Pas de modèle pour cet emplacement',
+          message: 'Caisses et matériel partent vides : renseigne-les sur le passage, ou crée le modèle dans Paramètres → Douane.',
+          color: 'yellow',
+          autoClose: false,
+        });
+      }
       modal.close();
       router.push(`/ivy/inventaire/douane/${data.id}`);
     } catch (err) {

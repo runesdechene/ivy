@@ -101,22 +101,26 @@ export async function POST(request: NextRequest) {
   }
 
   // Ce qui ne change pas d'un voyage a l'autre se reprend du passage precedent :
-  // identite, caisses, cases fixes du 11.74. Sans ca, tout etait a ressaisir le
-  // jour du passage, au guichet. Ce qui est propre au voyage (dates, titre du
-  // festival, adresse d'exposition, n° 11.74) repart vide. Les libelles et codes
-  // SH, eux, viennent du referentiel douanier (Parametres → Douane).
+  // identite et cases fixes du 11.74. Sans ca, tout etait a ressaisir le jour du
+  // passage, au guichet. Ce qui est propre au voyage (dates, titre du festival,
+  // adresse d'exposition, n° 11.74) repart vide. Les libelles et codes SH viennent
+  // du referentiel douanier ; les caisses et le materiel, du modele de l'emplacement.
   const { data: previous } = await supabase
     .from('customs_declarations')
-    .select('vat_pct, origin, origine_declaree, packaging_kg, doc_sous_titre, raison_sociale, nom_prenom, adresse_siege, bureau_douane, regime_valeur, methode_repartition, designation_formulaire, tarif_formulaire')
+    .select('vat_pct, origin, origine_declaree, doc_sous_titre, raison_sociale, nom_prenom, adresse_siege, bureau_douane, regime_valeur, methode_repartition, designation_formulaire, tarif_formulaire')
     .eq('shop_id', shopId)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  // Des cles mal encodees (« Le Zipp� ») trainent dans d'anciens libelles : on
-  // ne les propage pas.
-  const sansCorruption = <T,>(obj: Record<string, T> | null | undefined): Record<string, T> =>
-    Object.fromEntries(Object.entries(obj ?? {}).filter(([k]) => !k.includes('\uFFFD')));
+  // Caisses et materiel : copies du modele de CET emplacement (Parametres → Douane),
+  // puis ajustables sur le passage. Sans modele, le passage part vide.
+  const { data: modele } = await supabase
+    .from('customs_location_templates')
+    .select('packaging_kg, materiel')
+    .eq('shop_id', shopId)
+    .eq('location_id', locationId)
+    .maybeSingle();
 
   const { data: passage, error } = await supabase
     .from('customs_declarations')
@@ -133,7 +137,8 @@ export async function POST(request: NextRequest) {
       origin: body.origin || previous?.origin || 'BD',
       origine_declaree: previous?.origine_declaree || 'FR',
       prices_chf_ttc: {},
-      packaging_kg: sansCorruption(previous?.packaging_kg as Record<string, number> | null),
+      packaging_kg: modele?.packaging_kg ?? {},
+      materiel: modele?.materiel ?? [],
       doc_sous_titre: previous?.doc_sous_titre ?? null,
       raison_sociale: previous?.raison_sociale ?? null,
       nom_prenom: previous?.nom_prenom ?? null,
@@ -171,5 +176,6 @@ export async function POST(request: NextRequest) {
     pieces: items.reduce((s, i) => s + i.qty_departed, 0),
     // Ecartes de l'instantane, mais jamais en silence : l'ecran les affiche.
     archivesExclus,
+    sansModele: !modele,
   });
 }
