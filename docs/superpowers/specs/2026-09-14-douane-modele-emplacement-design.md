@@ -12,6 +12,15 @@ caisses par type de produit, et la liste du **matériel d'exposition** qui voyag
 stand (tables, chaises, bannières…). Un nouveau passage copie ce modèle ; on l'ajuste
 ensuite pour le voyage.
 
+> **Révision du 2026-09-14 (après implémentation) : lecture en direct.** À la demande
+> d'Uriel, caisses et matériel suivent la même règle que les libellés du référentiel :
+> un passage **ouvert** les lit en direct dans le modèle de l'emplacement, et ils sont
+> en **lecture seule** sur le passage. À la **clôture**, ils sont figés dans le passage.
+> La copie faite à la création ne sert plus que de repli s'il n'existe pas de modèle.
+> La case « Imprimer le matériel » reste propre au passage. Les sections ci-dessous qui
+> parlent de caisses ou de matériel « modifiables sur le passage » sont remplacées
+> par cette règle.
+
 ## Contexte
 
 - En août, le matériel du stand **n'a pas été déclaré**. Le 11.74 ne mentionne que les

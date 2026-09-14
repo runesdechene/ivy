@@ -14,10 +14,7 @@ import {
 } from '@tabler/icons-react';
 import { useDebounce } from '@/hooks/useDebounce';
 import { formatSh } from '@/lib/customs/tariffs';
-import {
-  depuisSaisie, versSaisie, totauxMateriel, type ObjetMateriel, type LigneSaisie,
-} from '@/lib/customs/materiel';
-import { MaterielEditor } from '@/components/customs/MaterielEditor';
+import { totauxMateriel, type ObjetMateriel } from '@/lib/customs/materiel';
 import styles from './douane-detail.module.scss';
 
 interface Passage {
@@ -102,8 +99,6 @@ interface FormState {
   grossWeightKg: Saisie;
   reference: string;
   pricesChfTtc: Record<string, number | ''>;
-  /** Poids des caisses par type, en kg. */
-  packagingKg: Record<string, number | ''>;
   /** Titre et sous-titre de la feuille imprimée. */
   docTitre: string;
   docSousTitre: string;
@@ -150,36 +145,6 @@ const LabelCell = memo(function LabelCell({
   );
 });
 
-/** Même principe pour le poids des caisses. */
-const PackagingCell = memo(function PackagingCell({
-  initial, onCommit,
-}: { initial: number | ''; onCommit: (value: number | '') => void }) {
-  const [value, setValue] = useState<Saisie>(initial);
-  const seen = useRef(initial);
-  useEffect(() => {
-    if (seen.current !== initial) { seen.current = initial; setValue(initial); }
-  }, [initial]);
-  return (
-    <NumberInput
-      size="xs"
-      value={value}
-      onChange={setValue}
-      allowedDecimalSeparators={['.', ',']}
-      onBlur={() => {
-        const n = nombre(value);
-        const next = n === null ? '' : n;
-        if (next !== initial) onCommit(next);
-      }}
-      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-      decimalScale={1}
-      step={0.5}
-      min={0}
-      placeholder="0"
-      styles={{ input: { textAlign: 'right' } }}
-    />
-  );
-});
-
 function formatDate(d: string | null): string {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -205,8 +170,6 @@ export default function DouanePassageDetailPage() {
   const [saving, setSaving] = useState(false);
   const [closing, setClosing] = useState(false);
   const [closeModalOpened, closeModal] = useDisclosure(false);
-  const [materiel, setMateriel] = useState<LigneSaisie[]>([]);
-  const [materielSaving, setMaterielSaving] = useState(false);
 
   const hydratedRef = useRef(false);
   const [form, setForm] = useState<FormState>({
@@ -215,7 +178,6 @@ export default function DouanePassageDetailPage() {
     grossWeightKg: '',
     reference: '',
     pricesChfTtc: {},
-    packagingKg: {},
     docTitre: '',
     docSousTitre: '',
     departedOn: '',
@@ -252,18 +214,12 @@ export default function DouanePassageDetailPage() {
           const n = Number(v);
           if (Number.isFinite(n)) prices[k] = n;
         }
-        const packs: Record<string, number> = {};
-        for (const [k, v] of Object.entries((data.passage?.packaging_kg ?? {}) as Record<string, unknown>)) {
-          const n = Number(v);
-          if (Number.isFinite(n)) packs[k] = n;
-        }
         setForm({
           eurToChf: data.passage?.eur_to_chf ?? '',
           vatPct: data.passage?.vat_pct ?? '',
           grossWeightKg: data.passage?.gross_weight_kg ?? '',
           reference: data.passage?.reference ?? '',
           pricesChfTtc: prices,
-          packagingKg: packs,
           docTitre: data.passage?.doc_titre ?? '',
           docSousTitre: data.passage?.doc_sous_titre ?? '',
           departedOn: data.passage?.departed_on ?? '',
@@ -280,7 +236,6 @@ export default function DouanePassageDetailPage() {
           tarifFormulaire: data.passage?.tarif_formulaire ?? '',
           origin: data.passage?.origin ?? '',
         });
-        setMateriel(versSaisie((data.passage?.materiel ?? []) as ObjetMateriel[]));
         hydratedRef.current = true;
       }
     } catch (err) {
@@ -320,9 +275,6 @@ export default function DouanePassageDetailPage() {
         dateExposition: next.dateExposition,
         dateRetourPrevue: next.dateRetourPrevue || null,
         dateApurement: next.dateApurement || null,
-        packagingKg: Object.fromEntries(
-          Object.entries(next.packagingKg).filter(([, v]) => typeof v === 'number'),
-        ),
         bureauDouane: next.bureauDouane,
         designationFormulaire: next.designationFormulaire,
         tarifFormulaire: next.tarifFormulaire,
@@ -390,15 +342,7 @@ export default function DouanePassageDetailPage() {
     });
   }, [savePatch]);
 
-  const commitPackaging = useCallback((type: string, value: number | '') => {
-    setForm((prev) => {
-      const next = { ...prev, packagingKg: { ...prev.packagingKg, [type]: value } };
-      savePatch(next);
-      return next;
-    });
-  }, [savePatch]);
-
-  // --- Matériel d'exposition : enregistré à la demande, pas à chaque frappe ---
+  // Enregistrement ponctuel, hors formulaire (la case « Imprimer le matériel »).
   const patchPassage = useCallback(async (body: Record<string, unknown>) => {
     const res = await fetch(`/api/customs/passages/${id}`, {
       method: 'PATCH',
@@ -411,24 +355,7 @@ export default function DouanePassageDetailPage() {
     return data.passage as Passage;
   }, [id]);
 
-  const saveMateriel = useCallback(async () => {
-    const m = depuisSaisie(materiel);
-    if ('erreur' in m) {
-      notifications.show({ title: 'Matériel incomplet', message: m.erreur, color: 'red' });
-      return;
-    }
-    setMaterielSaving(true);
-    try {
-      const p = await patchPassage({ materiel: m.materiel });
-      setMateriel(versSaisie(p.materiel));
-      notifications.show({ title: 'Matériel enregistré', message: `${m.materiel.length} ligne(s)`, color: 'green' });
-    } catch (err) {
-      notifications.show({ title: 'Erreur', message: err instanceof Error ? err.message : 'Enregistrement impossible', color: 'red' });
-    } finally {
-      setMaterielSaving(false);
-    }
-  }, [materiel, patchPassage]);
-
+  // Matériel résolu côté serveur : modèle de l'emplacement si ouvert, figé si clôturé.
   const materielEnregistre = passage?.materiel ?? [];
   const totauxMat = totauxMateriel(materielEnregistre);
 
@@ -517,10 +444,8 @@ export default function DouanePassageDetailPage() {
     }
     // Le brut d'un type = son net + le poids de SES caisses. Les t-shirts et les
     // sweats ne voyagent pas dans les mêmes, un poids brut unique serait faux.
-    const packOf = (type: string) => {
-      const v = form.packagingKg[type];
-      return typeof v === 'number' ? v : 0;
-    };
+    // Caisses résolues côté serveur : modèle de l'emplacement si ouvert, figées si clôturé.
+    const packOf = (type: string) => Number(passage?.packaging_kg?.[type]) || 0;
     const totalPackaging = [...rows.keys()].reduce((n, t) => n + packOf(t), 0);
     const totalNetKg = [...rows.values()].reduce((n, r) => n + r.netG, 0) / 1000;
     const built = [...rows.entries()];
@@ -566,7 +491,7 @@ export default function DouanePassageDetailPage() {
         })
         .sort((a, b) => b.qty - a.qty),
     };
-  }, [computed, form.packagingKg]);
+  }, [computed, passage]);
 
   /**
    * Poids brut du passage, avec la même règle que le document imprimé : net plus
@@ -1137,10 +1062,7 @@ export default function DouanePassageDetailPage() {
                   {(r.netG / 1000).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg
                 </Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>
-                  <PackagingCell
-                    initial={form.packagingKg[r.type] ?? ''}
-                    onCommit={(v) => commitPackaging(r.type, v)}
-                  />
+                  {r.packagingKg.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg
                 </Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>
                   {r.grossKg.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg
@@ -1255,7 +1177,9 @@ export default function DouanePassageDetailPage() {
 
         <Text size="xs" c="dimmed" mt="xs">
           Le poids brut d&apos;une ligne vaut son poids net plus celui de ses caisses.
-          Laisse à zéro si ce type voyage sans emballage propre.
+          Les caisses se règlent par emplacement dans{' '}
+          <Anchor component={Link} href="/parametres/douane" size="xs">Paramètres → Douane</Anchor>
+          {isClosed ? ' ; ce passage clôturé garde celles du jour de sa clôture.' : ', et ce passage ouvert les suit en direct.'}
           {!isClosed && (
             <> Les six dernières colonnes se rempliront <b>toutes seules à la clôture</b>,
             en comparant l&apos;instantané de départ au stock du moment. Elles apparaissent
@@ -1279,15 +1203,51 @@ export default function DouanePassageDetailPage() {
           />
         </div>
         <Text size="xs" c="dimmed" mb="sm">
-          Copié du modèle de l&apos;emplacement à la création du passage ; les changements ici ne valent que pour ce voyage.
-          Hors marchandise : il n&apos;entre ni dans les pièces, ni dans la valeur, ni dans la TVA.
+          Le matériel se règle par emplacement dans{' '}
+          <Anchor component={Link} href="/parametres/douane" size="xs">Paramètres → Douane</Anchor>
+          {isClosed ? ' ; ce passage clôturé garde la liste du jour de sa clôture.' : ', et ce passage ouvert le suit en direct.'}
+          {' '}Hors marchandise : il n&apos;entre ni dans les pièces, ni dans la valeur, ni dans la TVA.
         </Text>
-        <MaterielEditor lignes={materiel} onChange={setMateriel} tauxEurChf={computed.eurToChf} />
-        <Group justify="flex-end" mt="sm">
-          <Button color="moss" size="xs" onClick={saveMateriel} loading={materielSaving}>
-            Enregistrer le matériel
-          </Button>
-        </Group>
+        <Table withTableBorder striped>
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>Désignation</Table.Th>
+              <Table.Th style={{ textAlign: 'right' }}>Quantité</Table.Th>
+              <Table.Th style={{ textAlign: 'right' }}>Poids (kg)</Table.Th>
+              <Table.Th style={{ textAlign: 'right' }}>Valeur estimée (€)</Table.Th>
+              <Table.Th style={{ textAlign: 'right' }}>Valeur estimée (CHF)</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {materielEnregistre.map((o, i) => (
+              <Table.Tr key={i}>
+                <Table.Td>{o.designation}</Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}>{o.quantite}</Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}>{(o.quantite * o.poids_kg).toFixed(1)}</Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}>{formatEur(o.quantite * o.valeur_eur)}</Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}>{formatChf(o.quantite * o.valeur_eur * computed.eurToChf)}</Table.Td>
+              </Table.Tr>
+            ))}
+            {materielEnregistre.length === 0 && (
+              <Table.Tr>
+                <Table.Td colSpan={5}>
+                  <Text size="sm" c="dimmed" ta="center">Aucun matériel dans le modèle de cet emplacement.</Text>
+                </Table.Td>
+              </Table.Tr>
+            )}
+          </Table.Tbody>
+          {materielEnregistre.length > 0 && (
+            <Table.Tfoot>
+              <Table.Tr>
+                <Table.Td><b>TOTAL</b></Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}><b>{totauxMat.objets}</b></Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}><b>{totauxMat.poidsKg.toFixed(1)}</b></Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}><b>{formatEur(totauxMat.valeurEur)}</b></Table.Td>
+                <Table.Td style={{ textAlign: 'right' }}><b>{formatChf(totauxMat.valeurEur * computed.eurToChf)}</b></Table.Td>
+              </Table.Tr>
+            </Table.Tfoot>
+          )}
+        </Table>
       </Paper>
 
       {missing.total > 0 && (

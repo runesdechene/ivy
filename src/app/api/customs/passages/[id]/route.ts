@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { loadReferentiel, tarifsDuPassage } from '@/lib/customs/tariffs';
-import { validerMateriel } from '@/lib/customs/materiel';
+import { resoudrePassage } from '@/lib/customs/modele';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -36,13 +35,13 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     if (data.length < 1000) break;
   }
 
-  // Ouvert : libellés et codes SH viennent du référentiel, en direct. Clôturé : figés.
+  // Ouvert : libellés, codes SH, caisses et matériel lus en direct dans Paramètres → Douane.
+  // Clôturé : figés.
   try {
-    const referentiel = await loadReferentiel(supabase, passage.shop_id);
-    return NextResponse.json({ passage: { ...passage, ...tarifsDuPassage(passage, referentiel) }, items });
+    return NextResponse.json({ passage: await resoudrePassage(supabase, passage), items });
   } catch (err) {
-    console.error('GET passage (référentiel):', err);
-    return NextResponse.json({ error: 'Lecture du référentiel douanier impossible' }, { status: 500 });
+    console.error('GET passage (référentiel / modèle):', err);
+    return NextResponse.json({ error: 'Lecture des paramètres douaniers impossible' }, { status: 500 });
   }
 }
 
@@ -130,19 +129,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     }
     patch.tariff_by_type = clean;
   }
-  if (body.packagingKg && typeof body.packagingKg === 'object') {
-    const clean: Record<string, number> = {};
-    for (const [k, v] of Object.entries(body.packagingKg as Record<string, unknown>)) {
-      const n = Number(v);
-      if (Number.isFinite(n) && n >= 0) clean[k] = n;
-    }
-    patch.packaging_kg = clean;
-  }
-  if (body.materiel !== undefined) {
-    const materiel = validerMateriel(body.materiel);
-    if ('erreur' in materiel) return NextResponse.json({ error: materiel.erreur }, { status: 400 });
-    patch.materiel = materiel.materiel;
-  }
+  // Caisses et matériel ne se modifient plus ici : un passage ouvert les lit dans le
+  // modèle de l'emplacement (Paramètres → Douane), un passage clôturé les a figés.
+  // Seul le choix de les imprimer appartient au voyage.
   if (typeof body.materielImprime === 'boolean') patch.materiel_imprime = body.materielImprime;
   if (body.pricesChfTtc && typeof body.pricesChfTtc === 'object') {
     const clean: Record<string, number> = {};
@@ -164,11 +153,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     console.error('PATCH /api/customs/passages/[id]:', error);
     return NextResponse.json({ error: 'Enregistrement impossible' }, { status: 500 });
   }
-  // Même lecture que le GET : sans ça, la page perdait les libellés du référentiel
+  // Même lecture que le GET : sans ça, la page perdait libellés, caisses et matériel
   // à chaque enregistrement.
   try {
-    const referentiel = await loadReferentiel(supabase, data.shop_id);
-    return NextResponse.json({ passage: { ...data, ...tarifsDuPassage(data, referentiel) } });
+    return NextResponse.json({ passage: await resoudrePassage(supabase, data) });
   } catch {
     return NextResponse.json({ passage: data });
   }
@@ -187,7 +175,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
 
   const { data: passage } = await supabase
     .from('customs_declarations')
-    .select('id, shop_id, location_id, status, departed_on, customs_labels, tariff_by_type')
+    .select('id, shop_id, location_id, status, departed_on, customs_labels, tariff_by_type, packaging_kg, materiel')
     .eq('id', id)
     .maybeSingle();
 
@@ -196,14 +184,14 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
     return NextResponse.json({ error: 'Ce passage est déjà clôturé' }, { status: 409 });
   }
 
-  // Lu AVANT toute écriture : sans référentiel, on ne clôture pas — un passage
-  // clôturé sans ses codes SH ne pourrait plus les recevoir.
-  let tarifsFiges;
+  // Lu AVANT toute écriture : sans référentiel ni modèle, on ne clôture pas — un
+  // passage clôturé ne pourrait plus recevoir ses codes SH, ses caisses, son matériel.
+  let figes;
   try {
-    tarifsFiges = tarifsDuPassage(passage, await loadReferentiel(supabase, passage.shop_id));
+    figes = await resoudrePassage(supabase, passage);
   } catch (err) {
-    console.error('clôture, référentiel:', err);
-    return NextResponse.json({ error: 'Lecture du référentiel douanier impossible' }, { status: 500 });
+    console.error('clôture, référentiel / modèle:', err);
+    return NextResponse.json({ error: 'Lecture des paramètres douaniers impossible' }, { status: 500 });
   }
 
   const today = new Date().toISOString().slice(0, 10);
@@ -309,9 +297,11 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       returned_on: today,
       return_snapshot_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      // Figés ici : le passage clôturé ne suit plus le référentiel.
-      customs_labels: tarifsFiges.customs_labels,
-      tariff_by_type: tarifsFiges.tariff_by_type,
+      // Figés ici : le passage clôturé ne suit plus ni le référentiel ni le modèle.
+      customs_labels: figes.customs_labels,
+      tariff_by_type: figes.tariff_by_type,
+      packaging_kg: figes.packaging_kg,
+      materiel: figes.materiel,
     })
     .eq('id', id);
 
