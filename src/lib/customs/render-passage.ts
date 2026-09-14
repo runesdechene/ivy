@@ -12,6 +12,7 @@
  */
 
 import { formatSh } from './tariffs';
+import { totauxMateriel, type ObjetMateriel } from './materiel';
 
 export interface PassageRow {
   shop_id: string;
@@ -42,6 +43,10 @@ export interface PassageRow {
   date_exposition?: string | null;
   date_retour_prevue?: string | null;
   date_apurement?: string | null;
+  /** Matériel d'exposition : hors marchandise, réexporté intégralement. */
+  materiel?: ObjetMateriel[];
+  /** Faux : le matériel reste enregistré mais ne s'imprime pas. */
+  materiel_imprime?: boolean;
   /** Position tarifaire, origine et TVA par type. Le code SH vient d'ici. */
   tariff_by_type?: Record<string, { position?: string; origine?: string; tva?: number }>;
 }
@@ -456,6 +461,26 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
      « Vendu » vaut ici « parti − revenu », ce qui a réellement quitté le stock ; le relevé de caisse,
      lui, totalise ${sold} pièce(s).</p>`;
   }
+  // ---------- Matériel d'exposition ----------
+  // Tableau à part : il n'entre dans AUCUN total de la marchandise ci-dessus.
+  const materiel = passage.materiel_imprime === false ? [] : (passage.materiel ?? []);
+  if (materiel.length > 0) {
+    const tm = totauxMateriel(materiel);
+    html += `<h2>Matériel d'exposition — non destiné à la vente, réexporté intégralement</h2>
+<table><thead><tr>
+ <th class="l">Désignation</th><th>Quantité</th><th>Poids (kg)</th>
+ <th>Valeur estimée (EUR)</th><th>Valeur estimée (CHF)</th>${closed ? '<th class="retour">Retour</th>' : ''}
+</tr></thead><tbody>${materiel.map((o) => `<tr>
+ <td class="l">${esc(o.designation)}</td><td>${o.quantite}</td><td>${kgv(o.quantite * o.poids_kg)}</td>
+ <td>${num(o.quantite * o.valeur_eur)}</td><td>${num(o.quantite * o.valeur_eur * rate)}</td>
+ ${closed ? '<td class="retour">en totalité</td>' : ''}
+</tr>`).join('')}</tbody>
+<tfoot><tr><td class="l">TOTAL</td><td>${tm.objets}</td><td>${kgv(tm.poidsKg)}</td>
+ <td>${num(tm.valeurEur)}</td><td>${num(tm.valeurEur * rate)}</td>${closed ? '<td class="retour"></td>' : ''}</tr></tfoot></table>
+<p style="font-size:7.5pt;color:#333;margin-top:2mm">Valeurs estimées par le déclarant. Ce matériel
+ n'entre pas dans les totaux de la marchandise ci-dessus.</p>`;
+  }
+
   if (closed && ecartLignes.length > 0) {
     // On n'explique que le sens observe. Servir les deux causes a chaque fois
     // obligeait le douanier a deviner laquelle s'appliquait a la ligne devant lui.
