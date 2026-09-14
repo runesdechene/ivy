@@ -21,6 +21,17 @@ ensuite pour le voyage.
 > parlent de caisses ou de matériel « modifiables sur le passage » sont remplacées
 > par cette règle.
 
+> **Révision 2 du 2026-09-14 : les caisses sont des fournitures.** Une caisse mélange
+> les types : la grille « caisses par type » disparaît. Chaque fourniture porte une
+> case `caisse` ; les caisses ne figurent pas dans le tableau du matériel
+> d'exposition, et leur poids s'ajoute au **poids brut total** (case 24). **Aucune
+> répartition par type** : sur la feuille, les colonnes Caisses et Poids brut par
+> type restent vides, et une ligne indique « Tous les articles sont répartis dans
+> X caisses ». La case « Imprimer le matériel » ne retire pas les caisses du brut.
+> Les passages clôturés avant ce changement (août) gardent leurs caisses par type.
+> Migration `061` : la grille du modèle du Boxer devient une ligne « Caisses (total
+> repris d'août) », 1 × 33,1 kg.
+
 ## Contexte
 
 - En août, le matériel du stand **n'a pas été déclaré**. Le 11.74 ne mentionne que les

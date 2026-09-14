@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { TextInput, Loader, Select, NumberInput } from '@mantine/core';
+import { TextInput, Loader, Select } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useShop } from '@/context/ShopContext';
 import { formatSh, parseSh } from '@/lib/customs/tariffs';
@@ -61,7 +61,6 @@ export default function DouaneSettingsPage() {
   // emplacements directement, comme Paramètres → Commandes.
   const [locations, setLocations] = useState<{ id: string; name: string }[]>([]);
   const [locationId, setLocationId] = useState<string | null>(null);
-  const [caisses, setCaisses] = useState<Record<string, number | string>>({});
   const [materiel, setMateriel] = useState<LigneSaisie[]>([]);
   const [modeleCharge, setModeleCharge] = useState(false);
   const [modeleSaving, setModeleSaving] = useState(false);
@@ -84,7 +83,6 @@ export default function DouaneSettingsPage() {
     fetch(`/api/settings/customs-templates?shopId=${currentShop.id}&locationId=${locationId}`)
       .then((r) => r.json())
       .then((data: { template: { packaging_kg: Record<string, number>; materiel: ObjetMateriel[] } | null }) => {
-        setCaisses(data.template?.packaging_kg ?? {});
         setMateriel(versSaisie(data.template?.materiel ?? []));
       })
       .catch(() => notifications.show({ title: 'Erreur', message: 'Modèle illisible', color: 'rust' }))
@@ -98,11 +96,8 @@ export default function DouaneSettingsPage() {
       notifications.show({ title: 'Matériel incomplet', message: m.erreur, color: 'rust' });
       return;
     }
+    // Les caisses par type n'existent plus : elles sont des fournitures cochées « Caisse ».
     const packagingKg: Record<string, number> = {};
-    for (const [type, v] of Object.entries(caisses)) {
-      const n = typeof v === 'number' ? v : Number(String(v).replace(',', '.'));
-      if (String(v).trim() !== '' && Number.isFinite(n) && n >= 0) packagingKg[type] = n;
-    }
     setModeleSaving(true);
     try {
       const res = await fetch('/api/settings/customs-templates', {
@@ -268,8 +263,8 @@ export default function DouaneSettingsPage() {
           <div>
             <h3 className={styles.cardHeadTitle}>Modèle par emplacement</h3>
             <p className={styles.cardHeadSub}>
-              Copié dans chaque nouveau passage de cet emplacement, puis ajustable sur le passage.
-              Poids et valeur du matériel s&apos;entendent pour UN objet ; la valeur est une estimation en euros.
+              Suivi en direct par le passage ouvert de cet emplacement, figé à sa clôture.
+              Poids et valeur s&apos;entendent pour UN objet ; la valeur est une estimation en euros.
             </p>
           </div>
           <Select
@@ -288,23 +283,11 @@ export default function DouaneSettingsPage() {
             <Loader size="sm" />
           ) : (
             <>
-              <h4 className={styles.cardHeadTitle} style={{ fontSize: 14 }}>Caisses (kg) par type</h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8, marginBottom: 20 }}>
-                {rows.map((r) => (
-                  <NumberInput
-                    key={r.productType}
-                    label={r.productType}
-                    size="xs"
-                    value={caisses[r.productType] ?? ''}
-                    onChange={(v) => setCaisses((prev) => ({ ...prev, [r.productType]: v }))}
-                    min={0}
-                    decimalScale={1}
-                    allowedDecimalSeparators={['.', ',']}
-                    suffix=" kg"
-                  />
-                ))}
-              </div>
-              <h4 className={styles.cardHeadTitle} style={{ fontSize: 14 }}>Matériel d&apos;exposition</h4>
+              <h4 className={styles.cardHeadTitle} style={{ fontSize: 14 }}>Fournitures du stand</h4>
+              <p className={styles.cardHeadSub} style={{ marginBottom: 8 }}>
+                Coche « Caisse » pour ce qui transporte la marchandise : son poids s&apos;ajoute au poids brut
+                (réparti par type au prorata du poids net). Le reste s&apos;imprime à part, en matériel d&apos;exposition.
+              </p>
               <MaterielEditor lignes={materiel} onChange={setMateriel} />
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
                 <button className={styles.primaryButton} onClick={saveModele} disabled={modeleSaving}>

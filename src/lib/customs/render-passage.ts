@@ -12,7 +12,7 @@
  */
 
 import { formatSh } from './tariffs';
-import { totauxMateriel, type ObjetMateriel } from './materiel';
+import { caissesParType, separerFournitures, totauxMateriel, type ObjetMateriel } from './materiel';
 
 export interface PassageRow {
   shop_id: string;
@@ -158,11 +158,9 @@ export function renderPassage(
   const estIncomplete = (it: PassageItem) =>
     !it.weight_grams || it.unit_cost_textile === null || !it.unit_price_eur;
 
-  const packaging = passage.packaging_kg ?? {};
   const tariffs = passage.tariff_by_type ?? {};
   // Imprimé comme sur le formulaire : 6109.1000, pas 61091000.
   const shOf = (type: string) => formatSh(tariffs[type]?.position);
-  const hasPackaging = Object.values(packaging).some(v => Number(v) > 0);
 
   const num = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
   // Poids arrondis au dixieme de kilo : trois decimales n'apportent rien a un
@@ -252,10 +250,20 @@ export function renderPassage(
   }
 
   const globalGross = passage.gross_weight_kg !== null ? Number(passage.gross_weight_kg) : null;
-  // Le brut d'un type = son net + le poids de SES caisses. On ne retombe sur le
-  // poids brut global (reparti au prorata) que si aucune caisse n'est renseignee.
+  // Caisses : les fournitures cochées « caisse », en un seul total — une caisse
+  // mélange les types, on ne l'attribue à aucun. Passage ancien : ses caisses par
+  // type, et le brut d'un type = son net + ses caisses. On ne retombe sur le poids
+  // brut global (réparti au prorata) que si aucune caisse n'est renseignée.
+  const caisses = caissesParType(passage.materiel ?? [], passage.packaging_kg ?? {});
+  /** Brut par ligne : seulement quand les caisses sont attribuées à un type. */
+  const brutParLigne = caisses.source !== 'caisses';
+  const packaging = caisses.parType;
+  const hasPackaging = caisses.source !== 'aucune';
+  const { caisses: listeCaisses, materiel: materielExpo } = separerFournitures(passage.materiel ?? []);
   const packagingOf = (type: string) => Number(packaging[type]) || 0;
-  const totalPackaging = [...byType.keys()].reduce((n, t) => n + packagingOf(t), 0);
+  const totalPackaging = brutParLigne
+    ? [...byType.keys()].reduce((n, t) => n + packagingOf(t), 0)
+    : caisses.totalKg;
   const grossKg = hasPackaging ? netG / 1000 + totalPackaging : globalGross;
   const grossRatio = !hasPackaging && globalGross !== null && netG > 0 ? globalGross / (netG / 1000) : null;
   /**
@@ -388,7 +396,8 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
 
   for (const [objet, o] of [...byObjet.entries()].sort((a, b) => b[1].qty - a[1].qty)) {
     const pack = packagingOfObjet(o.types);
-    const brut = hasPackaging ? o.netG / 1000 + pack : null;
+    // Caisses-fournitures : pas de brut par type, seulement au total.
+    const brut = hasPackaging && brutParLigne ? o.netG / 1000 + pack : null;
     const reste = o.ret;
     const vendu = Math.max(0, o.qty - o.ret);
     const unitG = o.qty > 0 ? o.netG / o.qty : 0;
@@ -405,7 +414,7 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
     html += `<tr><td class="l"><b>${esc(labelOf(objet))}</b></td>` +
       `<td class="l">${shOf(objet) || '<b style="color:#b00">—</b>'}</td>` +
       `<td class="l">${esc(objet)}</td><td>${o.qty}</td><td>${kg(o.netG)}</td>` +
-      `<td>${hasPackaging ? kgv(pack) : '—'}</td>` +
+      `<td>${hasPackaging && brutParLigne ? kgv(pack) : '—'}</td>` +
       `<td>${brut !== null ? kgv(brut) : '—'}</td>` +
       `<td>${num(o.chf / rate)}</td><td>${num(o.chf)}</td><td>${num(vatOnImport(o.chf))}</td>` +
       (closed
@@ -445,13 +454,20 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
       : `<td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
     `</tr></tfoot></table>`;
 
+  if (caisses.source === 'caisses') {
+    html += `<p style="font-size:7.5pt;color:#333;margin-top:2mm">
+     <b>Tous les articles sont répartis dans ${caisses.nombre} caisse${caisses.nombre > 1 ? 's' : ''}</b>
+     (${listeCaisses.map((o) => `${o.quantite} × ${esc(o.designation)}`).join(', ')}),
+     soit ${kgv(caisses.totalKg)} kg compris dans le poids brut total.</p>`;
+  }
+
   if (!closed) {
     html += `<p style="font-size:7.5pt;color:#333;margin-top:2mm">
      Les quatre colonnes de droite se remplissent automatiquement à la clôture du passage,
      en comparant l'instantané de départ au stock constaté au retour. Rien n'est à saisir à la main.
-     ${hasPackaging
+     ${caisses.source === 'types'
        ? 'Le poids brut d\'un type vaut son poids net plus le poids de ses caisses.'
-       : 'Le poids brut par type est réparti au prorata du poids net.'}</p>`;
+       : caisses.source === 'aucune' ? 'Le poids brut par type est réparti au prorata du poids net.' : ''}</p>`;
   } else if (closed) {
     html += `<p style="font-size:7.5pt;color:#333;margin-top:2mm">
      <b>TVA réellement due</b> : elle porte sur la contre-prestation encaissée en Suisse,
@@ -462,8 +478,9 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
      lui, totalise ${sold} pièce(s).</p>`;
   }
   // ---------- Matériel d'exposition ----------
-  // Tableau à part : il n'entre dans AUCUN total de la marchandise ci-dessus.
-  const materiel = passage.materiel_imprime === false ? [] : (passage.materiel ?? []);
+  // Tableau à part : il n'entre dans AUCUN total de la marchandise ci-dessus. Les
+  // caisses n'y figurent pas — leur poids est déjà dans le brut de la marchandise.
+  const materiel = passage.materiel_imprime === false ? [] : materielExpo;
   if (materiel.length > 0) {
     const tm = totauxMateriel(materiel);
     html += `<h2>Matériel d'exposition — non destiné à la vente, réexporté intégralement</h2>
@@ -554,7 +571,7 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
   for (const [objet, modeles] of [...parObjet.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
     const lignes = [...modeles.values()].sort((a, b) => b.qty - a.qty);
     const t = byObjet.get(objet)!;
-    const brut = hasPackaging ? t.netG / 1000 + packagingOfObjet(t.types) : null;
+    const brut = hasPackaging && brutParLigne ? t.netG / 1000 + packagingOfObjet(t.types) : null;
 
     html += `<div class="sheet${lignes.length > 22 ? ' dense' : ''}">
 <h1>Annexe — ${esc(labelOf(objet))}</h1>

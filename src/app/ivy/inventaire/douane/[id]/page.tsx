@@ -14,7 +14,7 @@ import {
 } from '@tabler/icons-react';
 import { useDebounce } from '@/hooks/useDebounce';
 import { formatSh } from '@/lib/customs/tariffs';
-import { totauxMateriel, type ObjetMateriel } from '@/lib/customs/materiel';
+import { caissesParType, separerFournitures, totauxMateriel, type ObjetMateriel } from '@/lib/customs/materiel';
 import styles from './douane-detail.module.scss';
 
 interface Passage {
@@ -356,8 +356,10 @@ export default function DouanePassageDetailPage() {
   }, [id]);
 
   // Matériel résolu côté serveur : modèle de l'emplacement si ouvert, figé si clôturé.
-  const materielEnregistre = passage?.materiel ?? [];
+  // Les caisses vont dans le brut ; le reste est le matériel d'exposition.
+  const { caisses: caissesEnregistrees, materiel: materielEnregistre } = separerFournitures(passage?.materiel ?? []);
   const totauxMat = totauxMateriel(materielEnregistre);
+  const totauxCaisses = totauxMateriel(caissesEnregistrees);
 
   // --- Types de produits présents dans l'instantané ---
   const productTypes = useMemo(() => {
@@ -442,11 +444,15 @@ export default function DouanePassageDetailPage() {
       r.ret += it.qty_returned ?? 0;
       rows.set(type, r);
     }
-    // Le brut d'un type = son net + le poids de SES caisses. Les t-shirts et les
-    // sweats ne voyagent pas dans les mêmes, un poids brut unique serait faux.
-    // Caisses résolues côté serveur : modèle de l'emplacement si ouvert, figées si clôturé.
-    const packOf = (type: string) => Number(passage?.packaging_kg?.[type]) || 0;
-    const totalPackaging = [...rows.keys()].reduce((n, t) => n + packOf(t), 0);
+    // Même règle que la feuille imprimée. Fournitures cochées « Caisse » : un seul
+    // total, attribué à aucun type (une caisse les mélange). Passage ancien : ses
+    // caisses par type, et le brut d'un type = son net + ses caisses.
+    const caisses = caissesParType(passage?.materiel ?? [], passage?.packaging_kg ?? {});
+    const brutParLigne = caisses.source !== 'caisses';
+    const packOf = (type: string) => caisses.parType[type] ?? 0;
+    const totalPackaging = brutParLigne
+      ? [...rows.keys()].reduce((n, t) => n + packOf(t), 0)
+      : caisses.totalKg;
     const totalNetKg = [...rows.values()].reduce((n, r) => n + r.netG, 0) / 1000;
     const built = [...rows.entries()];
     const agg = built.reduce((acc, [type, r]) => {
@@ -464,6 +470,9 @@ export default function DouanePassageDetailPage() {
 
     return {
       totalPackaging,
+      caissesSource: caisses.source,
+      nombreCaisses: caisses.nombre,
+      brutParLigne,
       totalGrossKg: totalNetKg + totalPackaging,
       totalReste: agg.reste,
       totalVendu: agg.vendu,
@@ -497,7 +506,7 @@ export default function DouanePassageDetailPage() {
    * Poids brut du passage, avec la même règle que le document imprimé : net plus
    * caisses dès qu'une caisse est renseignée, sinon le poids brut global saisi.
    */
-  const hasPackaging = summary.totalPackaging > 0;
+  const hasPackaging = summary.caissesSource !== 'aucune';
   const grossKg = hasPackaging ? summary.totalGrossKg : computed.grossWeightKg;
 
   /**
@@ -1061,11 +1070,16 @@ export default function DouanePassageDetailPage() {
                 <Table.Td style={{ textAlign: 'right' }}>
                   {(r.netG / 1000).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg
                 </Table.Td>
+                {/* Caisses-fournitures : ni caisses ni brut par type, seulement au total. */}
                 <Table.Td style={{ textAlign: 'right' }}>
-                  {r.packagingKg.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg
+                  {summary.brutParLigne
+                    ? `${r.packagingKg.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg`
+                    : '—'}
                 </Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>
-                  {r.grossKg.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg
+                  {summary.brutParLigne
+                    ? `${r.grossKg.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg`
+                    : '—'}
                 </Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>{formatEur(r.customsEur)}</Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>{formatChf(r.customs)}</Table.Td>
@@ -1176,8 +1190,12 @@ export default function DouanePassageDetailPage() {
         </Table>
 
         <Text size="xs" c="dimmed" mt="xs">
-          Le poids brut d&apos;une ligne vaut son poids net plus celui de ses caisses.
-          Les caisses se règlent par emplacement dans{' '}
+          {summary.caissesSource === 'caisses'
+            ? <>Tous les articles sont répartis dans <b>{summary.nombreCaisses} caisse{summary.nombreCaisses > 1 ? 's' : ''}</b>
+                {' '}({caissesEnregistrees.map((o) => `${o.quantite} × ${o.designation}`).join(', ')}),
+                soit {totauxCaisses.poidsKg.toFixed(1)} kg compris dans le poids brut total. </>
+            : 'Le poids brut d\'une ligne vaut son poids net plus celui de ses caisses. '}
+          Les caisses sont des fournitures cochées « Caisse » dans{' '}
           <Anchor component={Link} href="/parametres/douane" size="xs">Paramètres → Douane</Anchor>
           {isClosed ? ' ; ce passage clôturé garde celles du jour de sa clôture.' : ', et ce passage ouvert les suit en direct.'}
           {!isClosed && (
@@ -1207,6 +1225,8 @@ export default function DouanePassageDetailPage() {
           <Anchor component={Link} href="/parametres/douane" size="xs">Paramètres → Douane</Anchor>
           {isClosed ? ' ; ce passage clôturé garde la liste du jour de sa clôture.' : ', et ce passage ouvert le suit en direct.'}
           {' '}Hors marchandise : il n&apos;entre ni dans les pièces, ni dans la valeur, ni dans la TVA.
+          Les fournitures cochées « Caisse » n&apos;y figurent pas : leur poids est dans le poids brut
+          (cadre Synthèse), et la case ci-dessus ne les retire pas.
         </Text>
         <Table withTableBorder striped>
           <Table.Thead>

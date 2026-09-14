@@ -1,10 +1,14 @@
 /**
- * Matériel d'exposition d'un stand : tables, chaises, bannières…
+ * Fournitures d'un stand : tables, chaises, bannières… et les CAISSES.
  *
- * Il passe la frontière avec la marchandise mais ne se vend pas : il revient
- * entier. Il n'entre donc JAMAIS dans les totaux de la marchandise (pièces,
- * valeur, TVA). Poids et valeur sont UNITAIRES ; la valeur est une estimation en
- * euros, une grande partie du matériel étant fabriquée par le déclarant.
+ * Tout passe la frontière avec la marchandise mais ne se vend pas : tout revient
+ * entier. Poids et valeur sont UNITAIRES ; la valeur est une estimation en euros,
+ * une grande partie du matériel étant fabriquée par le déclarant.
+ *
+ * Une caisse est une fourniture à part : elle CONTIENT la marchandise. Son poids
+ * entre dans le poids brut de la marchandise (case 24 du 11.74), jamais dans le
+ * tableau du matériel d'exposition — sinon il serait compté deux fois. Le reste
+ * du matériel n'entre dans aucun total de la marchandise (pièces, valeur, TVA).
  */
 
 export interface ObjetMateriel {
@@ -14,6 +18,8 @@ export interface ObjetMateriel {
   poids_kg: number;
   /** Valeur estimée d'UN objet, en euros. */
   valeur_eur: number;
+  /** Sert à transporter la marchandise : son poids va dans le brut. */
+  caisse: boolean;
 }
 
 /** Une ligne telle que tapée : Mantine renvoie « 1, » en texte pendant la frappe. */
@@ -22,6 +28,7 @@ export interface LigneSaisie {
   quantite: number | string;
   poids_kg: number | string;
   valeur_eur: number | string;
+  caisse: boolean;
 }
 
 type Resultat = { materiel: ObjetMateriel[] } | { erreur: string };
@@ -43,7 +50,9 @@ export function validerMateriel(raw: unknown): Resultat {
     }
     if (!positifOuNul(o.poids_kg)) return { erreur: `Matériel, ${ligne} : poids invalide` };
     if (!positifOuNul(o.valeur_eur)) return { erreur: `Matériel, ${ligne} : valeur invalide` };
-    materiel.push({ designation, quantite: o.quantite, poids_kg: o.poids_kg, valeur_eur: o.valeur_eur });
+    // Absent sur les lignes d'avant les caisses : une fourniture ordinaire.
+    const caisse = o.caisse === true;
+    materiel.push({ designation, quantite: o.quantite, poids_kg: o.poids_kg, valeur_eur: o.valeur_eur, caisse });
   }
   return { materiel };
 }
@@ -60,7 +69,9 @@ export function depuisSaisie(lignes: LigneSaisie[]): Resultat {
     designation: l.designation,
     quantite: nombre(l.quantite),
     poids_kg: nombre(l.poids_kg),
-    valeur_eur: nombre(l.valeur_eur),
+    // Une caisse n'a souvent pas de valeur à déclarer : vide vaut 0.
+    valeur_eur: l.caisse && String(l.valeur_eur).trim() === '' ? 0 : nombre(l.valeur_eur),
+    caisse: l.caisse,
   })));
 }
 
@@ -77,6 +88,44 @@ export function totauxMateriel(materiel: ObjetMateriel[]): { objets: number; poi
     }),
     { objets: 0, poidsKg: 0, valeurEur: 0 },
   );
+}
+
+export function separerFournitures(fournitures: ObjetMateriel[]): { caisses: ObjetMateriel[]; materiel: ObjetMateriel[] } {
+  return {
+    caisses: fournitures.filter((o) => o.caisse),
+    materiel: fournitures.filter((o) => !o.caisse),
+  };
+}
+
+/**
+ * Les caisses d'un passage : leur poids total et, s'il existe, leur poids par type.
+ *
+ * Caisses-fournitures (`source: 'caisses'`) : un total et un nombre de caisses,
+ * AUCUN poids par type. Une caisse mélange les types ; la feuille dit seulement
+ * que tous les articles sont répartis dans X caisses, et seul le brut total
+ * (case 24) est donné. Répartir au prorata inventerait une précision fausse.
+ *
+ * Passage clôturé avant les caisses-fournitures (`source: 'types'`) : ses
+ * caisses par type, figées, restent affichées comme à l'époque.
+ */
+export function caissesParType(
+  fournitures: ObjetMateriel[],
+  caissesParTypeAnciennes: Record<string, number>,
+): { source: 'caisses' | 'types' | 'aucune'; totalKg: number; nombre: number; parType: Record<string, number> } {
+  const caisses = totauxMateriel(separerFournitures(fournitures).caisses);
+  if (caisses.poidsKg > 0) {
+    return { source: 'caisses', totalKg: caisses.poidsKg, nombre: caisses.objets, parType: {} };
+  }
+  const anciennes = Object.entries(caissesParTypeAnciennes).filter(([, kg]) => Number(kg) > 0);
+  if (anciennes.length > 0) {
+    return {
+      source: 'types',
+      totalKg: anciennes.reduce((s, [, kg]) => s + Number(kg), 0),
+      nombre: 0,
+      parType: Object.fromEntries(anciennes.map(([t, kg]) => [t, Number(kg)])),
+    };
+  }
+  return { source: 'aucune', totalKg: 0, nombre: 0, parType: {} };
 }
 
 /** Caisses par type : { type: kg ≥ 0 }. null si la forme est fausse. */

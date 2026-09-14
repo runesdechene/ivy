@@ -45,7 +45,9 @@ export function modeleDuPassage(
   passage: { status: string; packaging_kg?: Record<string, number> | null; materiel?: ObjetMateriel[] | null },
   modele: ModeleEmplacement | null,
 ): ModeleEmplacement {
-  if (passage.status !== 'closed' && modele) return modele;
+  // Les caisses par type sont remplacées par les fournitures cochées « Caisse » :
+  // un passage ouvert n'hérite plus de l'ancienne grille du modèle.
+  if (passage.status !== 'closed' && modele) return { packaging_kg: {}, materiel: modele.materiel };
   return { packaging_kg: passage.packaging_kg ?? {}, materiel: passage.materiel ?? [] };
 }
 

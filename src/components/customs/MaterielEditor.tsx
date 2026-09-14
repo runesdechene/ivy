@@ -1,19 +1,20 @@
 'use client';
 
-import { Table, TextInput, NumberInput, ActionIcon, Button, Text } from '@mantine/core';
+import { Table, TextInput, NumberInput, ActionIcon, Button, Text, Checkbox, Tooltip } from '@mantine/core';
 import { IconPlus, IconTrash } from '@tabler/icons-react';
-import { depuisSaisie, totauxMateriel, type LigneSaisie } from '@/lib/customs/materiel';
+import { depuisSaisie, separerFournitures, totauxMateriel, type LigneSaisie } from '@/lib/customs/materiel';
 
-export const LIGNE_VIDE: LigneSaisie = { designation: '', quantite: '', poids_kg: '', valeur_eur: '' };
+export const LIGNE_VIDE: LigneSaisie = { designation: '', quantite: '', poids_kg: '', valeur_eur: '', caisse: false };
 
 const fmt = (n: number, d = 2) => n.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
 
 /**
- * Liste du matériel d'exposition, éditable ligne à ligne.
+ * Liste des fournitures du stand, éditable ligne à ligne.
  *
  * Poids et valeur se saisissent pour UN objet ; le pied de tableau donne les
- * totaux. Les lignes en cours de frappe restent du texte : la conversion et la
- * validation se font à l'enregistrement, côté appelant, via `depuisSaisie`.
+ * totaux. Une ligne cochée « Caisse » transporte la marchandise : son poids ira
+ * dans le brut. Les lignes en cours de frappe restent du texte : la conversion et
+ * la validation se font à l'enregistrement, côté appelant, via `depuisSaisie`.
  */
 export function MaterielEditor({ lignes, onChange, tauxEurChf, disabled }: {
   lignes: LigneSaisie[];
@@ -27,6 +28,7 @@ export function MaterielEditor({ lignes, onChange, tauxEurChf, disabled }: {
   // Totaux sur les seules lignes valides : une ligne à moitié tapée ne fausse pas le pied.
   const valide = depuisSaisie(lignes);
   const totaux = 'materiel' in valide ? totauxMateriel(valide.materiel) : null;
+  const poidsCaisses = 'materiel' in valide ? totauxMateriel(separerFournitures(valide.materiel).caisses).poidsKg : 0;
 
   return (
     <>
@@ -37,6 +39,11 @@ export function MaterielEditor({ lignes, onChange, tauxEurChf, disabled }: {
             <Table.Th style={{ width: 110, textAlign: 'right' }}>Quantité</Table.Th>
             <Table.Th style={{ width: 140, textAlign: 'right' }}>Poids unitaire (kg)</Table.Th>
             <Table.Th style={{ width: 160, textAlign: 'right' }}>Valeur estimée unitaire (€)</Table.Th>
+            <Table.Th style={{ width: 80, textAlign: 'center' }}>
+              <Tooltip label="Transporte la marchandise : son poids va dans le poids brut, pas dans le matériel d'exposition" multiline w={260}>
+                <span>Caisse</span>
+              </Tooltip>
+            </Table.Th>
             <Table.Th style={{ width: 50 }} />
           </Table.Tr>
         </Table.Thead>
@@ -61,6 +68,11 @@ export function MaterielEditor({ lignes, onChange, tauxEurChf, disabled }: {
                   allowedDecimalSeparators={['.', ',']}
                   onChange={(v) => maj(i, { valeur_eur: v })} styles={{ input: { textAlign: 'right' } }} />
               </Table.Td>
+              <Table.Td style={{ textAlign: 'center' }}>
+                <Checkbox checked={l.caisse} color="moss" disabled={disabled} aria-label="Caisse"
+                  style={{ display: 'inline-block' }}
+                  onChange={(e) => maj(i, { caisse: e.currentTarget.checked })} />
+              </Table.Td>
               <Table.Td>
                 <ActionIcon variant="subtle" color="rust" disabled={disabled}
                   onClick={() => onChange(lignes.filter((_, j) => j !== i))} aria-label="Retirer">
@@ -71,7 +83,7 @@ export function MaterielEditor({ lignes, onChange, tauxEurChf, disabled }: {
           ))}
           {lignes.length === 0 && (
             <Table.Tr>
-              <Table.Td colSpan={5}><Text size="sm" c="dimmed" ta="center">Aucun matériel.</Text></Table.Td>
+              <Table.Td colSpan={6}><Text size="sm" c="dimmed" ta="center">Aucune fourniture.</Text></Table.Td>
             </Table.Tr>
           )}
         </Table.Tbody>
@@ -80,11 +92,15 @@ export function MaterielEditor({ lignes, onChange, tauxEurChf, disabled }: {
             <Table.Tr>
               <Table.Td><b>TOTAL</b></Table.Td>
               <Table.Td style={{ textAlign: 'right' }}><b>{totaux.objets}</b></Table.Td>
-              <Table.Td style={{ textAlign: 'right' }}><b>{fmt(totaux.poidsKg, 1)} kg</b></Table.Td>
+              <Table.Td style={{ textAlign: 'right' }}>
+                <b>{fmt(totaux.poidsKg, 1)} kg</b>
+                {poidsCaisses > 0 && <Text size="xs" c="dimmed">dont caisses {fmt(poidsCaisses, 1)} kg</Text>}
+              </Table.Td>
               <Table.Td style={{ textAlign: 'right' }}>
                 <b>{fmt(totaux.valeurEur)} €</b>
                 {tauxEurChf ? <Text size="xs" c="dimmed">{fmt(totaux.valeurEur * tauxEurChf)} CHF</Text> : null}
               </Table.Td>
+              <Table.Td />
               <Table.Td />
             </Table.Tr>
           </Table.Tfoot>
