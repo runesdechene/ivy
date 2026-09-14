@@ -72,10 +72,25 @@ interface DeclarationItem {
   incomplete: boolean;
 }
 
+/**
+ * Valeur d'un champ numérique : un nombre, ou le texte en cours de frappe.
+ *
+ * Mantine renvoie « 0. » en TEXTE tant que ce n'est pas encore un nombre. Le
+ * ramener à '' effaçait le champ au premier point : impossible de taper 0,94.
+ */
+type Saisie = number | string;
+
+/** Le nombre porté par une saisie, ou null si elle n'en est pas (encore) un. */
+function nombre(v: Saisie): number | null {
+  if (typeof v === 'number') return v;
+  const n = parseFloat(v.replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
+}
+
 interface FormState {
-  eurToChf: number | '';
-  vatPct: number | '';
-  grossWeightKg: number | '';
+  eurToChf: Saisie;
+  vatPct: Saisie;
+  grossWeightKg: Saisie;
   reference: string;
   pricesChfTtc: Record<string, number | ''>;
   /** Libellé douanier par type : « T-shirt » pour « Le Confort ». */
@@ -134,7 +149,7 @@ const LabelCell = memo(function LabelCell({
 const PackagingCell = memo(function PackagingCell({
   initial, onCommit,
 }: { initial: number | ''; onCommit: (value: number | '') => void }) {
-  const [value, setValue] = useState<number | ''>(initial);
+  const [value, setValue] = useState<Saisie>(initial);
   const seen = useRef(initial);
   useEffect(() => {
     if (seen.current !== initial) { seen.current = initial; setValue(initial); }
@@ -143,8 +158,13 @@ const PackagingCell = memo(function PackagingCell({
     <NumberInput
       size="xs"
       value={value}
-      onChange={(v) => setValue(typeof v === 'number' ? v : '')}
-      onBlur={() => { if (value !== initial) onCommit(value); }}
+      onChange={setValue}
+      allowedDecimalSeparators={['.', ',']}
+      onBlur={() => {
+        const n = nombre(value);
+        const next = n === null ? '' : n;
+        if (next !== initial) onCommit(next);
+      }}
       onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
       decimalScale={1}
       step={0.5}
@@ -289,7 +309,7 @@ export default function DouanePassageDetailPage() {
     try {
       const body: Record<string, unknown> = {
         reference: next.reference,
-        grossWeightKg: next.grossWeightKg === '' ? null : Number(next.grossWeightKg),
+        grossWeightKg: nombre(next.grossWeightKg),
         pricesChfTtc,
         customsLabels: next.customsLabels,
         docTitre: next.docTitre,
@@ -317,8 +337,11 @@ export default function DouanePassageDetailPage() {
       // Une origine vide ne s'enregistre pas : la colonne est obligatoire.
       if (next.origineDeclaree.trim()) body.origineDeclaree = next.origineDeclaree;
       if (next.origin.trim()) body.origin = next.origin;
-      if (typeof next.eurToChf === 'number' && next.eurToChf > 0) body.eurToChf = next.eurToChf;
-      if (typeof next.vatPct === 'number' && next.vatPct >= 0) body.vatPct = next.vatPct;
+      // Une saisie inachevée (« 0. ») ne s'enregistre pas : on garde la dernière valeur valable.
+      const taux = nombre(next.eurToChf);
+      const tva = nombre(next.vatPct);
+      if (taux !== null && taux > 0) body.eurToChf = taux;
+      if (tva !== null && tva >= 0) body.vatPct = tva;
 
       const res = await fetch(`/api/customs/passages/${id}`, {
         method: 'PATCH',
@@ -409,9 +432,9 @@ export default function DouanePassageDetailPage() {
 
   // --- Totaux et valeur douanière, recalculés en direct depuis le formulaire ---
   const computed = useMemo(() => {
-    const eurToChf = typeof form.eurToChf === 'number' ? form.eurToChf : (passage?.eur_to_chf ?? 0);
-    const vatPct = typeof form.vatPct === 'number' ? form.vatPct : (passage?.vat_pct ?? 8.1);
-    const grossWeightKg = typeof form.grossWeightKg === 'number' ? form.grossWeightKg : null;
+    const eurToChf = nombre(form.eurToChf) || Number(passage?.eur_to_chf ?? 0);
+    const vatPct = nombre(form.vatPct) ?? Number(passage?.vat_pct ?? 8.1);
+    const grossWeightKg = nombre(form.grossWeightKg);
 
     let pieces = 0;
     let netWeightGrams = 0;
@@ -877,7 +900,8 @@ export default function DouanePassageDetailPage() {
           <NumberInput
             label="Taux (1 EUR = ? CHF)"
             value={form.eurToChf}
-            onChange={(v) => updateForm({ eurToChf: typeof v === 'number' ? v : '' })}
+            onChange={(v) => updateForm({ eurToChf: v })}
+            allowedDecimalSeparators={['.', ',']}
             decimalScale={4}
             step={0.01}
             min={0}
@@ -885,7 +909,8 @@ export default function DouanePassageDetailPage() {
           <NumberInput
             label="TVA suisse (%)"
             value={form.vatPct}
-            onChange={(v) => updateForm({ vatPct: typeof v === 'number' ? v : '' })}
+            onChange={(v) => updateForm({ vatPct: v })}
+            allowedDecimalSeparators={['.', ',']}
             suffix=" %"
             decimalScale={2}
             step={0.1}
@@ -895,7 +920,8 @@ export default function DouanePassageDetailPage() {
             label="Poids brut global (kg)"
             description={hasPackaging ? 'Ignoré : les caisses par type font foi.' : 'Utilisé faute de caisses par type.'}
             value={form.grossWeightKg}
-            onChange={(v) => updateForm({ grossWeightKg: typeof v === 'number' ? v : '' })}
+            onChange={(v) => updateForm({ grossWeightKg: v })}
+            allowedDecimalSeparators={['.', ',']}
             decimalScale={3}
             step={1}
             min={0}

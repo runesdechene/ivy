@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Loader, Paper, Table, Button, Group, Modal, NumberInput, TextInput,
+  Loader, Paper, Table, Button, Group, Modal, NumberInput,
   Stack, Text, Alert,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
@@ -53,9 +53,10 @@ export default function DouanePage() {
   const [creating, setCreating] = useState(false);
   const [conflict, setConflict] = useState<ConflictInfo | null>(null);
 
-  const [eurToChf, setEurToChf] = useState<number | ''>('');
-  const [vatPct, setVatPct] = useState<number | ''>(8.1);
-  const [reference, setReference] = useState('');
+  // `string` pendant la frappe : Mantine renvoie « 0. » en texte tant que ce n'est
+  // pas encore un nombre. Le ramener à '' effaçait le champ au premier point.
+  const [eurToChf, setEurToChf] = useState<number | string>('');
+  const [vatPct, setVatPct] = useState<number | string>(8.1);
 
   const fetchPassages = useCallback(async () => {
     if (!currentShop) return;
@@ -84,7 +85,6 @@ export default function DouanePage() {
     setConflict(null);
     setEurToChf('');
     setVatPct(8.1);
-    setReference('');
     modal.open();
   }, [modal]);
 
@@ -114,7 +114,6 @@ export default function DouanePage() {
           locationName: currentLocation.name,
           eurToChf: Number(eurToChf),
           vatPct: vatPct === '' ? 8.1 : Number(vatPct),
-          reference: reference.trim() || undefined,
         }),
       });
 
@@ -142,7 +141,7 @@ export default function DouanePage() {
     } finally {
       setCreating(false);
     }
-  }, [currentShop, currentLocation, eurToChf, vatPct, reference, modal, router]);
+  }, [currentShop, currentLocation, eurToChf, vatPct, modal, router]);
 
   const shopName = currentShop?.name || 'Runes de Chêne';
 
@@ -279,7 +278,8 @@ export default function DouanePage() {
             label="Taux du jour (1 EUR = ? CHF)"
             description="Obligatoire — le taux officiel des douanes."
             value={eurToChf}
-            onChange={(v) => setEurToChf(typeof v === 'number' ? v : '')}
+            onChange={setEurToChf}
+            allowedDecimalSeparators={['.', ',']}
             decimalScale={4}
             step={0.01}
             min={0}
@@ -288,17 +288,12 @@ export default function DouanePage() {
           <NumberInput
             label="TVA suisse (%)"
             value={vatPct}
-            onChange={(v) => setVatPct(typeof v === 'number' ? v : '')}
+            onChange={setVatPct}
+            allowedDecimalSeparators={['.', ',']}
             suffix=" %"
             decimalScale={2}
             step={0.1}
             min={0}
-          />
-          <TextInput
-            label="N° du 11.74"
-            description="Facultatif — attribué par la douane au guichet, à saisir ensuite sur le passage."
-            value={reference}
-            onChange={(e) => setReference(e.currentTarget.value)}
           />
 
           <Group justify="flex-end" mt="xs">
