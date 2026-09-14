@@ -343,7 +343,7 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
    ['TVA suisse', `${passage.vat_pct} %`],
    // Le pays inscrit en case 10 du formulaire. L'origine du textile, elle, est par
    // type : colonne Origine du tableau.
-   ["Pays d'origine", esc(passage.origine_declaree)],
+   ["Pays d'origine de l'import", esc(passage.origine_declaree)],
  ].filter(([, v]) => v).map(([k, v]) => `<span class="chip"><b>${k}</b> ${v}</span>`).join('')}
 </div>
 
