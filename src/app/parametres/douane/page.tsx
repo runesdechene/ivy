@@ -58,7 +58,9 @@ export default function DouaneSettingsPage() {
 
   // --- Modèle par emplacement : caisses et matériel d'exposition ---
   // Les pages Paramètres ne sont pas sous LocationProvider : on lit les
-  // emplacements directement, comme Paramètres → Commandes.
+  // emplacements directement, avec les mêmes règles que le sélecteur d'Ivy —
+  // seulement les emplacements ACTIFS (Shopify garde les désactivés, comme
+  // « Fournisseur »), et par défaut celui choisi dans le sélecteur.
   const [locations, setLocations] = useState<{ id: string; name: string }[]>([]);
   const [locationId, setLocationId] = useState<string | null>(null);
   const [materiel, setMateriel] = useState<LigneSaisie[]>([]);
@@ -69,10 +71,16 @@ export default function DouaneSettingsPage() {
     if (!currentShop) return;
     fetch(`/api/locations?shopId=${currentShop.id}`)
       .then((r) => r.json())
-      .then((data: { locations?: { id: string; name: string }[] }) => {
-        const list = data.locations ?? [];
+      .then((data: { locations?: { id: string; name: string; active: boolean }[] }) => {
+        const list = (data.locations ?? []).filter((l) => l.active);
         setLocations(list);
-        setLocationId((prev) => prev ?? list[0]?.id ?? null);
+        let saved: string | null = null;
+        try {
+          saved = localStorage.getItem(`ivy_location_${currentShop.id}`);
+        } catch {
+          /* stockage indisponible : premier emplacement */
+        }
+        setLocationId((prev) => prev ?? list.find((l) => l.id === saved)?.id ?? list[0]?.id ?? null);
       })
       .catch(() => notifications.show({ title: 'Erreur', message: 'Emplacements illisibles', color: 'rust' }));
   }, [currentShop]);
