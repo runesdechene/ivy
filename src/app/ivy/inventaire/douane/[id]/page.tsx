@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Loader, Paper, Table, Button, Group, Modal, NumberInput, TextInput,
-  Stack, Text, Alert, SimpleGrid, ActionIcon, Anchor,
+  Stack, Text, Alert, SimpleGrid, ActionIcon, Anchor, Checkbox,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
@@ -14,6 +14,10 @@ import {
 } from '@tabler/icons-react';
 import { useDebounce } from '@/hooks/useDebounce';
 import { formatSh } from '@/lib/customs/tariffs';
+import {
+  depuisSaisie, versSaisie, totauxMateriel, type ObjetMateriel, type LigneSaisie,
+} from '@/lib/customs/materiel';
+import { MaterielEditor } from '@/components/customs/MaterielEditor';
 import styles from './douane-detail.module.scss';
 
 interface Passage {
@@ -35,6 +39,9 @@ interface Passage {
   tarif_formulaire: string | null;
   bureau_douane: string | null;
   prices_chf_ttc: Record<string, number>;
+  /** Matériel d'exposition du voyage, copié du modèle de l'emplacement. */
+  materiel: ObjetMateriel[];
+  materiel_imprime: boolean;
   customs_labels: Record<string, string>;
   doc_titre: string | null;
   raison_sociale: string | null;
@@ -198,6 +205,8 @@ export default function DouanePassageDetailPage() {
   const [saving, setSaving] = useState(false);
   const [closing, setClosing] = useState(false);
   const [closeModalOpened, closeModal] = useDisclosure(false);
+  const [materiel, setMateriel] = useState<LigneSaisie[]>([]);
+  const [materielSaving, setMaterielSaving] = useState(false);
 
   const hydratedRef = useRef(false);
   const [form, setForm] = useState<FormState>({
@@ -271,6 +280,7 @@ export default function DouanePassageDetailPage() {
           tarifFormulaire: data.passage?.tarif_formulaire ?? '',
           origin: data.passage?.origin ?? '',
         });
+        setMateriel(versSaisie((data.passage?.materiel ?? []) as ObjetMateriel[]));
         hydratedRef.current = true;
       }
     } catch (err) {
@@ -387,6 +397,40 @@ export default function DouanePassageDetailPage() {
       return next;
     });
   }, [savePatch]);
+
+  // --- Matériel d'exposition : enregistré à la demande, pas à chaque frappe ---
+  const patchPassage = useCallback(async (body: Record<string, unknown>) => {
+    const res = await fetch(`/api/customs/passages/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Enregistrement impossible');
+    setPassage(data.passage);
+    return data.passage as Passage;
+  }, [id]);
+
+  const saveMateriel = useCallback(async () => {
+    const m = depuisSaisie(materiel);
+    if ('erreur' in m) {
+      notifications.show({ title: 'Matériel incomplet', message: m.erreur, color: 'red' });
+      return;
+    }
+    setMaterielSaving(true);
+    try {
+      const p = await patchPassage({ materiel: m.materiel });
+      setMateriel(versSaisie(p.materiel));
+      notifications.show({ title: 'Matériel enregistré', message: `${m.materiel.length} ligne(s)`, color: 'green' });
+    } catch (err) {
+      notifications.show({ title: 'Erreur', message: err instanceof Error ? err.message : 'Enregistrement impossible', color: 'red' });
+    } finally {
+      setMaterielSaving(false);
+    }
+  }, [materiel, patchPassage]);
+
+  const materielEnregistre = passage?.materiel ?? [];
+  const totauxMat = totauxMateriel(materielEnregistre);
 
   // --- Types de produits présents dans l'instantané ---
   const productTypes = useMemo(() => {
@@ -886,6 +930,28 @@ export default function DouanePassageDetailPage() {
           </>
         )}
 
+        {materielEnregistre.length > 0 && (
+          <div style={{ marginTop: 16, opacity: passage.materiel_imprime ? 1 : 0.45 }}>
+            <Text size="xs" fw={600} mb={4}>
+              Matériel d&apos;exposition — séparé de la marchandise
+              {!passage.materiel_imprime && ' (non imprimé sur la feuille)'}
+            </Text>
+            <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="xs">
+              {([
+                ['Objets', `${totauxMat.objets}`],
+                ['Poids', `${totauxMat.poidsKg.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg`],
+                ['Valeur estimée', formatEur(totauxMat.valeurEur)],
+                ['Valeur estimée', formatChf(totauxMat.valeurEur * computed.eurToChf)],
+              ] as const).map(([label, value], i) => (
+                <div key={i} className={styles.metricCard}>
+                  <div className={styles.metricLabel}>{label}</div>
+                  <div className={styles.metricValue}>{value}</div>
+                </div>
+              ))}
+            </SimpleGrid>
+          </div>
+        )}
+
         <Text size="xs" c="dimmed" mt="sm">
           Origine du textile (imprimée sur la feuille de résumé, distincte de la case 10) :
         </Text>
@@ -1196,6 +1262,32 @@ export default function DouanePassageDetailPage() {
             dès maintenant pour figurer sur le document d&apos;aller.</>
           )}
         </Text>
+      </Paper>
+
+      <Paper className={styles.panel} radius="md">
+        <div className={styles.panelHead}>
+          <h3 className={styles.panelTitle}>Matériel d&apos;exposition</h3>
+          <Checkbox
+            label="Imprimer le matériel sur la feuille de résumé"
+            checked={passage.materiel_imprime}
+            color="moss"
+            onChange={(e) => {
+              const v = e.currentTarget.checked;
+              patchPassage({ materielImprime: v }).catch(() =>
+                notifications.show({ title: 'Erreur', message: 'Enregistrement impossible', color: 'red' }));
+            }}
+          />
+        </div>
+        <Text size="xs" c="dimmed" mb="sm">
+          Copié du modèle de l&apos;emplacement à la création du passage ; les changements ici ne valent que pour ce voyage.
+          Hors marchandise : il n&apos;entre ni dans les pièces, ni dans la valeur, ni dans la TVA.
+        </Text>
+        <MaterielEditor lignes={materiel} onChange={setMateriel} tauxEurChf={computed.eurToChf} />
+        <Group justify="flex-end" mt="sm">
+          <Button color="moss" size="xs" onClick={saveMateriel} loading={materielSaving}>
+            Enregistrer le matériel
+          </Button>
+        </Group>
       </Paper>
 
       {missing.total > 0 && (
