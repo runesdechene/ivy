@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { loadReferentiel, tarifsDuPassage } from '@/lib/customs/tariffs';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -34,7 +35,14 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     if (data.length < 1000) break;
   }
 
-  return NextResponse.json({ passage, items });
+  // Ouvert : libellés et codes SH viennent du référentiel, en direct. Clôturé : figés.
+  try {
+    const referentiel = await loadReferentiel(supabase, passage.shop_id);
+    return NextResponse.json({ passage: { ...passage, ...tarifsDuPassage(passage, referentiel) }, items });
+  } catch (err) {
+    console.error('GET passage (référentiel):', err);
+    return NextResponse.json({ error: 'Lecture du référentiel douanier impossible' }, { status: 500 });
+  }
 }
 
 /**
@@ -149,7 +157,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     console.error('PATCH /api/customs/passages/[id]:', error);
     return NextResponse.json({ error: 'Enregistrement impossible' }, { status: 500 });
   }
-  return NextResponse.json({ passage: data });
+  // Même lecture que le GET : sans ça, la page perdait les libellés du référentiel
+  // à chaque enregistrement.
+  try {
+    const referentiel = await loadReferentiel(supabase, data.shop_id);
+    return NextResponse.json({ passage: { ...data, ...tarifsDuPassage(data, referentiel) } });
+  } catch {
+    return NextResponse.json({ passage: data });
+  }
 }
 
 /**
@@ -165,13 +180,23 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
 
   const { data: passage } = await supabase
     .from('customs_declarations')
-    .select('id, shop_id, location_id, status, departed_on')
+    .select('id, shop_id, location_id, status, departed_on, customs_labels, tariff_by_type')
     .eq('id', id)
     .maybeSingle();
 
   if (!passage) return NextResponse.json({ error: 'Passage introuvable' }, { status: 404 });
   if (passage.status === 'closed') {
     return NextResponse.json({ error: 'Ce passage est déjà clôturé' }, { status: 409 });
+  }
+
+  // Lu AVANT toute écriture : sans référentiel, on ne clôture pas — un passage
+  // clôturé sans ses codes SH ne pourrait plus les recevoir.
+  let tarifsFiges;
+  try {
+    tarifsFiges = tarifsDuPassage(passage, await loadReferentiel(supabase, passage.shop_id));
+  } catch (err) {
+    console.error('clôture, référentiel:', err);
+    return NextResponse.json({ error: 'Lecture du référentiel douanier impossible' }, { status: 500 });
   }
 
   const today = new Date().toISOString().slice(0, 10);
@@ -277,6 +302,9 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       returned_on: today,
       return_snapshot_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      // Figés ici : le passage clôturé ne suit plus le référentiel.
+      customs_labels: tarifsFiges.customs_labels,
+      tariff_by_type: tarifsFiges.tariff_by_type,
     })
     .eq('id', id);
 

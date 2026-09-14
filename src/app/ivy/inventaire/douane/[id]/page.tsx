@@ -2,9 +2,10 @@
 
 import { Fragment, memo, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   Loader, Paper, Table, Button, Group, Modal, NumberInput, TextInput,
-  Stack, Text, Alert, SimpleGrid, ActionIcon,
+  Stack, Text, Alert, SimpleGrid, ActionIcon, Anchor,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
@@ -12,6 +13,7 @@ import {
   IconArrowLeft, IconPrinter, IconLock, IconAlertTriangle,
 } from '@tabler/icons-react';
 import { useDebounce } from '@/hooks/useDebounce';
+import { formatSh } from '@/lib/customs/tariffs';
 import styles from './douane-detail.module.scss';
 
 interface Passage {
@@ -93,8 +95,6 @@ interface FormState {
   grossWeightKg: Saisie;
   reference: string;
   pricesChfTtc: Record<string, number | ''>;
-  /** Libellé douanier par type : « T-shirt » pour « Le Confort ». */
-  customsLabels: Record<string, string>;
   /** Poids des caisses par type, en kg. */
   packagingKg: Record<string, number | ''>;
   /** Titre et sous-titre de la feuille imprimée. */
@@ -108,8 +108,6 @@ interface FormState {
   dateExposition: string;
   dateRetourPrevue: string;
   dateApurement: string;
-  /** Code SH par type de produit. */
-  shByType: Record<string, string>;
   /** Cases fixes du 11.74 : 10, 15, 17, 20. Et l'origine du textile, distincte. */
   origineDeclaree: string;
   bureauDouane: string;
@@ -208,7 +206,6 @@ export default function DouanePassageDetailPage() {
     grossWeightKg: '',
     reference: '',
     pricesChfTtc: {},
-    customsLabels: {},
     packagingKg: {},
     docTitre: '',
     docSousTitre: '',
@@ -220,7 +217,6 @@ export default function DouanePassageDetailPage() {
     dateExposition: '',
     dateRetourPrevue: '',
     dateApurement: '',
-    shByType: {},
     origineDeclaree: '',
     bureauDouane: '',
     designationFormulaire: '',
@@ -247,10 +243,6 @@ export default function DouanePassageDetailPage() {
           const n = Number(v);
           if (Number.isFinite(n)) prices[k] = n;
         }
-        const labels: Record<string, string> = {};
-        for (const [k, v] of Object.entries((data.passage?.customs_labels ?? {}) as Record<string, unknown>)) {
-          if (typeof v === 'string') labels[k] = v;
-        }
         const packs: Record<string, number> = {};
         for (const [k, v] of Object.entries((data.passage?.packaging_kg ?? {}) as Record<string, unknown>)) {
           const n = Number(v);
@@ -262,7 +254,6 @@ export default function DouanePassageDetailPage() {
           grossWeightKg: data.passage?.gross_weight_kg ?? '',
           reference: data.passage?.reference ?? '',
           pricesChfTtc: prices,
-          customsLabels: labels,
           packagingKg: packs,
           docTitre: data.passage?.doc_titre ?? '',
           docSousTitre: data.passage?.doc_sous_titre ?? '',
@@ -274,10 +265,6 @@ export default function DouanePassageDetailPage() {
           dateExposition: data.passage?.date_exposition ?? '',
           dateRetourPrevue: data.passage?.date_retour_prevue ?? '',
           dateApurement: data.passage?.date_apurement ?? '',
-          shByType: Object.fromEntries(
-            Object.entries((data.passage?.tariff_by_type ?? {}) as Record<string, { position?: string }>)
-              .map(([k, v]) => [k, v?.position ?? '']),
-          ),
           origineDeclaree: data.passage?.origine_declaree ?? '',
           bureauDouane: data.passage?.bureau_douane ?? '',
           designationFormulaire: data.passage?.designation_formulaire ?? '',
@@ -311,7 +298,8 @@ export default function DouanePassageDetailPage() {
         reference: next.reference,
         grossWeightKg: nombre(next.grossWeightKg),
         pricesChfTtc,
-        customsLabels: next.customsLabels,
+        // Libellés et codes SH ne partent plus d'ici : ils vivent dans le référentiel
+        // douanier (Paramètres → Douane), et sont figés côté serveur à la clôture.
         docTitre: next.docTitre,
         docSousTitre: next.docSousTitre,
         departedOn: next.departedOn || null,
@@ -322,11 +310,6 @@ export default function DouanePassageDetailPage() {
         dateExposition: next.dateExposition,
         dateRetourPrevue: next.dateRetourPrevue || null,
         dateApurement: next.dateApurement || null,
-        tariffByType: Object.fromEntries(
-          Object.entries(next.shByType)
-            .filter(([, v]) => v.trim())
-            .map(([k, v]) => [k, { position: v.trim() }]),
-        ),
         packagingKg: Object.fromEntries(
           Object.entries(next.packagingKg).filter(([, v]) => typeof v === 'number'),
         ),
@@ -384,22 +367,6 @@ export default function DouanePassageDetailPage() {
 
   // La frappe vit dans le composant enfant. Ici on ne reçoit que la valeur
   // finale, à la sortie du champ : un seul rendu, une seule requête.
-  const commitLabel = useCallback((type: string, value: string) => {
-    setForm((prev) => {
-      const next = { ...prev, customsLabels: { ...prev.customsLabels, [type]: value } };
-      savePatch(next);
-      return next;
-    });
-  }, [savePatch]);
-
-  const commitSh = useCallback((type: string, value: string) => {
-    setForm((prev) => {
-      const next = { ...prev, shByType: { ...prev.shByType, [type]: value } };
-      savePatch(next);
-      return next;
-    });
-  }, [savePatch]);
-
   const commitDocField = useCallback((
     field: 'docTitre' | 'docSousTitre' | 'departedOn' | 'raisonSociale' | 'nomPrenom' | 'adresseSiege'
       | 'adresseExposition' | 'dateExposition' | 'dateRetourPrevue' | 'dateApurement'
@@ -429,6 +396,14 @@ export default function DouanePassageDetailPage() {
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'fr'));
   }, [items]);
+
+  /**
+   * Libellé et code SH d'un type. Le serveur les a déjà résolus : depuis le
+   * référentiel pour un passage ouvert, figés dans le passage s'il est clôturé.
+   * Ils ne se modifient qu'à un endroit, Paramètres → Douane.
+   */
+  const libelleOf = useCallback((type: string) => passage?.customs_labels?.[type] ?? '', [passage]);
+  const codeShOf = useCallback((type: string) => passage?.tariff_by_type?.[type]?.position ?? '', [passage]);
 
   // --- Totaux et valeur douanière, recalculés en direct depuis le formulaire ---
   const computed = useMemo(() => {
@@ -574,9 +549,9 @@ export default function DouanePassageDetailPage() {
     // Une ligne par code SH, si le douanier demande la ventilation.
     const parCode = new Map<string, { types: string[]; pieces: number; netG: number; packKg: number; chf: number }>();
     for (const r of summary.rows) {
-      const code = form.shByType[r.type]?.trim() || 'sans code SH';
+      const code = formatSh(codeShOf(r.type)) || 'sans code SH';
       const g = parCode.get(code) ?? { types: [], pieces: 0, netG: 0, packKg: 0, chf: 0 };
-      g.types.push(form.customsLabels[r.type] || r.type);
+      g.types.push(libelleOf(r.type) || r.type);
       g.pieces += r.qty;
       g.netG += r.netG;
       g.packKg += r.packagingKg;
@@ -592,7 +567,15 @@ export default function DouanePassageDetailPage() {
       .sort((a, b) => b.valeur - a.valeur);
 
     return { total, lignes };
-  }, [computed, summary, grossKg, hasPackaging, form.shByType, form.customsLabels]);
+  }, [computed, summary, grossKg, hasPackaging, codeShOf, libelleOf]);
+
+  /** Types de l'instantané auxquels il manque un libellé ou un code SH. */
+  const tarifsManquants = useMemo(
+    () => summary.rows
+      .filter((r) => !libelleOf(r.type) || !codeShOf(r.type))
+      .map((r) => ({ type: r.type, qty: r.qty, libelle: !!libelleOf(r.type), code: !!codeShOf(r.type) })),
+    [summary, libelleOf, codeShOf],
+  );
 
   // --- Detail par produit : Avalon, Yggdrasil... ---
   const parProduit = useMemo(() => {
@@ -799,6 +782,30 @@ export default function DouanePassageDetailPage() {
           </Text>
         </div>
       </SimpleGrid>
+
+      {tarifsManquants.length > 0 && (
+        <Alert
+          color="rust"
+          icon={<IconAlertTriangle size={16} />}
+          title={`${tarifsManquants.length} type(s) sans libellé ou sans code SH`}
+          mb="md"
+        >
+          <Stack gap={4}>
+            {tarifsManquants.map((t) => (
+              <Text size="sm" key={t.type}>
+                <b>{t.type}</b> — {t.qty} pièce(s) — manque {[!t.libelle && 'le libellé', !t.code && 'le code SH'].filter(Boolean).join(' et ')}
+              </Text>
+            ))}
+            {isClosed ? (
+              <Text size="xs" c="dimmed">Passage clôturé : ses valeurs sont figées.</Text>
+            ) : (
+              <Anchor component={Link} href="/parametres/douane" size="sm" fw={600}>
+                Compléter dans Paramètres → Douane
+              </Anchor>
+            )}
+          </Stack>
+        </Alert>
+      )}
 
       <Paper className={styles.panel} radius="md">
         <div className={styles.panelHead}>
@@ -1011,8 +1018,11 @@ export default function DouanePassageDetailPage() {
           ))}
         </SimpleGrid>
         <Text size="xs" c="dimmed" mb="sm">
-          La colonne <b>Objet</b> est ce que lira le douanier : mets-y un mot courant
-          (« T-shirt », « Sweat-shirt »), pas le nom commercial. Elle est enregistrée avec le passage.
+          L&apos;<b>objet</b> et le <b>code SH</b> viennent du référentiel douanier :
+          ils se modifient dans <Anchor component={Link} href="/parametres/douane" size="xs">Paramètres → Douane</Anchor>.
+          {isClosed
+            ? ' Ce passage est clôturé : il garde les valeurs du jour de sa clôture.'
+            : ' Ce passage ouvert suit le référentiel en direct.'}
         </Text>
         <Table striped highlightOnHover withTableBorder>
           <Table.Thead>
@@ -1048,18 +1058,12 @@ export default function DouanePassageDetailPage() {
             {summary.rows.map((r) => (
               <Table.Tr key={r.type}>
                 <Table.Td>
-                  <LabelCell
-                    initial={form.customsLabels[r.type] ?? ''}
-                    placeholder={r.type}
-                    onCommit={(v) => commitLabel(r.type, v)}
-                  />
+                  {libelleOf(r.type) || <Text size="sm" c="rust" fw={600}>à renseigner</Text>}
                 </Table.Td>
                 <Table.Td>
-                  <LabelCell
-                    initial={form.shByType[r.type] ?? ''}
-                    placeholder="00000000"
-                    onCommit={(v) => commitSh(r.type, v)}
-                  />
+                  {codeShOf(r.type)
+                    ? formatSh(codeShOf(r.type))
+                    : <Text size="sm" c="rust" fw={600}>à renseigner</Text>}
                 </Table.Td>
                 <Table.Td><Text size="xs" c="dimmed">{r.type}</Text></Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>{r.qty}</Table.Td>

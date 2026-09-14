@@ -11,6 +11,8 @@
  * parti / vendu / revenu. Les ventes, elles, se déclarent ensuite sur WebDec.
  */
 
+import { formatSh } from './tariffs';
+
 export interface PassageRow {
   shop_id: string;
   location_name: string;
@@ -153,7 +155,8 @@ export function renderPassage(
 
   const packaging = passage.packaging_kg ?? {};
   const tariffs = passage.tariff_by_type ?? {};
-  const shOf = (type: string) => tariffs[type]?.position ?? '';
+  // Imprimé comme sur le formulaire : 6109.1000, pas 61091000.
+  const shOf = (type: string) => formatSh(tariffs[type]?.position);
   const hasPackaging = Object.values(packaging).some(v => Number(v) > 0);
 
   const num = (n: number) => (Math.round(n * 100) / 100).toFixed(2);

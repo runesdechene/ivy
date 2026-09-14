@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { renderPassage, type PassageRow, type PassageItem } from '@/lib/customs/render-passage';
+import { loadReferentiel, tarifsDuPassage } from '@/lib/customs/tariffs';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -51,7 +52,17 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     return NextResponse.json({ error: 'Ce passage ne contient aucune ligne' }, { status: 400 });
   }
 
-  const html = renderPassage(passage as PassageRow, items, { onlySummary });
+  // Passage ouvert : libellés et codes SH lus en direct dans le référentiel.
+  let referentiel;
+  try {
+    referentiel = await loadReferentiel(supabase, passage.shop_id);
+  } catch (err) {
+    console.error('GET document (référentiel):', err);
+    return NextResponse.json({ error: 'Lecture du référentiel douanier impossible' }, { status: 500 });
+  }
+  const row = { ...passage, ...tarifsDuPassage(passage, referentiel) } as PassageRow;
+
+  const html = renderPassage(row, items, { onlySummary });
 
   return new NextResponse(html, {
     status: 200,

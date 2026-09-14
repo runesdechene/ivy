@@ -95,12 +95,13 @@ export async function POST(request: NextRequest) {
   }
 
   // Ce qui ne change pas d'un voyage a l'autre se reprend du passage precedent :
-  // identite, libelles, codes SH, caisses, cases fixes du 11.74. Sans ca, tout
-  // etait a ressaisir le jour du passage, au guichet. Ce qui est propre au
-  // voyage (dates, titre du festival, adresse d'exposition, n° 11.74) repart vide.
+  // identite, caisses, cases fixes du 11.74. Sans ca, tout etait a ressaisir le
+  // jour du passage, au guichet. Ce qui est propre au voyage (dates, titre du
+  // festival, adresse d'exposition, n° 11.74) repart vide. Les libelles et codes
+  // SH, eux, viennent du referentiel douanier (Parametres → Douane).
   const { data: previous } = await supabase
     .from('customs_declarations')
-    .select('vat_pct, origin, origine_declaree, customs_labels, packaging_kg, tariff_by_type, doc_sous_titre, raison_sociale, nom_prenom, adresse_siege, bureau_douane, regime_valeur, methode_repartition, designation_formulaire, tarif_formulaire')
+    .select('vat_pct, origin, origine_declaree, packaging_kg, doc_sous_titre, raison_sociale, nom_prenom, adresse_siege, bureau_douane, regime_valeur, methode_repartition, designation_formulaire, tarif_formulaire')
     .eq('shop_id', shopId)
     .order('created_at', { ascending: false })
     .limit(1)
@@ -124,9 +125,7 @@ export async function POST(request: NextRequest) {
       origin: body.origin || previous?.origin || 'BD',
       origine_declaree: previous?.origine_declaree || 'FR',
       prices_chf_ttc: {},
-      customs_labels: sansCorruption(previous?.customs_labels as Record<string, string> | null),
       packaging_kg: sansCorruption(previous?.packaging_kg as Record<string, number> | null),
-      tariff_by_type: sansCorruption(previous?.tariff_by_type as Record<string, unknown> | null),
       doc_sous_titre: previous?.doc_sous_titre ?? null,
       raison_sociale: previous?.raison_sociale ?? null,
       nom_prenom: previous?.nom_prenom ?? null,
