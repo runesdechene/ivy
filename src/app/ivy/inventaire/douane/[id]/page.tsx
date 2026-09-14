@@ -807,7 +807,7 @@ export default function DouanePassageDetailPage() {
         </Alert>
       )}
 
-      <Paper className={styles.panel} radius="md">
+      <Paper className={`${styles.panel} ${styles.panelRecopie}`} radius="md">
         <div className={styles.panelHead}>
           <h3 className={styles.panelTitle}>À recopier sur le 11.74</h3>
         </div>

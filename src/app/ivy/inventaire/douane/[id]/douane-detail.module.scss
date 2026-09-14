@@ -104,6 +104,17 @@
   margin-bottom: 20px;
 }
 
+// Le cadre qu'on a sous les yeux au guichet, stylo en main : il doit se trouver
+// d'un coup d'oeil dans la page.
+.panelRecopie {
+  border: 2px solid $moss;
+  background: $moss-bg;
+
+  .panelTitle {
+    color: $moss;
+  }
+}
+
 .panelHead {
   display: flex;
   align-items: center;
