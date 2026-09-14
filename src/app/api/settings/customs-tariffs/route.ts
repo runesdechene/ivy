@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/supabase/client';
-import { parseSh } from '@/lib/customs/tariffs';
+import { parseOrigine, parseSh } from '@/lib/customs/tariffs';
 
 const PAGE_SIZE = 1000;
 
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   try {
     const { data: rows, error } = await supabase
       .from('customs_type_tariffs')
-      .select('product_type, code_sh, libelle, updated_at')
+      .select('product_type, code_sh, libelle, origine, updated_at')
       .eq('shop_id', shopId);
     if (error) throw error;
 
@@ -47,13 +47,14 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * PUT — enregistre le code SH et le libellé d'un type.
- * body: { shopId, productType, codeSh, libelle }. Un code vide efface le code ;
- * un code qui n'a pas 8 chiffres est refusé, plutôt que stocké faux.
+ * PUT — enregistre le code SH, le libellé et l'origine d'un type.
+ * body: { shopId, productType, codeSh, libelle, origine }. Un champ vide l'efface ;
+ * un code SH sans ses 8 chiffres ou une origine sans ses 2 lettres est refusé,
+ * plutôt que stocké faux.
  */
 export async function PUT(request: NextRequest) {
   const body = (await request.json()) as {
-    shopId?: string; productType?: string; codeSh?: string; libelle?: string;
+    shopId?: string; productType?: string; codeSh?: string; libelle?: string; origine?: string;
   };
   const { shopId, productType } = body;
   if (!shopId || !productType) {
@@ -65,6 +66,11 @@ export async function PUT(request: NextRequest) {
   if (saisie && !codeSh) {
     return NextResponse.json({ error: 'Le code SH doit compter 8 chiffres (ex. 6109.1000)' }, { status: 400 });
   }
+  const saisieOrigine = (body.origine ?? '').trim();
+  const origine = saisieOrigine ? parseOrigine(saisieOrigine) : null;
+  if (saisieOrigine && !origine) {
+    return NextResponse.json({ error: "L'origine est un code pays à 2 lettres (ex. BD)" }, { status: 400 });
+  }
 
   const supabase = createServerClient();
   const { data, error } = await supabase
@@ -75,11 +81,12 @@ export async function PUT(request: NextRequest) {
         product_type: productType,
         code_sh: codeSh,
         libelle: (body.libelle ?? '').trim() || null,
+        origine,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'shop_id,product_type' },
     )
-    .select('product_type, code_sh, libelle, updated_at')
+    .select('product_type, code_sh, libelle, origine, updated_at')
     .single();
 
   if (error) {

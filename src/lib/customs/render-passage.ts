@@ -24,7 +24,7 @@ export interface PassageRow {
   eur_to_chf: number;
   vat_pct: number;
   gross_weight_kg: number | null;
-  /** Origine du textile (BD). */
+  /** Origine unique du textile, d'avant l'origine par type : simple repli. */
   origin: string;
   /** Pays d'origine inscrit en case 10 du 11.74 (FR). */
   origine_declaree?: string | null;
@@ -160,6 +160,9 @@ export function renderPassage(
   const tariffs = passage.tariff_by_type ?? {};
   // Imprimé comme sur le formulaire : 6109.1000, pas 61091000.
   const shOf = (type: string) => formatSh(tariffs[type]?.position);
+  // Origine du textile par type (référentiel) ; repli sur l'origine unique des
+  // passages antérieurs à l'origine par type.
+  const origineOf = (type: string) => tariffs[type]?.origine || passage.origin || '';
 
   const num = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
   // Poids arrondis au dixieme de kilo : trois decimales n'apportent rien a un
@@ -338,10 +341,9 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
    ['N° 11.74', esc(passage.reference)],
    ['Taux', `1 EUR = ${rate} CHF`],
    ['TVA suisse', `${passage.vat_pct} %`],
-   // Deux informations distinctes : le pays inscrit en case 10 du formulaire,
-   // et le pays ou le textile a ete fabrique.
+   // Le pays inscrit en case 10 du formulaire. L'origine du textile, elle, est par
+   // type : colonne Origine du tableau.
    ["Pays d'origine", esc(passage.origine_declaree)],
-   ['Origine textile', esc(passage.origin)],
  ].filter(([, v]) => v).map(([k, v]) => `<span class="chip"><b>${k}</b> ${v}</span>`).join('')}
 </div>
 
@@ -374,9 +376,9 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
 
 <h2>Détail par type de produit</h2>
 <table><thead>
-<tr><th colspan="10">Départ</th><th colspan="${closed ? 8 : 4}" class="retour">Retour</th></tr>
+<tr><th colspan="11">Départ</th><th colspan="${closed ? 8 : 4}" class="retour">Retour</th></tr>
 <tr>
- <th class="l">Objet</th><th class="l">Code SH</th><th class="l">Type Ivy</th><th>Quantité</th><th>Poids net (kg)</th><th>Caisses (kg)</th><th>Poids brut (kg)</th>
+ <th class="l">Objet</th><th class="l">Code SH</th><th class="l">Origine</th><th class="l">Type Ivy</th><th>Quantité</th><th>Poids net (kg)</th><th>Caisses (kg)</th><th>Poids brut (kg)</th>
  <th>Valeur douanière au départ<br>HT (EUR)</th><th>Valeur douanière au départ<br>HT (CHF)</th><th>TVA import CHF</th>
  ${closed
     // Une fois cloture, le prix pratique n'est plus une indication de depart :
@@ -411,6 +413,7 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
     })();
     html += `<tr><td class="l"><b>${esc(labelOf(objet))}</b></td>` +
       `<td class="l">${shOf(objet) || '<b style="color:#b00">—</b>'}</td>` +
+      `<td class="l">${esc(origineOf(objet)) || '<b style="color:#b00">—</b>'}</td>` +
       `<td class="l">${esc(objet)}</td><td>${o.qty}</td><td>${kg(o.netG)}</td>` +
       `<td>${hasPackaging && brutParLigne ? kgv(pack) : '—'}</td>` +
       `<td>${brut !== null ? kgv(brut) : '—'}</td>` +
@@ -431,7 +434,7 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
       `</tr>`;
   }
 
-  html += `</tbody><tfoot><tr><td class="l" colspan="3">TOTAL</td><td>${pieces}</td><td>${kg(netG)}</td>` +
+  html += `</tbody><tfoot><tr><td class="l" colspan="4">TOTAL</td><td>${pieces}</td><td>${kg(netG)}</td>` +
     `<td>${hasPackaging ? kgv(totalPackaging) : '—'}</td>` +
     `<td>${grossKg !== null ? kgv(grossKg) : '—'}</td>` +
     `<td>${num(customsChf / rate)}</td><td>${num(customsChf)}</td><td>${num(vatOnImport(customsChf))}</td>` +
@@ -580,7 +583,7 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
  <b>Quantité totale</b> ${t.qty} pièce(s)<br>
  <b>Poids net / brut</b> ${kg(t.netG)} kg / ${brut !== null ? kgv(brut) : '—'} kg<br>
  <b>Valeur en douane</b> ${num(t.chf / rate)} EUR &nbsp;/&nbsp; ${num(t.chf)} CHF<br>
- <b>Origine</b> ${esc(passage.origin)} &nbsp;·&nbsp; ${esc(passage.departed_on)}
+ <b>Origine</b> ${esc(origineOf(objet)) || '—'} &nbsp;·&nbsp; ${esc(passage.departed_on)}
 </div>
 <table><thead><tr>
  <th class="l">Photo</th><th class="l">Modèle</th><th>Quantité</th>

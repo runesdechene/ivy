@@ -28,7 +28,7 @@ interface Passage {
   eur_to_chf: number;
   vat_pct: number;
   gross_weight_kg: number | null;
-  /** Origine du textile (BD). */
+  /** Origine unique d'avant l'origine par type : repli des passages clôturés. */
   origin: string;
   /** Pays d'origine en case 10 du 11.74 (FR). */
   origine_declaree: string | null;
@@ -108,12 +108,11 @@ interface FormState {
   adresseExposition: string;
   dateExposition: string;
   dateRetourPrevue: string;
-  /** Cases fixes du 11.74 : 10, 15, 17, 20. Et l'origine du textile, distincte. */
+  /** Cases fixes du 11.74 : 10, 15, 17, 20. */
   origineDeclaree: string;
   bureauDouane: string;
   designationFormulaire: string;
   tarifFormulaire: string;
-  origin: string;
 }
 
 /**
@@ -189,7 +188,6 @@ export default function DouanePassageDetailPage() {
     bureauDouane: '',
     designationFormulaire: '',
     tarifFormulaire: '',
-    origin: '',
   });
 
   const fetchPassage = useCallback(async () => {
@@ -230,7 +228,6 @@ export default function DouanePassageDetailPage() {
           bureauDouane: data.passage?.bureau_douane ?? '',
           designationFormulaire: data.passage?.designation_formulaire ?? '',
           tarifFormulaire: data.passage?.tarif_formulaire ?? '',
-          origin: data.passage?.origin ?? '',
         });
         hydratedRef.current = true;
       }
@@ -276,7 +273,6 @@ export default function DouanePassageDetailPage() {
       };
       // Une origine vide ne s'enregistre pas : la colonne est obligatoire.
       if (next.origineDeclaree.trim()) body.origineDeclaree = next.origineDeclaree;
-      if (next.origin.trim()) body.origin = next.origin;
       // Une saisie inachevée (« 0. ») ne s'enregistre pas : on garde la dernière valeur valable.
       const taux = nombre(next.eurToChf);
       const tva = nombre(next.vatPct);
@@ -327,7 +323,7 @@ export default function DouanePassageDetailPage() {
   const commitDocField = useCallback((
     field: 'docTitre' | 'docSousTitre' | 'departedOn' | 'raisonSociale' | 'nomPrenom' | 'adresseSiege'
       | 'adresseExposition' | 'dateExposition' | 'dateRetourPrevue'
-      | 'origineDeclaree' | 'bureauDouane' | 'designationFormulaire' | 'tarifFormulaire' | 'origin',
+      | 'origineDeclaree' | 'bureauDouane' | 'designationFormulaire' | 'tarifFormulaire',
     value: string,
   ) => {
     setForm((prev) => {
@@ -372,6 +368,12 @@ export default function DouanePassageDetailPage() {
    */
   const libelleOf = useCallback((type: string) => passage?.customs_labels?.[type] ?? '', [passage]);
   const codeShOf = useCallback((type: string) => passage?.tariff_by_type?.[type]?.position ?? '', [passage]);
+  // Même repli que la feuille : l'origine unique des passages antérieurs.
+  const origineOf = useCallback(
+    (type: string) =>
+      passage?.tariff_by_type?.[type]?.origine || (passage?.status === 'closed' ? passage.origin : '') || '',
+    [passage],
+  );
 
   // --- Totaux et valeur douanière, recalculés en direct depuis le formulaire ---
   const computed = useMemo(() => {
@@ -545,8 +547,11 @@ export default function DouanePassageDetailPage() {
   /** Types de l'instantané auxquels il manque un libellé ou un code SH. */
   const tarifsManquants = useMemo(
     () => summary.rows
-      .filter((r) => !libelleOf(r.type) || !codeShOf(r.type))
-      .map((r) => ({ type: r.type, qty: r.qty, libelle: !!libelleOf(r.type), code: !!codeShOf(r.type) })),
+      .filter((r) => !libelleOf(r.type) || !codeShOf(r.type) || !origineOf(r.type))
+      .map((r) => ({
+        type: r.type, qty: r.qty,
+        libelle: !!libelleOf(r.type), code: !!codeShOf(r.type), origine: !!origineOf(r.type),
+      })),
     [summary, libelleOf, codeShOf],
   );
 
@@ -760,13 +765,13 @@ export default function DouanePassageDetailPage() {
         <Alert
           color="rust"
           icon={<IconAlertTriangle size={16} />}
-          title={`${tarifsManquants.length} type(s) sans libellé ou sans code SH`}
+          title={`${tarifsManquants.length} type(s) incomplet(s) dans le référentiel douanier`}
           mb="md"
         >
           <Stack gap={4}>
             {tarifsManquants.map((t) => (
               <Text size="sm" key={t.type}>
-                <b>{t.type}</b> — {t.qty} pièce(s) — manque {[!t.libelle && 'le libellé', !t.code && 'le code SH'].filter(Boolean).join(' et ')}
+                <b>{t.type}</b> — {t.qty} pièce(s) — manque {[!t.libelle && 'le libellé', !t.code && 'le code SH', !t.origine && "l'origine"].filter(Boolean).join(', ')}
               </Text>
             ))}
             {isClosed ? (
@@ -880,17 +885,6 @@ export default function DouanePassageDetailPage() {
             </SimpleGrid>
           </div>
         )}
-
-        <Text size="xs" c="dimmed" mt="sm">
-          Origine du textile (imprimée sur la feuille de résumé, distincte de la case 10) :
-        </Text>
-        <div style={{ maxWidth: 120 }}>
-          <LabelCell
-            initial={form.origin}
-            placeholder="BD"
-            onCommit={(v) => commitDocField('origin', v)}
-          />
-        </div>
       </Paper>
 
       <Paper className={styles.panel} radius="md">
@@ -1021,7 +1015,7 @@ export default function DouanePassageDetailPage() {
         <Table striped highlightOnHover withTableBorder>
           <Table.Thead>
             <Table.Tr>
-              <Table.Th colSpan={9} style={{ textAlign: 'center' }}>Départ</Table.Th>
+              <Table.Th colSpan={10} style={{ textAlign: 'center' }}>Départ</Table.Th>
               <Table.Th colSpan={6} style={{ textAlign: 'center', borderLeft: '2px solid var(--mantine-color-gray-4)' }}>
                 Retour
               </Table.Th>
@@ -1029,6 +1023,7 @@ export default function DouanePassageDetailPage() {
             <Table.Tr>
               <Table.Th style={{ minWidth: 180 }}>Objet (libellé douanier)</Table.Th>
               <Table.Th style={{ minWidth: 110 }}>Code SH</Table.Th>
+              <Table.Th>Origine</Table.Th>
               <Table.Th>Type Ivy</Table.Th>
               <Table.Th style={{ textAlign: 'right' }}>Qté de départ</Table.Th>
               <Table.Th style={{ textAlign: 'right' }}>Poids net</Table.Th>
@@ -1059,6 +1054,9 @@ export default function DouanePassageDetailPage() {
                     ? formatSh(codeShOf(r.type))
                     : <Text size="sm" c="rust" fw={600}>à renseigner</Text>}
                 </Table.Td>
+                <Table.Td>
+                  {origineOf(r.type) || <Text size="sm" c="rust" fw={600}>à renseigner</Text>}
+                </Table.Td>
                 <Table.Td><Text size="xs" c="dimmed">{r.type}</Text></Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>{r.qty}</Table.Td>
                 <Table.Td style={{ textAlign: 'right' }}>
@@ -1088,7 +1086,8 @@ export default function DouanePassageDetailPage() {
           </Table.Tbody>
           <Table.Tfoot>
             <Table.Tr>
-              <Table.Td colSpan={2}><b>TOTAL</b></Table.Td>
+              {/* Objet, Code SH, Origine, Type Ivy : le total démarre sous la quantité. */}
+              <Table.Td colSpan={4}><b>TOTAL</b></Table.Td>
               <Table.Td style={{ textAlign: 'right' }}><b>{computed.pieces}</b></Table.Td>
               <Table.Td style={{ textAlign: 'right' }}>
                 <b>{computed.netWeightKg.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg</b>

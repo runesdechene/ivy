@@ -14,6 +14,14 @@ export interface TypeTariff {
   code_sh: string | null;
   /** Mot courant lu par le douanier : « T-shirt coton ». */
   libelle: string | null;
+  /** Pays de fabrication du textile, 2 lettres : BD. Distinct de la case 10 du 11.74. */
+  origine: string | null;
+}
+
+/** « bd », « BD » → BD. null si ce n'est pas un code pays à 2 lettres. */
+export function parseOrigine(saisie: string): string | null {
+  const code = saisie.trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(code) ? code : null;
 }
 
 export type Referentiel = Record<string, TypeTariff>;
@@ -33,12 +41,12 @@ export function parseSh(saisie: string): string | null {
 export async function loadReferentiel(supabase: SupabaseClient, shopId: string): Promise<Referentiel> {
   const { data, error } = await supabase
     .from('customs_type_tariffs')
-    .select('product_type, code_sh, libelle')
+    .select('product_type, code_sh, libelle, origine')
     .eq('shop_id', shopId);
   if (error) throw new Error(error.message);
   const out: Referentiel = {};
   for (const r of (data ?? []) as ({ product_type: string } & TypeTariff)[]) {
-    out[r.product_type] = { code_sh: r.code_sh, libelle: r.libelle };
+    out[r.product_type] = { code_sh: r.code_sh, libelle: r.libelle, origine: r.origine };
   }
   return out;
 }
@@ -46,10 +54,10 @@ export async function loadReferentiel(supabase: SupabaseClient, shopId: string):
 type TariffByType = Record<string, { position?: string; origine?: string; tva?: number }>;
 
 /**
- * Libellés et codes SH à utiliser pour un passage.
+ * Libellés, codes SH et origines à utiliser pour un passage.
  *
- * Ouvert : ceux du référentiel, en conservant les autres champs éventuels
- * (origine, TVA) déjà portés par le passage. Clôturé : ceux figés dans le passage.
+ * Ouvert : ceux du référentiel, en conservant les autres champs éventuels (TVA)
+ * déjà portés par le passage. Clôturé : ceux figés dans le passage.
  */
 export function tarifsDuPassage(
   passage: { status: string; customs_labels?: Record<string, string> | null; tariff_by_type?: TariffByType | null },
@@ -64,7 +72,12 @@ export function tarifsDuPassage(
     if (t.libelle) customs_labels[type] = t.libelle;
     const autres = { ...(passage.tariff_by_type?.[type] ?? {}) };
     delete autres.position;
-    tariff_by_type[type] = t.code_sh ? { ...autres, position: t.code_sh } : autres;
+    delete autres.origine;
+    tariff_by_type[type] = {
+      ...autres,
+      ...(t.code_sh ? { position: t.code_sh } : {}),
+      ...(t.origine ? { origine: t.origine } : {}),
+    };
   }
   return { customs_labels, tariff_by_type };
 }

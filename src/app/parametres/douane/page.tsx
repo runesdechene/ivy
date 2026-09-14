@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { TextInput, Loader, Select } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useShop } from '@/context/ShopContext';
-import { formatSh, parseSh } from '@/lib/customs/tariffs';
+import { formatSh, parseOrigine, parseSh } from '@/lib/customs/tariffs';
 import { depuisSaisie, versSaisie, type LigneSaisie, type ObjetMateriel } from '@/lib/customs/materiel';
 import { MaterielEditor } from '@/components/customs/MaterielEditor';
 import styles from '../parametres.module.scss';
@@ -14,14 +14,17 @@ interface Row {
   /** Ce qui est affiché dans les champs, tel que tapé. */
   libelle: string;
   codeSh: string;
+  origine: string;
   /** Dernières valeurs enregistrées : on n'écrit que ce qui a changé. */
   savedLibelle: string;
   savedCodeSh: string;
+  savedOrigine: string;
   saving: boolean;
   codeError: string | null;
+  origineError: string | null;
 }
 
-const complet = (r: Row) => !!r.savedLibelle && !!r.savedCodeSh;
+const complet = (r: Row) => !!r.savedLibelle && !!r.savedCodeSh && !!r.savedOrigine;
 
 export default function DouaneSettingsPage() {
   const { currentShop } = useShop();
@@ -35,7 +38,7 @@ export default function DouaneSettingsPage() {
       const res = await fetch(`/api/settings/customs-tariffs?shopId=${currentShop.id}`);
       if (!res.ok) throw new Error();
       const data = await res.json() as {
-        rows: { product_type: string; code_sh: string | null; libelle: string | null }[];
+        rows: { product_type: string; code_sh: string | null; libelle: string | null; origine: string | null }[];
         productTypes: string[];
       };
       const byType = new Map(data.rows.map((r) => [r.product_type, r]));
@@ -43,7 +46,12 @@ export default function DouaneSettingsPage() {
         const r = byType.get(type);
         const libelle = r?.libelle ?? '';
         const codeSh = formatSh(r?.code_sh);
-        return { productType: type, libelle, codeSh, savedLibelle: libelle, savedCodeSh: codeSh, saving: false, codeError: null };
+        const origine = r?.origine ?? '';
+        return {
+          productType: type, libelle, codeSh, origine,
+          savedLibelle: libelle, savedCodeSh: codeSh, savedOrigine: origine,
+          saving: false, codeError: null, origineError: null,
+        };
       }));
     } catch {
       notifications.show({ title: 'Erreur', message: 'Impossible de charger le référentiel douanier', color: 'rust' });
@@ -137,21 +145,27 @@ export default function DouaneSettingsPage() {
       return;
     }
     const codeSh = formatSh(code);
-    if (libelle === row.savedLibelle && codeSh === row.savedCodeSh) {
-      patch(row.productType, { codeError: null, codeSh });
+    const saisieOrigine = row.origine.trim();
+    const origine = saisieOrigine ? parseOrigine(saisieOrigine) : '';
+    if (origine === null) {
+      patch(row.productType, { origineError: '2 lettres, ex. BD' });
+      return;
+    }
+    if (libelle === row.savedLibelle && codeSh === row.savedCodeSh && origine === row.savedOrigine) {
+      patch(row.productType, { codeError: null, origineError: null, codeSh, origine });
       return;
     }
 
-    patch(row.productType, { saving: true, codeError: null, codeSh });
+    patch(row.productType, { saving: true, codeError: null, origineError: null, codeSh, origine });
     try {
       const res = await fetch('/api/settings/customs-tariffs', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shopId: currentShop.id, productType: row.productType, codeSh: code ?? '', libelle }),
+        body: JSON.stringify({ shopId: currentShop.id, productType: row.productType, codeSh: code ?? '', libelle, origine }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Enregistrement impossible');
-      patch(row.productType, { savedLibelle: libelle, savedCodeSh: codeSh, libelle });
+      patch(row.productType, { savedLibelle: libelle, savedCodeSh: codeSh, savedOrigine: origine, libelle });
     } catch (err) {
       notifications.show({
         title: 'Erreur',
@@ -191,7 +205,7 @@ export default function DouaneSettingsPage() {
             Référentiel <em>douanier</em>
           </h1>
           <div className={styles.sub}>
-            Un libellé et un code SH par type de produit, repris par chaque passage en douane
+            Un libellé, un code SH et une origine par type de produit, repris par chaque passage en douane
           </div>
         </div>
       </div>
@@ -205,6 +219,7 @@ export default function DouaneSettingsPage() {
             <p className={styles.cardHeadSub}>
               Le libellé est ce que lit le douanier : un mot courant (« Sweat-shirt »), pas le nom commercial.
               Le code SH se choisit selon la matière — 6110.20 pour un sweat en coton, par exemple.
+              L&apos;origine est le pays de fabrication du vêtement (code à 2 lettres), distinct de la case 10 du 11.74.
               Un passage ouvert suit ce référentiel en direct ; un passage clôturé garde ses valeurs.
             </p>
           </div>
@@ -217,6 +232,7 @@ export default function DouaneSettingsPage() {
                   <th className={styles.th}>Type de produit</th>
                   <th className={styles.th}>Libellé douanier</th>
                   <th className={styles.th} style={{ width: 170 }}>Code SH</th>
+                  <th className={styles.th} style={{ width: 110 }}>Origine</th>
                   <th className={styles.th} style={{ width: 130 }} />
                 </tr>
               </thead>
@@ -243,6 +259,18 @@ export default function DouaneSettingsPage() {
                         onBlur={() => save(row)}
                         onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                         styles={{ input: { backgroundColor: 'var(--cream)', borderColor: 'var(--divider)', fontVariantNumeric: 'tabular-nums' } }}
+                      />
+                    </td>
+                    <td className={styles.td}>
+                      <TextInput
+                        value={row.origine}
+                        placeholder="BD"
+                        maxLength={2}
+                        error={row.origineError}
+                        onChange={(e) => patch(row.productType, { origine: e.currentTarget.value.toUpperCase(), origineError: null })}
+                        onBlur={() => save(row)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                        styles={{ input: { backgroundColor: 'var(--cream)', borderColor: 'var(--divider)', textTransform: 'uppercase' } }}
                       />
                     </td>
                     <td className={styles.td}>
