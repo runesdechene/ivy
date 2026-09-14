@@ -44,8 +44,8 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/customs/passages — ouvre un passage et FIGE l'instantané de départ.
  *
- * body: { shopId, locationId, locationName, eurToChf, vatPct?, grossWeightKg?,
- *         reference?, origin? }
+ * body: { shopId, locationId, locationName, eurToChf, departedOn?, vatPct?,
+ *         grossWeightKg?, reference?, origin? }
  *
  * Aucun prix de vente à l'entrée : seul le prix d'achat se déclare sur le 11.74.
  */
@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
     grossWeightKg?: number | null;
     reference?: string;
     origin?: string;
+    departedOn?: string;
   };
 
   const { shopId, locationId, locationName, eurToChf } = body;
@@ -67,6 +68,11 @@ export async function POST(request: NextRequest) {
   }
   if (!eurToChf || eurToChf <= 0) {
     return NextResponse.json({ error: 'Le taux EUR vers CHF est obligatoire' }, { status: 400 });
+  }
+  // Date d'entrée prévue sur le territoire : souvent différente du jour où l'on
+  // fige le stock (on charge la veille, on passe la frontière le lendemain).
+  if (body.departedOn !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(body.departedOn)) {
+    return NextResponse.json({ error: "Date d'entrée invalide (AAAA-MM-JJ)" }, { status: 400 });
   }
 
   // Un seul passage ouvert par emplacement : sinon deux instantanés se marchent dessus.
@@ -119,6 +125,8 @@ export async function POST(request: NextRequest) {
       location_id: locationId,
       location_name: locationName,
       eur_to_chf: eurToChf,
+      // A defaut, la colonne prend la date du jour.
+      ...(body.departedOn ? { departed_on: body.departedOn } : {}),
       vat_pct: body.vatPct ?? previous?.vat_pct ?? 8.1,
       gross_weight_kg: body.grossWeightKg ?? null,
       reference: body.reference ?? null,

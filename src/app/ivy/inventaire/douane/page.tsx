@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Loader, Paper, Table, Button, Group, Modal, NumberInput,
+  Loader, Paper, Table, Button, Group, Modal, NumberInput, TextInput,
   Stack, Text, Alert,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
@@ -36,6 +36,12 @@ interface ConflictInfo {
   departedOn: string;
 }
 
+/** Date du jour au format AAAA-MM-JJ, dans le fuseau du navigateur (pas en UTC). */
+function aujourdhui(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function formatDate(d: string | null): string {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -57,6 +63,7 @@ export default function DouanePage() {
   // pas encore un nombre. Le ramener à '' effaçait le champ au premier point.
   const [eurToChf, setEurToChf] = useState<number | string>('');
   const [vatPct, setVatPct] = useState<number | string>(8.1);
+  const [departedOn, setDepartedOn] = useState('');
 
   const fetchPassages = useCallback(async () => {
     if (!currentShop) return;
@@ -85,6 +92,7 @@ export default function DouanePage() {
     setConflict(null);
     setEurToChf('');
     setVatPct(8.1);
+    setDepartedOn(aujourdhui());
     modal.open();
   }, [modal]);
 
@@ -97,6 +105,14 @@ export default function DouanePage() {
       notifications.show({
         title: 'Taux manquant',
         message: 'Le taux EUR vers CHF est obligatoire : il figure sur le document.',
+        color: 'red',
+      });
+      return;
+    }
+    if (!departedOn) {
+      notifications.show({
+        title: 'Date manquante',
+        message: "La date d'entrée sur le territoire figure sur la feuille de résumé.",
         color: 'red',
       });
       return;
@@ -114,6 +130,7 @@ export default function DouanePage() {
           locationName: currentLocation.name,
           eurToChf: Number(eurToChf),
           vatPct: vatPct === '' ? 8.1 : Number(vatPct),
+          departedOn: departedOn || undefined,
         }),
       });
 
@@ -141,7 +158,7 @@ export default function DouanePage() {
     } finally {
       setCreating(false);
     }
-  }, [currentShop, currentLocation, eurToChf, vatPct, modal, router]);
+  }, [currentShop, currentLocation, eurToChf, vatPct, departedOn, modal, router]);
 
   const shopName = currentShop?.name || 'Runes de Chêne';
 
@@ -274,6 +291,14 @@ export default function DouanePage() {
             </Text>
           )}
 
+          <TextInput
+            type="date"
+            label="Date d'entrée prévue sur le territoire"
+            description="Celle qui figure sur la feuille de résumé. Le stock, lui, est figé au moment du clic."
+            value={departedOn}
+            onChange={(e) => setDepartedOn(e.currentTarget.value)}
+            required
+          />
           <NumberInput
             label="Taux du jour (1 EUR = ? CHF)"
             description="Obligatoire — le taux officiel des douanes."
