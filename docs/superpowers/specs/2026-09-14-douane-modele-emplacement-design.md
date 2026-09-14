@@ -54,8 +54,12 @@ CREATE TABLE customs_location_templates (
 );
 
 ALTER TABLE customs_declarations
-  ADD COLUMN materiel JSONB NOT NULL DEFAULT '[]'::jsonb;
+  ADD COLUMN materiel JSONB NOT NULL DEFAULT '[]'::jsonb,
+  ADD COLUMN materiel_imprime BOOLEAN NOT NULL DEFAULT TRUE;
 ```
+
+`materiel_imprime` : faute d'avoir pu tout peser ou remplir avant le départ, on peut
+retirer le matériel de la feuille imprimée sans vider la liste.
 
 RLS : membres du shop via `user_shops`, `TO authenticated`, `(SELECT auth.uid())`.
 
@@ -85,6 +89,9 @@ viennent du modèle de l'emplacement. Sans modèle : vides.
 - Colonne Caisses de la synthèse inchangée (modifiable).
 - Nouveau cadre « Matériel d'exposition », même éditeur, enregistré sur le passage
   (`PATCH`, champ `materiel`).
+- Case à cocher « Imprimer le matériel sur la feuille de résumé », cochée par défaut
+  (`materiel_imprime`). Décochée, le tableau matériel disparaît de la feuille et le bloc
+  « Matériel » de l'encadré vert est grisé ; la liste reste enregistrée.
 - Encadré vert « À recopier » : bloc « Matériel » séparé (objets, poids, valeur € / CHF).
 
 ## Feuille de résumé
@@ -92,7 +99,7 @@ viennent du modèle de l'emplacement. Sans modèle : vides.
 Sous le tableau par type : tableau **« Matériel d'exposition — non destiné à la vente,
 réexporté intégralement »**, avec les colonnes Désignation, Quantité, Poids (kg),
 Valeur estimée (€), Valeur estimée (CHF), et une ligne TOTAL. Il est absent si la
-liste est vide. Passage clôturé : mention « revenu en totalité ».
+liste est vide ou si `materiel_imprime` est faux. Passage clôturé : mention « revenu en totalité ».
 
 ## Validation
 
