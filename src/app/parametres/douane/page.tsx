@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { TextInput, Loader } from '@mantine/core';
+import { TextInput, Loader, Select, NumberInput } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useShop } from '@/context/ShopContext';
 import { formatSh, parseSh } from '@/lib/customs/tariffs';
+import { depuisSaisie, versSaisie, type LigneSaisie, type ObjetMateriel } from '@/lib/customs/materiel';
+import { MaterielEditor } from '@/components/customs/MaterielEditor';
 import styles from '../parametres.module.scss';
 
 interface Row {
@@ -53,6 +55,71 @@ export default function DouaneSettingsPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // --- Modèle par emplacement : caisses et matériel d'exposition ---
+  // Les pages Paramètres ne sont pas sous LocationProvider : on lit les
+  // emplacements directement, comme Paramètres → Commandes.
+  const [locations, setLocations] = useState<{ id: string; name: string }[]>([]);
+  const [locationId, setLocationId] = useState<string | null>(null);
+  const [caisses, setCaisses] = useState<Record<string, number | string>>({});
+  const [materiel, setMateriel] = useState<LigneSaisie[]>([]);
+  const [modeleCharge, setModeleCharge] = useState(false);
+  const [modeleSaving, setModeleSaving] = useState(false);
+
+  useEffect(() => {
+    if (!currentShop) return;
+    fetch(`/api/locations?shopId=${currentShop.id}`)
+      .then((r) => r.json())
+      .then((data: { locations?: { id: string; name: string }[] }) => {
+        const list = data.locations ?? [];
+        setLocations(list);
+        setLocationId((prev) => prev ?? list[0]?.id ?? null);
+      })
+      .catch(() => notifications.show({ title: 'Erreur', message: 'Emplacements illisibles', color: 'rust' }));
+  }, [currentShop]);
+
+  useEffect(() => {
+    if (!currentShop || !locationId) return;
+    setModeleCharge(false);
+    fetch(`/api/settings/customs-templates?shopId=${currentShop.id}&locationId=${locationId}`)
+      .then((r) => r.json())
+      .then((data: { template: { packaging_kg: Record<string, number>; materiel: ObjetMateriel[] } | null }) => {
+        setCaisses(data.template?.packaging_kg ?? {});
+        setMateriel(versSaisie(data.template?.materiel ?? []));
+      })
+      .catch(() => notifications.show({ title: 'Erreur', message: 'Modèle illisible', color: 'rust' }))
+      .finally(() => setModeleCharge(true));
+  }, [currentShop, locationId]);
+
+  const saveModele = async () => {
+    if (!currentShop || !locationId) return;
+    const m = depuisSaisie(materiel);
+    if ('erreur' in m) {
+      notifications.show({ title: 'Matériel incomplet', message: m.erreur, color: 'rust' });
+      return;
+    }
+    const packagingKg: Record<string, number> = {};
+    for (const [type, v] of Object.entries(caisses)) {
+      const n = typeof v === 'number' ? v : Number(String(v).replace(',', '.'));
+      if (String(v).trim() !== '' && Number.isFinite(n) && n >= 0) packagingKg[type] = n;
+    }
+    setModeleSaving(true);
+    try {
+      const res = await fetch('/api/settings/customs-templates', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shopId: currentShop.id, locationId, packagingKg, materiel: m.materiel }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Enregistrement impossible');
+      setMateriel(versSaisie(data.template.materiel));
+      notifications.show({ title: 'Modèle enregistré', message: 'Repris par les prochains passages de cet emplacement.', color: 'moss' });
+    } catch (err) {
+      notifications.show({ title: 'Erreur', message: err instanceof Error ? err.message : 'Enregistrement impossible', color: 'rust' });
+    } finally {
+      setModeleSaving(false);
+    }
+  };
 
   const patch = (type: string, p: Partial<Row>) =>
     setRows((prev) => prev.map((r) => (r.productType === type ? { ...r, ...p } : r)));
@@ -194,6 +261,59 @@ export default function DouaneSettingsPage() {
             <p className={styles.emptyStateText}>Aucun type de produit trouvé.</p>
           </div>
         )}
+      </div>
+
+      <div className={styles.card} style={{ marginTop: 28 }}>
+        <div className={styles.cardHead}>
+          <div>
+            <h3 className={styles.cardHeadTitle}>Modèle par emplacement</h3>
+            <p className={styles.cardHeadSub}>
+              Copié dans chaque nouveau passage de cet emplacement, puis ajustable sur le passage.
+              Poids et valeur du matériel s&apos;entendent pour UN objet ; la valeur est une estimation en euros.
+            </p>
+          </div>
+          <Select
+            data={locations.map((l) => ({ value: l.id, label: l.name }))}
+            value={locationId}
+            onChange={setLocationId}
+            allowDeselect={false}
+            placeholder="Emplacement"
+            w={240}
+          />
+        </div>
+        <div className={styles.cardBody}>
+          {!locationId ? (
+            <p className={styles.emptyStateText}>Choisis un emplacement.</p>
+          ) : !modeleCharge ? (
+            <Loader size="sm" />
+          ) : (
+            <>
+              <h4 className={styles.cardHeadTitle} style={{ fontSize: 14 }}>Caisses (kg) par type</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8, marginBottom: 20 }}>
+                {rows.map((r) => (
+                  <NumberInput
+                    key={r.productType}
+                    label={r.productType}
+                    size="xs"
+                    value={caisses[r.productType] ?? ''}
+                    onChange={(v) => setCaisses((prev) => ({ ...prev, [r.productType]: v }))}
+                    min={0}
+                    decimalScale={1}
+                    allowedDecimalSeparators={['.', ',']}
+                    suffix=" kg"
+                  />
+                ))}
+              </div>
+              <h4 className={styles.cardHeadTitle} style={{ fontSize: 14 }}>Matériel d&apos;exposition</h4>
+              <MaterielEditor lignes={materiel} onChange={setMateriel} />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+                <button className={styles.primaryButton} onClick={saveModele} disabled={modeleSaving}>
+                  {modeleSaving ? 'Enregistrement…' : 'Enregistrer le modèle'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
