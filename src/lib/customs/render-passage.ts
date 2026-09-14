@@ -459,13 +459,15 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
     html += `<p style="font-size:7.5pt;color:#333;margin-top:2mm">
      <b>Tous les articles sont répartis dans ${caisses.nombre} caisse${caisses.nombre > 1 ? 's' : ''}</b>
      (${listeCaisses.map((o) => `${o.quantite} × ${esc(o.designation)}`).join(', ')}),
-     soit ${kgv(caisses.totalKg)} kg compris dans le poids brut approximatif.</p>`;
+     soit ${kgv(caisses.totalKg)} kg compris dans le poids brut approximatif
+     (le poids des caisses et des articles peut varier légèrement en fonction de leur nature,
+     malgré un effort de mesure).</p>`;
   }
 
   if (!closed) {
     html += `<p style="font-size:7.5pt;color:#333;margin-top:2mm">
-     Les quatre colonnes de droite se remplissent automatiquement à la clôture du passage,
-     en comparant l'instantané de départ au stock constaté au retour.
+     Les quatre colonnes de droite sont à compléter au retour, avec le stock constaté
+     au passage de la frontière.
      ${caisses.source === 'types'
        ? 'Le poids brut d\'un type vaut son poids net plus le poids de ses caisses.'
        : caisses.source === 'aucune' ? 'Le poids brut par type est réparti au prorata du poids net.' : ''}</p>`;

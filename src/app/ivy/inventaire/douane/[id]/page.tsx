@@ -1186,7 +1186,9 @@ export default function DouanePassageDetailPage() {
           {summary.caissesSource === 'caisses'
             ? <>Tous les articles sont répartis dans <b>{summary.nombreCaisses} caisse{summary.nombreCaisses > 1 ? 's' : ''}</b>
                 {' '}({caissesEnregistrees.map((o) => `${o.quantite} × ${o.designation}`).join(', ')}),
-                soit {totauxCaisses.poidsKg.toFixed(1)} kg compris dans le poids brut approximatif. </>
+                soit {totauxCaisses.poidsKg.toFixed(1)} kg compris dans le poids brut approximatif
+                (le poids des caisses et des articles peut varier légèrement en fonction de leur nature,
+                malgré un effort de mesure). </>
             : 'Le poids brut d\'une ligne vaut son poids net plus celui de ses caisses. '}
           Les caisses sont des fournitures cochées « Caisse » dans{' '}
           <Anchor component={Link} href="/parametres/douane" size="xs">Paramètres → Douane</Anchor>
