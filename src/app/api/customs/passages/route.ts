@@ -44,8 +44,10 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/customs/passages — ouvre un passage et FIGE l'instantané de départ.
  *
- * body: { shopId, locationId, locationName, eurToChf, vatPct?, grossWeightKg?,
- *         reference?, origin?, pricesChfTtc? }
+ * body: { shopId, locationId, locationName, eurToChf, departedOn?, vatPct?,
+ *         grossWeightKg?, reference?, origin? }
+ *
+ * Aucun prix de vente à l'entrée : seul le prix d'achat se déclare sur le 11.74.
  */
 export async function POST(request: NextRequest) {
   const body = (await request.json()) as {
@@ -57,7 +59,7 @@ export async function POST(request: NextRequest) {
     grossWeightKg?: number | null;
     reference?: string;
     origin?: string;
-    pricesChfTtc?: Record<string, number>;
+    departedOn?: string;
   };
 
   const { shopId, locationId, locationName, eurToChf } = body;
@@ -66,6 +68,11 @@ export async function POST(request: NextRequest) {
   }
   if (!eurToChf || eurToChf <= 0) {
     return NextResponse.json({ error: 'Le taux EUR vers CHF est obligatoire' }, { status: 400 });
+  }
+  // Date d'entrée prévue sur le territoire : souvent différente du jour où l'on
+  // fige le stock (on charge la veille, on passe la frontière le lendemain).
+  if (body.departedOn !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(body.departedOn)) {
+    return NextResponse.json({ error: "Date d'entrée invalide (AAAA-MM-JJ)" }, { status: 400 });
   }
 
   // Un seul passage ouvert par emplacement : sinon deux instantanés se marchent dessus.
@@ -93,6 +100,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Aucun stock à cet emplacement' }, { status: 400 });
   }
 
+  // Ce qui ne change pas d'un voyage a l'autre se reprend du passage precedent :
+  // identite et cases fixes du 11.74. Sans ca, tout etait a ressaisir le jour du
+  // passage, au guichet. Ce qui est propre au voyage (dates, titre du festival,
+  // adresse d'exposition, n° 11.74) repart vide. Les libelles et codes SH viennent
+  // du referentiel douanier ; les caisses et le materiel, du modele de l'emplacement.
+  const { data: previous } = await supabase
+    .from('customs_declarations')
+    .select('vat_pct, origin, origine_declaree, doc_sous_titre, raison_sociale, nom_prenom, adresse_siege, bureau_douane, regime_valeur, methode_repartition, designation_formulaire, tarif_formulaire')
+    .eq('shop_id', shopId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  // Caisses et materiel : copies du modele de CET emplacement (Parametres → Douane),
+  // puis ajustables sur le passage. Sans modele, le passage part vide.
+  const { data: modele } = await supabase
+    .from('customs_location_templates')
+    .select('packaging_kg, materiel')
+    .eq('shop_id', shopId)
+    .eq('location_id', locationId)
+    .maybeSingle();
+
   const { data: passage, error } = await supabase
     .from('customs_declarations')
     .insert({
@@ -100,11 +129,25 @@ export async function POST(request: NextRequest) {
       location_id: locationId,
       location_name: locationName,
       eur_to_chf: eurToChf,
-      vat_pct: body.vatPct ?? 8.1,
+      // A defaut, la colonne prend la date du jour.
+      ...(body.departedOn ? { departed_on: body.departedOn } : {}),
+      vat_pct: body.vatPct ?? previous?.vat_pct ?? 8.1,
       gross_weight_kg: body.grossWeightKg ?? null,
       reference: body.reference ?? null,
-      origin: body.origin || 'BD',
-      prices_chf_ttc: body.pricesChfTtc ?? {},
+      origin: body.origin || previous?.origin || 'BD',
+      origine_declaree: previous?.origine_declaree || 'FR',
+      prices_chf_ttc: {},
+      packaging_kg: modele?.packaging_kg ?? {},
+      materiel: modele?.materiel ?? [],
+      doc_sous_titre: previous?.doc_sous_titre ?? null,
+      raison_sociale: previous?.raison_sociale ?? null,
+      nom_prenom: previous?.nom_prenom ?? null,
+      adresse_siege: previous?.adresse_siege ?? null,
+      bureau_douane: previous?.bureau_douane ?? null,
+      regime_valeur: previous?.regime_valeur ?? 'NEGOCE',
+      methode_repartition: previous?.methode_repartition ?? 'VALEUR',
+      designation_formulaire: previous?.designation_formulaire ?? null,
+      tarif_formulaire: previous?.tarif_formulaire ?? null,
     })
     .select('id')
     .single();
@@ -133,5 +176,6 @@ export async function POST(request: NextRequest) {
     pieces: items.reduce((s, i) => s + i.qty_departed, 0),
     // Ecartes de l'instantane, mais jamais en silence : l'ecran les affiche.
     archivesExclus,
+    sansModele: !modele,
   });
 }

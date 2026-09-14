@@ -6,9 +6,13 @@
  * prix, poids brut) viennent du passage et restent modifiables ; l'instantané,
  * lui, ne bouge jamais.
  *
- * Passage ouvert  → formulaire 1187 (importation temporaire).
- * Passage clôturé → 11.74, avec la réconciliation parti / vendu / revenu.
+ * Passage ouvert  → formulaire 11.74 (admission temporaire, à l'entrée).
+ * Passage clôturé → 11.87 (apurement, au retour), avec la réconciliation
+ * parti / vendu / revenu. Les ventes, elles, se déclarent ensuite sur WebDec.
  */
+
+import { formatSh } from './tariffs';
+import { caissesParType, separerFournitures, totauxMateriel, type ObjetMateriel } from './materiel';
 
 export interface PassageRow {
   shop_id: string;
@@ -20,7 +24,10 @@ export interface PassageRow {
   eur_to_chf: number;
   vat_pct: number;
   gross_weight_kg: number | null;
+  /** Origine unique du textile, d'avant l'origine par type : simple repli. */
   origin: string;
+  /** Pays d'origine inscrit en case 10 du 11.74 (FR). */
+  origine_declaree?: string | null;
   prices_chf_ttc: Record<string, number>;
   /** Libelle douanier par type : { "Le Confort": "T-shirt coton" }. */
   customs_labels?: Record<string, string>;
@@ -35,7 +42,10 @@ export interface PassageRow {
   adresse_exposition?: string | null;
   date_exposition?: string | null;
   date_retour_prevue?: string | null;
-  date_apurement?: string | null;
+  /** Matériel d'exposition : hors marchandise, réexporté intégralement. */
+  materiel?: ObjetMateriel[];
+  /** Faux : le matériel reste enregistré mais ne s'imprime pas. */
+  materiel_imprime?: boolean;
   /** Position tarifaire, origine et TVA par type. Le code SH vient d'ici. */
   tariff_by_type?: Record<string, { position?: string; origine?: string; tva?: number }>;
 }
@@ -147,10 +157,12 @@ export function renderPassage(
   const estIncomplete = (it: PassageItem) =>
     !it.weight_grams || it.unit_cost_textile === null || !it.unit_price_eur;
 
-  const packaging = passage.packaging_kg ?? {};
   const tariffs = passage.tariff_by_type ?? {};
-  const shOf = (type: string) => tariffs[type]?.position ?? '';
-  const hasPackaging = Object.values(packaging).some(v => Number(v) > 0);
+  // Imprimé comme sur le formulaire : 6109.1000, pas 61091000.
+  const shOf = (type: string) => formatSh(tariffs[type]?.position);
+  // Origine du textile par type (référentiel) ; repli sur l'origine unique des
+  // passages antérieurs à l'origine par type.
+  const origineOf = (type: string) => tariffs[type]?.origine || passage.origin || '';
 
   const num = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
   // Poids arrondis au dixieme de kilo : trois decimales n'apportent rien a un
@@ -218,7 +230,9 @@ export function renderPassage(
     }
     if (!it.weight_grams) problems.noWeight++;
     if (it.unit_cost_textile === null) problems.noRule++;
-    if (!it.unit_price_eur) problems.noPrice++;
+    // Le prix de vente n'a rien a faire a l'entree : seul le prix d'achat se
+    // declare. Son absence ne compte donc qu'au retour.
+    if (closed && !it.unit_price_eur) problems.noPrice++;
 
     const t = it.product_type ?? '(sans type)';
     const agg = byType.get(t) ?? { qty: 0, netG: 0, chf: 0, ret: 0, sold: 0, netRetG: 0, chfRet: 0 };
@@ -238,10 +252,20 @@ export function renderPassage(
   }
 
   const globalGross = passage.gross_weight_kg !== null ? Number(passage.gross_weight_kg) : null;
-  // Le brut d'un type = son net + le poids de SES caisses. On ne retombe sur le
-  // poids brut global (reparti au prorata) que si aucune caisse n'est renseignee.
+  // Caisses : les fournitures cochées « caisse », en un seul total — une caisse
+  // mélange les types, on ne l'attribue à aucun. Passage ancien : ses caisses par
+  // type, et le brut d'un type = son net + ses caisses. On ne retombe sur le poids
+  // brut global (réparti au prorata) que si aucune caisse n'est renseignée.
+  const caisses = caissesParType(passage.materiel ?? [], passage.packaging_kg ?? {});
+  /** Brut par ligne : seulement quand les caisses sont attribuées à un type. */
+  const brutParLigne = caisses.source !== 'caisses';
+  const packaging = caisses.parType;
+  const hasPackaging = caisses.source !== 'aucune';
+  const { caisses: listeCaisses, materiel: materielExpo } = separerFournitures(passage.materiel ?? []);
   const packagingOf = (type: string) => Number(packaging[type]) || 0;
-  const totalPackaging = [...byType.keys()].reduce((n, t) => n + packagingOf(t), 0);
+  const totalPackaging = brutParLigne
+    ? [...byType.keys()].reduce((n, t) => n + packagingOf(t), 0)
+    : caisses.totalKg;
   const grossKg = hasPackaging ? netG / 1000 + totalPackaging : globalGross;
   const grossRatio = !hasPackaging && globalGross !== null && netG > 0 ? globalGross / (netG / 1000) : null;
   /**
@@ -276,8 +300,8 @@ export function renderPassage(
       ? typeNetG / 1000 + packagingOf(type)
       : grossRatio !== null ? (typeNetG / 1000) * grossRatio : null;
   const titre = closed
-    ? 'Réexportation après vente incertaine — formulaire 11.74'
-    : 'Importation temporaire pour vente incertaine — formulaire 1187';
+    ? "Apurement de l'admission temporaire — formulaire 11.87"
+    : 'Admission temporaire pour vente incertaine — formulaire 11.74';
 
   /**
    * Apurement. Ce qui n'est pas réexporté reste en Suisse : la TVA due porte sur
@@ -313,12 +337,13 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
    ["Dates d'exposition", esc(passage.date_exposition)],
    ["Entrée sur le territoire", esc(passage.departed_on)],
    ['Retour prévu', esc(passage.date_retour_prevue)],
-   ...(passage.date_apurement ? [["Apurement", esc(passage.date_apurement)]] : []),
    ...(closed ? [['Retour effectif', esc(passage.returned_on)]] : []),
-   ['Référence 1187', esc(passage.reference)],
+   ['N° 11.74', esc(passage.reference)],
    ['Taux', `1 EUR = ${rate} CHF`],
    ['TVA suisse', `${passage.vat_pct} %`],
-   ['Origine', esc(passage.origin)],
+   // Le pays inscrit en case 10 du formulaire. L'origine du textile, elle, est par
+   // type : colonne Origine du tableau.
+   ["Pays d'origine de l'import", esc(passage.origine_declaree)],
  ].filter(([, v]) => v).map(([k, v]) => `<span class="chip"><b>${k}</b> ${v}</span>`).join('')}
 </div>
 
@@ -346,15 +371,14 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
       la contre-prestation réellement encaissée, ramenée à l'unité. Ils n'entrent pas dans la valeur
       en douane — qui reste le prix d'achat — mais ce sont eux qui déterminent la base imposable et
       la TVA due à l'apurement.`
-   : `Les prix de vente ci-dessous ne servent qu'à situer la marchandise ;
-      ils n'entrent pas dans la valeur déclarée.`}
+   : ''}
 </p>
 
 <h2>Détail par type de produit</h2>
 <table><thead>
-<tr><th colspan="${closed ? 10 : 11}">Départ</th><th colspan="${closed ? 8 : 7}" class="retour">Retour</th></tr>
+<tr><th colspan="11">Départ</th><th colspan="${closed ? 8 : 4}" class="retour">Retour</th></tr>
 <tr>
- <th class="l">Objet</th><th class="l">Code SH</th><th class="l">Type Ivy</th><th>Quantité</th><th>Poids net (kg)</th><th>Caisses (kg)</th><th>Poids brut (kg)</th>
+ <th class="l">Objet</th><th class="l">Code SH</th><th class="l">Origine</th><th class="l">Type Ivy</th><th>Quantité</th><th>Poids net (kg)</th><th>Caisses (kg)</th><th>Poids brut (kg)</th>
  <th>Valeur douanière au départ<br>HT (EUR)</th><th>Valeur douanière au départ<br>HT (CHF)</th><th>TVA import CHF</th>
  ${closed
     // Une fois cloture, le prix pratique n'est plus une indication de depart :
@@ -364,14 +388,16 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
       '<th>Valeur restante en douane (CHF)</th>' +
       '<th>Prix de vente moyen<br>pondéré CHF TTC</th>' +
       '<th>CA vendu TTC (CHF)</th><th>Base imposable HT (CHF)</th><th>TVA due (CHF)</th>'
-    : '<th>Prix de vente unitaire<br>CHF TTC</th>' +
-      '<th class="tofill retour">Qté restante</th><th class="tofill">Qté vendue</th><th class="tofill">Poids restant (kg)</th>' +
-      '<th class="tofill">Valeur restante en douane (CHF)</th><th class="tofill">CA vendu TTC (CHF)</th><th class="tofill">Base imposable HT (CHF)</th><th class="tofill">TVA due (CHF)</th>'}
+    // A l'entree, aucun prix de vente : seul le prix d'achat se declare. Les
+    // ventes se declarent apres le retour, sur WebDec.
+    : '<th class="tofill retour">Qté restante</th><th class="tofill">Qté vendue</th><th class="tofill">Poids restant (kg)</th>' +
+      '<th class="tofill">Valeur restante en douane (CHF)</th>'}
 </tr></thead><tbody>`;
 
   for (const [objet, o] of [...byObjet.entries()].sort((a, b) => b[1].qty - a[1].qty)) {
     const pack = packagingOfObjet(o.types);
-    const brut = hasPackaging ? o.netG / 1000 + pack : null;
+    // Caisses-fournitures : pas de brut par type, seulement au total.
+    const brut = hasPackaging && brutParLigne ? o.netG / 1000 + pack : null;
     const reste = o.ret;
     const vendu = Math.max(0, o.qty - o.ret);
     const unitG = o.qty > 0 ? o.netG / o.qty : 0;
@@ -387,8 +413,9 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
     })();
     html += `<tr><td class="l"><b>${esc(labelOf(objet))}</b></td>` +
       `<td class="l">${shOf(objet) || '<b style="color:#b00">—</b>'}</td>` +
+      `<td class="l">${esc(origineOf(objet)) || '<b style="color:#b00">—</b>'}</td>` +
       `<td class="l">${esc(objet)}</td><td>${o.qty}</td><td>${kg(o.netG)}</td>` +
-      `<td>${hasPackaging ? kgv(pack) : '—'}</td>` +
+      `<td>${hasPackaging && brutParLigne ? kgv(pack) : '—'}</td>` +
       `<td>${brut !== null ? kgv(brut) : '—'}</td>` +
       `<td>${num(o.chf / rate)}</td><td>${num(o.chf)}</td><td>${num(vatOnImport(o.chf))}</td>` +
       (closed
@@ -403,34 +430,47 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
               `<td>${prixVenteTtc > 0 ? num(prixVenteTtc) : '<b style="color:#b00">—</b>'}</td>` +
               `<td>${num(caTtc)}</td><td>${num(base)}</td><td>${num(caTtc - base)}</td>`;
           })()
-        : `<td>${prixVenteTtc > 0 ? num(prixVenteTtc) : '<b style="color:#b00">—</b>'}</td>` +
-          `<td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
+        : `<td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
       `</tr>`;
   }
 
-  html += `</tbody><tfoot><tr><td class="l" colspan="3">TOTAL</td><td>${pieces}</td><td>${kg(netG)}</td>` +
+  html += `</tbody><tfoot><tr><td class="l" colspan="4">TOTAL</td><td>${pieces}</td><td>${kg(netG)}</td>` +
     `<td>${hasPackaging ? kgv(totalPackaging) : '—'}</td>` +
     `<td>${grossKg !== null ? kgv(grossKg) : '—'}</td>` +
     `<td>${num(customsChf / rate)}</td><td>${num(customsChf)}</td><td>${num(vatOnImport(customsChf))}</td>` +
     (closed
       ? (() => {
-          // Prix moyen toutes lignes confondues : le CA rapporte aux pieces
-          // vendues. C'est la moyenne que le douanier refera de tete.
-          const prixMoyen = venduTotal > 0 ? caTtcTotal / venduTotal : 0;
+          // PAS de prix moyen sur la ligne TOTAL. Une moyenne n'est pas une somme :
+          // remultipliee par la quantite vendue, elle ne redonne jamais le CA. La
+          // case affichait 40.10 pour 125 pieces, soit 5012.50, face a un CA de
+          // 5012.00 — et un douanier qui refait ce calcul conclut que le document
+          // ne tient pas debout. Toute case de cette ligne doit etre une somme
+          // verifiable, ou rester vide.
           return `<td class="retour">${returned}</td><td>${venduTotal}</td>` +
             `<td>${kg(netRetG)}</td>` +
             `<td>${num(chfRet)}</td>` +
-            `<td>${num(prixMoyen)}</td>` +
+            `<td></td>` +
             `<td>${num(caTtcTotal)}</td><td>${num(baseTotale)}</td><td>${num(tvaDue)}</td>`;
         })()
-      : `<td></td><td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
+      : `<td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
     `</tr></tfoot></table>`;
+
+  if (caisses.source === 'caisses') {
+    html += `<p style="font-size:7.5pt;color:#333;margin-top:2mm">
+     <b>Tous les articles sont répartis dans ${caisses.nombre} caisse${caisses.nombre > 1 ? 's' : ''}</b>
+     (${listeCaisses.map((o) => `${o.quantite} × ${esc(o.designation)}`).join(', ')}),
+     soit ${kgv(caisses.totalKg)} kg compris dans le poids brut approximatif
+     (le poids des caisses et des articles peut varier légèrement en fonction de leur nature,
+     malgré un effort de mesure).</p>`;
+  }
 
   if (!closed) {
     html += `<p style="font-size:7.5pt;color:#333;margin-top:2mm">
-     Les sept colonnes de droite se remplissent automatiquement à la clôture du passage,
-     en comparant l'instantané de départ au stock constaté au retour. Rien n'est à saisir à la main.
-     Le poids brut par type est réparti au prorata du poids net.</p>`;
+     Les quatre colonnes de droite sont à compléter au retour, avec le stock constaté
+     au passage de la frontière.
+     ${caisses.source === 'types'
+       ? 'Le poids brut d\'un type vaut son poids net plus le poids de ses caisses.'
+       : caisses.source === 'aucune' ? 'Le poids brut par type est réparti au prorata du poids net.' : ''}</p>`;
   } else if (closed) {
     html += `<p style="font-size:7.5pt;color:#333;margin-top:2mm">
      <b>TVA réellement due</b> : elle porte sur la contre-prestation encaissée en Suisse,
@@ -440,6 +480,27 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
      « Vendu » vaut ici « parti − revenu », ce qui a réellement quitté le stock ; le relevé de caisse,
      lui, totalise ${sold} pièce(s).</p>`;
   }
+  // ---------- Matériel d'exposition ----------
+  // Tableau à part : il n'entre dans AUCUN total de la marchandise ci-dessus. Les
+  // caisses n'y figurent pas — leur poids est déjà dans le brut de la marchandise.
+  const materiel = passage.materiel_imprime === false ? [] : materielExpo;
+  if (materiel.length > 0) {
+    const tm = totauxMateriel(materiel);
+    html += `<h2>Matériel d'exposition — non destiné à la vente, réexporté intégralement</h2>
+<table><thead><tr>
+ <th class="l">Désignation</th><th>Quantité</th><th>Poids (kg)</th>
+ <th>Valeur estimée (EUR)</th><th>Valeur estimée (CHF)</th>${closed ? '<th class="retour">Retour</th>' : ''}
+</tr></thead><tbody>${materiel.map((o) => `<tr>
+ <td class="l">${esc(o.designation)}</td><td>${o.quantite}</td><td>${kgv(o.quantite * o.poids_kg)}</td>
+ <td>${num(o.quantite * o.valeur_eur)}</td><td>${num(o.quantite * o.valeur_eur * rate)}</td>
+ ${closed ? '<td class="retour">en totalité</td>' : ''}
+</tr>`).join('')}</tbody>
+<tfoot><tr><td class="l">TOTAL</td><td>${tm.objets}</td><td>${kgv(tm.poidsKg)}</td>
+ <td>${num(tm.valeurEur)}</td><td>${num(tm.valeurEur * rate)}</td>${closed ? '<td class="retour"></td>' : ''}</tr></tfoot></table>
+<p style="font-size:7.5pt;color:#333;margin-top:2mm">Valeurs estimées par le déclarant. Ce matériel
+ n'entre pas dans les totaux de la marchandise ci-dessus.</p>`;
+  }
+
   if (closed && ecartLignes.length > 0) {
     // On n'explique que le sens observe. Servir les deux causes a chaque fois
     // obligeait le douanier a deviner laquelle s'appliquait a la ligne devant lui.
@@ -513,7 +574,7 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
   for (const [objet, modeles] of [...parObjet.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
     const lignes = [...modeles.values()].sort((a, b) => b.qty - a.qty);
     const t = byObjet.get(objet)!;
-    const brut = hasPackaging ? t.netG / 1000 + packagingOfObjet(t.types) : null;
+    const brut = hasPackaging && brutParLigne ? t.netG / 1000 + packagingOfObjet(t.types) : null;
 
     html += `<div class="sheet${lignes.length > 22 ? ' dense' : ''}">
 <h1>Annexe — ${esc(labelOf(objet))}</h1>
@@ -524,7 +585,7 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
  <b>Quantité totale</b> ${t.qty} pièce(s)<br>
  <b>Poids net / brut</b> ${kg(t.netG)} kg / ${brut !== null ? kgv(brut) : '—'} kg<br>
  <b>Valeur en douane</b> ${num(t.chf / rate)} EUR &nbsp;/&nbsp; ${num(t.chf)} CHF<br>
- <b>Origine</b> ${esc(passage.origin)} &nbsp;·&nbsp; ${esc(passage.departed_on)}
+ <b>Origine</b> ${esc(origineOf(objet)) || '—'} &nbsp;·&nbsp; ${esc(passage.departed_on)}
 </div>
 <table><thead><tr>
  <th class="l">Photo</th><th class="l">Modèle</th><th>Quantité</th>

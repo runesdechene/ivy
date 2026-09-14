@@ -6,7 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
  * Au clic, on fige l'état du stock d'un emplacement : quelles variantes, en
  * quelle quantité, avec quels coûts décomposés et quel poids. Rien ne le
  * modifie ensuite — même si le stock bouge, même si un produit est supprimé.
- * C'est ce qui rendra le formulaire 11.74 exact au retour.
+ * C'est ce qui rendra le formulaire 11.87 exact au retour.
  */
 
 export interface SnapshotItem {

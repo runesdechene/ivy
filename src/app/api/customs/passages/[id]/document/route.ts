@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { renderPassage, type PassageRow, type PassageItem } from '@/lib/customs/render-passage';
+import { resoudrePassage } from '@/lib/customs/modele';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
   const { data: passage, error } = await supabase
     .from('customs_declarations')
-    .select('shop_id, location_name, status, reference, departed_on, returned_on, eur_to_chf, vat_pct, gross_weight_kg, origin, prices_chf_ttc, customs_labels, packaging_kg, doc_titre, doc_sous_titre, raison_sociale, nom_prenom, adresse_siege, adresse_exposition, date_exposition, date_retour_prevue, date_apurement, tariff_by_type')
+    .select('shop_id, location_id, location_name, status, reference, departed_on, returned_on, eur_to_chf, vat_pct, gross_weight_kg, origin, origine_declaree, prices_chf_ttc, customs_labels, packaging_kg, doc_titre, doc_sous_titre, raison_sociale, nom_prenom, adresse_siege, adresse_exposition, date_exposition, date_retour_prevue, tariff_by_type, materiel, materiel_imprime')
     .eq('id', id)
     .maybeSingle();
 
@@ -51,7 +52,17 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     return NextResponse.json({ error: 'Ce passage ne contient aucune ligne' }, { status: 400 });
   }
 
-  const html = renderPassage(passage as PassageRow, items, { onlySummary });
+  // Passage ouvert : libellés, codes SH, caisses et matériel lus en direct dans
+  // Paramètres → Douane. Clôturé : figés.
+  let row: PassageRow;
+  try {
+    row = (await resoudrePassage(supabase, passage)) as PassageRow;
+  } catch (err) {
+    console.error('GET document (référentiel / modèle):', err);
+    return NextResponse.json({ error: 'Lecture des paramètres douaniers impossible' }, { status: 500 });
+  }
+
+  const html = renderPassage(row, items, { onlySummary });
 
   return new NextResponse(html, {
     status: 200,

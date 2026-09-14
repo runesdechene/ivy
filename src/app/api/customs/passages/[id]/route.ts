@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { resoudrePassage } from '@/lib/customs/modele';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -34,7 +35,14 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     if (data.length < 1000) break;
   }
 
-  return NextResponse.json({ passage, items });
+  // Ouvert : libellés, codes SH, caisses et matériel lus en direct dans Paramètres → Douane.
+  // Clôturé : figés.
+  try {
+    return NextResponse.json({ passage: await resoudrePassage(supabase, passage), items });
+  } catch (err) {
+    console.error('GET passage (référentiel / modèle):', err);
+    return NextResponse.json({ error: 'Lecture des paramètres douaniers impossible' }, { status: 500 });
+  }
 }
 
 /**
@@ -60,15 +68,21 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   ] as const) {
     if (typeof body[key] === 'string') patch[col] = body[key];
   }
+  // Pas de date d'apurement saisie : c'est la date du retour effectif, fixée à la clôture.
   for (const [key, col] of [
     ['dateRetourPrevue', 'date_retour_prevue'],
-    ['dateApurement', 'date_apurement'],
   ] as const) {
     if (typeof body[key] === 'string' || body[key] === null) patch[col] = body[key] || null;
   }
   if (typeof body.docTitre === 'string') patch.doc_titre = body.docTitre;
   if (typeof body.docSousTitre === 'string') patch.doc_sous_titre = body.docSousTitre;
-  if (typeof body.origin === 'string' && body.origin) patch.origin = body.origin;
+  if (typeof body.origin === 'string' && body.origin) patch.origin = body.origin.trim().toUpperCase();
+  if (typeof body.origineDeclaree === 'string' && body.origineDeclaree) {
+    patch.origine_declaree = body.origineDeclaree.trim().toUpperCase();
+  }
+  // Cases 17 et 20 du 11.74
+  if (typeof body.designationFormulaire === 'string') patch.designation_formulaire = body.designationFormulaire.trim() || null;
+  if (typeof body.tarifFormulaire === 'string') patch.tarif_formulaire = body.tarifFormulaire.trim() || null;
   if (typeof body.departedOn === 'string') patch.departed_on = body.departedOn;
   if (body.customsLabels && typeof body.customsLabels === 'object') {
     const clean: Record<string, string> = {};
@@ -115,14 +129,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     }
     patch.tariff_by_type = clean;
   }
-  if (body.packagingKg && typeof body.packagingKg === 'object') {
-    const clean: Record<string, number> = {};
-    for (const [k, v] of Object.entries(body.packagingKg as Record<string, unknown>)) {
-      const n = Number(v);
-      if (Number.isFinite(n) && n >= 0) clean[k] = n;
-    }
-    patch.packaging_kg = clean;
-  }
+  // Caisses et matériel ne se modifient plus ici : un passage ouvert les lit dans le
+  // modèle de l'emplacement (Paramètres → Douane), un passage clôturé les a figés.
+  // Seul le choix de les imprimer appartient au voyage.
+  if (typeof body.materielImprime === 'boolean') patch.materiel_imprime = body.materielImprime;
   if (body.pricesChfTtc && typeof body.pricesChfTtc === 'object') {
     const clean: Record<string, number> = {};
     for (const [k, v] of Object.entries(body.pricesChfTtc as Record<string, unknown>)) {
@@ -143,7 +153,13 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     console.error('PATCH /api/customs/passages/[id]:', error);
     return NextResponse.json({ error: 'Enregistrement impossible' }, { status: 500 });
   }
-  return NextResponse.json({ passage: data });
+  // Même lecture que le GET : sans ça, la page perdait libellés, caisses et matériel
+  // à chaque enregistrement.
+  try {
+    return NextResponse.json({ passage: await resoudrePassage(supabase, data) });
+  } catch {
+    return NextResponse.json({ passage: data });
+  }
 }
 
 /**
@@ -159,13 +175,23 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
 
   const { data: passage } = await supabase
     .from('customs_declarations')
-    .select('id, shop_id, location_id, status, departed_on')
+    .select('id, shop_id, location_id, status, departed_on, customs_labels, tariff_by_type, packaging_kg, materiel')
     .eq('id', id)
     .maybeSingle();
 
   if (!passage) return NextResponse.json({ error: 'Passage introuvable' }, { status: 404 });
   if (passage.status === 'closed') {
     return NextResponse.json({ error: 'Ce passage est déjà clôturé' }, { status: 409 });
+  }
+
+  // Lu AVANT toute écriture : sans référentiel ni modèle, on ne clôture pas — un
+  // passage clôturé ne pourrait plus recevoir ses codes SH, ses caisses, son matériel.
+  let figes;
+  try {
+    figes = await resoudrePassage(supabase, passage);
+  } catch (err) {
+    console.error('clôture, référentiel / modèle:', err);
+    return NextResponse.json({ error: 'Lecture des paramètres douaniers impossible' }, { status: 500 });
   }
 
   const today = new Date().toISOString().slice(0, 10);
@@ -271,6 +297,11 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       returned_on: today,
       return_snapshot_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      // Figés ici : le passage clôturé ne suit plus ni le référentiel ni le modèle.
+      customs_labels: figes.customs_labels,
+      tariff_by_type: figes.tariff_by_type,
+      packaging_kg: figes.packaging_kg,
+      materiel: figes.materiel,
     })
     .eq('id', id);
 
