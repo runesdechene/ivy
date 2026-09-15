@@ -172,6 +172,8 @@ export function renderPassage(
   // douanier, et l'entier ecraserait les petites lignes (0,72 kg -> 1 kg).
   const kg = (g: number) => (g / 1000).toFixed(1);
   const kgv = (v: number) => v.toFixed(1);
+  /** Poids sorti = poids parti − poids revenu, tels qu'AFFICHÉS : la case se vérifie de tête. */
+  const kgSorti = (partiG: number, revenuG: number) => kgv(Math.max(0, Number(kg(partiG)) - Number(kg(revenuG))));
 
   /**
    * Valeur en douane : le prix d'ACHAT, pas le prix de vente. C'est le coût du
@@ -378,7 +380,7 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
 
 <h2>Détail par type de produit</h2>
 <table><thead>
-<tr><th colspan="11">Départ</th><th colspan="${closed ? (avecPrixMoyen ? 7 : 6) : 5}" class="retour">Retour</th></tr>
+<tr><th colspan="11">Départ</th><th colspan="${closed ? (avecPrixMoyen ? 8 : 7) : 6}" class="retour">Retour</th></tr>
 <tr>
  <th class="l">Objet</th><th class="l">Code SH</th><th class="l">Origine</th><th class="l">Type Ivy</th><th>Quantité</th><th>Poids net (kg)</th><th>Caisses (kg)</th><th>Poids brut (kg)</th>
  <th>Valeur douanière au départ<br>HT (EUR)</th><th>Valeur douanière au départ<br>HT (CHF)</th><th>TVA import CHF</th>
@@ -387,14 +389,15 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
     // Remultiplie par la quantite, il peut s'ecarter du CA de quelques centimes ;
     // le CA, lui, reste la somme exacte. La TVA n'est donnee qu'au total : reportee
     // par type, l'arrondi de chaque ligne ne se recalculait pas.
-    ? `<th class="retour">Qté restante</th><th>Qté sortie</th><th>dont offertes</th><th>Poids restant (kg)</th>` +
+    ? `<th class="retour">Qté restante</th><th>Qté sortie</th><th>dont offertes</th><th>Poids restant (kg)</th><th>Poids sorti (kg)</th>` +
       `<th>Valeur restante en douane (CHF)</th>` +
       (avecPrixMoyen ? `<th${synthese ? '' : ' class="tofill"'}>Prix moyen (CHF)</th>` : '') +
       `<th${synthese ? '' : ' class="tofill"'}>CA déclaré (CHF)</th>`
     // A l'entree, aucun prix de vente : seul le prix d'achat se declare. Mais cette
     // feuille est la seule imprimee : le retour s'y complete a la main, faute
-    // d'imprimante sur place. Le CA du festival y a donc sa colonne, vide.
+    // d'imprimante sur place. Toute valeur du retour y a donc sa colonne, vide.
     : '<th class="tofill retour">Qté restante</th><th class="tofill">Qté vendue</th><th class="tofill">Poids restant (kg)</th>' +
+      '<th class="tofill">Poids vendu (kg)</th>' +
       '<th class="tofill">Valeur restante en douane (CHF)</th><th class="tofill">CA du festival (CHF)</th>'}
 </tr></thead><tbody>`;
 
@@ -415,13 +418,13 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
         ? (() => {
             const s = syntheseDe(objet);
             return `<td class="retour">${reste}</td><td>${vendu}</td><td>${synthese ? s.offertes : ''}</td>` +
-              `<td>${kg(o.netRetG)}</td>` +
+              `<td>${kg(o.netRetG)}</td><td>${kgSorti(o.netG, o.netRetG)}</td>` +
               `<td>${num(o.chfRet)}</td>` +
               (synthese
                 ? `${avecPrixMoyen ? `<td>${prixMoyen(s)}</td>` : ''}<td>${centimes(s.caCentimes)}</td>`
                 : `${avecPrixMoyen ? '<td class="tofill"></td>' : ''}<td class="tofill"></td>`);
           })()
-        : `<td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
+        : `<td class="tofill retour"></td>${'<td class="tofill"></td>'.repeat(5)}`) +
       `</tr>`;
   }
 
@@ -436,13 +439,13 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
           // CA de 5012.00. Toute case de cette ligne est une somme, ou reste vide.
           return `<td class="retour">${returned}</td><td>${venduTotal}</td>` +
             `<td>${synthese ? synthese.lignes.reduce((n, l) => n + l.offertes, 0) : ''}</td>` +
-            `<td>${kg(netRetG)}</td>` +
+            `<td>${kg(netRetG)}</td><td>${kgSorti(netG, netRetG)}</td>` +
             `<td>${num(chfRet)}</td>` +
             (synthese
               ? `${avecPrixMoyen ? '<td></td>' : ''}<td>${centimes(synthese.caCentimes)}</td>`
               : `${avecPrixMoyen ? '<td class="tofill"></td>' : ''}<td class="tofill"></td>`);
         })()
-      : `<td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
+      : `<td class="tofill retour"></td>${'<td class="tofill"></td>'.repeat(5)}`) +
     `</tr></tfoot></table>`;
 
   if (caisses.source === 'caisses') {
@@ -456,7 +459,7 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
 
   if (!closed) {
     html += `<p style="font-size:7.5pt;color:#333;margin-top:2mm">
-     Les cinq colonnes de droite sont à compléter au retour, avec le stock constaté
+     Les six colonnes de droite sont à compléter au retour, avec le stock constaté
      au passage de la frontière et le chiffre d'affaires encaissé pendant le festival.
      ${caisses.source === 'types'
        ? 'Le poids brut d\'un type vaut son poids net plus le poids de ses caisses.'
