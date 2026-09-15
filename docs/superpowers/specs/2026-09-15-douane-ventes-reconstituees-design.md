@@ -1,7 +1,7 @@
 # Ventes reconstituées et synthèse du 11.87 — Design Spec
 
 **Date :** 2026-09-15
-**Statut :** en validation avec Uriel
+**Statut :** approuvé (Uriel, 2026-09-15)
 **Branche :** `feat/douane-ventes`
 **Contrainte :** livré avant le départ du 2026-09-16 (réseau incertain pendant le festival). Rien n'est fusionné dans `main` tant que ce n'est pas vérifié.
 
@@ -22,8 +22,8 @@ reconstitution est un **document attaché au passage clôturé**.
   (« Montant personnalisé ») et sans réduction. Une transaction peut avoir plusieurs lignes.
 - Prix affichés au stand en **CHF ronds**. Un paiement carte est reconverti par SumUp en euros ; un
   paiement **rond en euros** est un client payé en euros **au pair** (1 CHF = 1 €, usage frontalier).
-- La TVA suisse a été appliquée **par-dessus** le CA déclaré : 5 012 × 8,1 % = 405,97 → **405,95** payés
-  (arrondi aux 5 centimes).
+- La TVA suisse est **ajoutée par-dessus** le CA déclaré — règle suisse de la contre-prestation,
+  **confirmée par Uriel le 2026-09-15** : 5 012 × 8,1 % = 405,97 → **405,95** payés (arrondi aux 5 centimes).
 - Quantité vendue = **parti − revenu par type** (Fribourg : 125, et non 126 : un t-shirt rapporté par
   une cliente).
 
