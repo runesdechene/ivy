@@ -142,9 +142,11 @@ const CSS = `
 export function renderPassage(
   passage: PassageRow,
   items: PassageItem[],
-  options: { onlySummary?: boolean } = {},
+  /** prixMoyen : colonne optionnelle, cochée avant d'imprimer (la douane ne l'a jamais demandée). */
+  options: { onlySummary?: boolean; prixMoyen?: boolean } = {},
 ): string {
   const closed = passage.status === 'closed';
+  const avecPrixMoyen = options.prixMoyen === true;
   const rate = Number(passage.eur_to_chf);
   const labels = passage.customs_labels ?? {};
   /** Ce que le douanier lit : le libelle saisi, a defaut le nom du type. */
@@ -376,7 +378,7 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
 
 <h2>Détail par type de produit</h2>
 <table><thead>
-<tr><th colspan="11">Départ</th><th colspan="${closed ? 7 : 4}" class="retour">Retour</th></tr>
+<tr><th colspan="11">Départ</th><th colspan="${closed ? (avecPrixMoyen ? 7 : 6) : 4}" class="retour">Retour</th></tr>
 <tr>
  <th class="l">Objet</th><th class="l">Code SH</th><th class="l">Origine</th><th class="l">Type Ivy</th><th>Quantité</th><th>Poids net (kg)</th><th>Caisses (kg)</th><th>Poids brut (kg)</th>
  <th>Valeur douanière au départ<br>HT (EUR)</th><th>Valeur douanière au départ<br>HT (CHF)</th><th>TVA import CHF</th>
@@ -387,7 +389,8 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
     // par type, l'arrondi de chaque ligne ne se recalculait pas.
     ? `<th class="retour">Qté restante</th><th>Qté sortie</th><th>dont offertes</th><th>Poids restant (kg)</th>` +
       `<th>Valeur restante en douane (CHF)</th>` +
-      `<th${synthese ? '' : ' class="tofill"'}>Prix moyen (CHF)</th><th${synthese ? '' : ' class="tofill"'}>CA déclaré (CHF)</th>`
+      (avecPrixMoyen ? `<th${synthese ? '' : ' class="tofill"'}>Prix moyen (CHF)</th>` : '') +
+      `<th${synthese ? '' : ' class="tofill"'}>CA déclaré (CHF)</th>`
     // A l'entree, aucun prix de vente : seul le prix d'achat se declare. Les
     // ventes se declarent apres le retour, sur WebDec.
     : '<th class="tofill retour">Qté restante</th><th class="tofill">Qté vendue</th><th class="tofill">Poids restant (kg)</th>' +
@@ -414,8 +417,8 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
               `<td>${kg(o.netRetG)}</td>` +
               `<td>${num(o.chfRet)}</td>` +
               (synthese
-                ? `<td>${prixMoyen(s)}</td><td>${centimes(s.caCentimes)}</td>`
-                : `<td class="tofill"></td><td class="tofill"></td>`);
+                ? `${avecPrixMoyen ? `<td>${prixMoyen(s)}</td>` : ''}<td>${centimes(s.caCentimes)}</td>`
+                : `${avecPrixMoyen ? '<td class="tofill"></td>' : ''}<td class="tofill"></td>`);
           })()
         : `<td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
       `</tr>`;
@@ -435,8 +438,8 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
             `<td>${kg(netRetG)}</td>` +
             `<td>${num(chfRet)}</td>` +
             (synthese
-              ? `<td></td><td>${centimes(synthese.caCentimes)}</td>`
-              : `<td class="tofill"></td><td class="tofill"></td>`);
+              ? `${avecPrixMoyen ? '<td></td>' : ''}<td>${centimes(synthese.caCentimes)}</td>`
+              : `${avecPrixMoyen ? '<td class="tofill"></td>' : ''}<td class="tofill"></td>`);
         })()
       : `<td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
     `</tr></tfoot></table>`;
@@ -464,10 +467,10 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
      (${venduTotal} pièce(s) sorties du stock), soit <b>${centimes(synthese.tvaCentimes)} CHF</b>,
      <b>${centimes(synthese.tvaAPayerCentimes)} CHF</b> à payer après arrondi aux 5 centimes —
      à opposer aux ${num(vatOnImport(customsChf))} CHF avancés à l'entrée.
-     « Qté sortie » vaut « parti − revenu » ; chaque CA est la somme des ventes du type dans la liste jointe,
-     et le prix moyen ce CA divisé par les pièces vendues, arrondi au centime.</p>`
+     « Qté sortie » vaut « parti − revenu » ; chaque CA est la somme des ventes du type dans la liste jointe${avecPrixMoyen
+       ? ',\n     et le prix moyen ce CA divisé par les pièces vendues, arrondi au centime' : ''}.</p>`
       : `<p style="font-size:7.5pt;color:#333;margin-top:2mm">
-     Les colonnes <b>Prix moyen</b> et <b>CA déclaré</b> sont à compléter : reconstituer d'abord les ventes
+     ${avecPrixMoyen ? 'Les colonnes <b>Prix moyen</b> et <b>CA déclaré</b> sont' : 'La colonne <b>CA déclaré</b> est'} à compléter : reconstituer d'abord les ventes
      (paiements SumUp et espèces). « Qté sortie » vaut « parti − revenu ».</p>`;
   }
   // ---------- Matériel d'exposition ----------

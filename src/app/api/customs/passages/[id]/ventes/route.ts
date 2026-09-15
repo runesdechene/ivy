@@ -8,8 +8,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
-/** GET /api/customs/passages/<id>/ventes — liste imprimable des ventes reconstituées. */
-export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+/** GET /api/customs/passages/<id>/ventes[?prixMoyen=1] — liste imprimable des ventes reconstituées. */
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   const { data: passage } = await supabase
     .from('customs_declarations')
@@ -20,7 +20,9 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
   if (!passage.reconstitution) {
     return NextResponse.json({ error: "Aucune vente reconstituée pour ce passage" }, { status: 404 });
   }
-  const html = renderVentes(passage as PassageVentes, passage.reconstitution as Reconstitution);
+  const html = renderVentes(passage as PassageVentes, passage.reconstitution as Reconstitution, {
+    prixMoyen: request.nextUrl.searchParams.get('prixMoyen') === '1',
+  });
   return new NextResponse(html, {
     status: 200,
     headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
