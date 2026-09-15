@@ -13,6 +13,7 @@
 
 import { formatSh } from './tariffs';
 import { caissesParType, separerFournitures, totauxMateriel, type ObjetMateriel } from './materiel';
+import { syntheseParType, type Reconstitution } from './reconstitution';
 
 export interface PassageRow {
   shop_id: string;
@@ -46,6 +47,8 @@ export interface PassageRow {
   materiel?: ObjetMateriel[];
   /** Faux : le matériel reste enregistré mais ne s'imprime pas. */
   materiel_imprime?: boolean;
+  /** Ventes reconstituées au retour (SumUp + espèces) : source du CA déclaré. */
+  reconstitution?: Reconstitution | null;
   /** Position tarifaire, origine et TVA par type. Le code SH vient d'ici. */
   tariff_by_type?: Record<string, { position?: string; origine?: string; tva?: number }>;
 }
@@ -143,8 +146,6 @@ export function renderPassage(
 ): string {
   const closed = passage.status === 'closed';
   const rate = Number(passage.eur_to_chf);
-  const vatDiv = 1 + Number(passage.vat_pct) / 100;
-  const prices = passage.prices_chf_ttc ?? {};
   const labels = passage.customs_labels ?? {};
   /** Ce que le douanier lit : le libelle saisi, a defaut le nom du type. */
   const labelOf = (type: string) => labels[type] || type;
@@ -170,12 +171,6 @@ export function renderPassage(
   const kg = (g: number) => (g / 1000).toFixed(1);
   const kgv = (v: number) => v.toFixed(1);
 
-  /** Prix de vente TTC en CHF : celui saisi pour le type, sinon le prix Ivy converti. */
-  const ttcOf = (it: PassageItem) => {
-    const saisi = prices[it.product_type ?? ''];
-    return saisi && saisi > 0 ? saisi : (Number(it.unit_price_eur) || 0) * rate;
-  };
-  const htOf = (it: PassageItem) => ttcOf(it) / vatDiv;
   /**
    * Valeur en douane : le prix d'ACHAT, pas le prix de vente. C'est le coût du
    * textile plus celui de l'impression — déjà hors taxe, rien à retirer.
@@ -211,7 +206,9 @@ export function renderPassage(
     netRetG: number; chfRet: number;
   }>();
   const byProduct = new Map<string, { title: string; image: string | null; type: string | null; rows: PassageItem[] }>();
-  const problems = { noWeight: 0, noRule: 0, noPrice: 0 };
+  // Le prix de vente Ivy ne sert plus ni a l'entree ni au retour : les ventes sont
+  // reconstituees depuis les prix de stand du referentiel.
+  const problems = { noWeight: 0, noRule: 0 };
 
   for (const it of items) {
     const g = it.weight_grams ?? 0;
@@ -230,9 +227,6 @@ export function renderPassage(
     }
     if (!it.weight_grams) problems.noWeight++;
     if (it.unit_cost_textile === null) problems.noRule++;
-    // Le prix de vente n'a rien a faire a l'entree : seul le prix d'achat se
-    // declare. Son absence ne compte donc qu'au retour.
-    if (closed && !it.unit_price_eur) problems.noPrice++;
 
     const t = it.product_type ?? '(sans type)';
     const agg = byType.get(t) ?? { qty: 0, netG: 0, chf: 0, ret: 0, sold: 0, netRetG: 0, chfRet: 0 };
@@ -304,19 +298,19 @@ export function renderPassage(
     : 'Admission temporaire pour vente incertaine — formulaire 11.74';
 
   /**
-   * Apurement. Ce qui n'est pas réexporté reste en Suisse : la TVA due porte sur
-   * la CONTRE-PRESTATION encaissée, jamais sur la valeur d'entrée. Calculé une
-   * seule fois — les pastilles du haut, le total du tableau et le paragraphe de
-   * conclusion doivent annoncer le même montant, sinon le document se contredit
-   * lui-même sous les yeux du douanier.
+   * Apurement. Ce qui n'est pas réexporté reste en Suisse : la TVA porte sur la
+   * CONTRE-PRESTATION, et s'ajoute PAR-DESSUS le CA déclaré (règle suisse). Le CA
+   * vient des ventes reconstituées (SumUp + espèces) : sans elles, les colonnes
+   * restent à compléter plutôt que d'afficher un CA théorique. Calculé une seule
+   * fois — pastilles, tableau et paragraphe annoncent le même montant.
    */
   const venduTotal = Math.max(0, pieces - returned);
-  let caTtcTotal = 0;
-  for (const [type, t] of byType) {
-    caTtcTotal += (prices[type] ?? 0) * Math.max(0, t.qty - t.ret);
-  }
-  const baseTotale = caTtcTotal / vatDiv;
-  const tvaDue = caTtcTotal - baseTotale;
+  const synthese = closed && passage.reconstitution
+    ? syntheseParType(passage.reconstitution, Number(passage.vat_pct))
+    : null;
+  const syntheseDe = (type: string) => synthese?.lignes.find((l) => l.type === type)
+    ?? { sorties: 0, offertes: 0, caCentimes: 0, tvaCentimes: 0 };
+  const centimes = (c: number) => (c / 100).toFixed(2);
 
   let html = `<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <title>${esc(passage.doc_titre) || 'Douane suisse'} — ${esc(passage.departed_on)}</title>
@@ -357,37 +351,37 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
    ? `<span class="chip fort"><b>Revenues</b> ${returned}</span>` +
      `<span class="chip fort"><b>Poids net au retour</b> ${kg(netRetG)} kg</span>` +
      (grossRetKg !== null ? `<span class="chip fort"><b>Poids brut au retour</b> ${kgv(grossRetKg)} kg</span>` : '') +
-     `<span class="chip fort"><b>Vendues (caisse)</b> ${sold}</span>` +
-     `<span class="chip fort"><b>CA encaissé</b> ${num(caTtcTotal)} CHF</span>` +
-     `<span class="chip fort"><b>Base imposable</b> ${num(baseTotale)} CHF</span>` +
-     `<span class="chip fort"><b>TVA due</b> ${num(tvaDue)} CHF</span>`
+     `<span class="chip fort"><b>Sorties du stock</b> ${venduTotal}</span>` +
+     (synthese
+       ? `<span class="chip fort"><b>CA déclaré</b> ${centimes(synthese.caCentimes)} CHF</span>` +
+         `<span class="chip fort"><b>TVA ${passage.vat_pct} %</b> ${centimes(synthese.tvaCentimes)} CHF</span>` +
+         `<span class="chip fort"><b>TVA à payer</b> ${centimes(synthese.tvaAPayerCentimes)} CHF</span>`
+       : `<span class="chip fort"><b>CA déclaré</b> — à compléter</span>`)
    : ''}
 </div>
 <p style="font-size:6.8pt;color:#333;margin:0 0 2mm">
  <b>Valeur en douane = prix d'achat</b> (coût du textile + coût de l'impression), hors taxe par nature.
  Conversion en francs au taux de ${rate}.
  ${closed
-   ? `Les prix de vente ci-dessous sont des <b>moyennes pondérées par type, remises comprises</b> :
-      la contre-prestation réellement encaissée, ramenée à l'unité. Ils n'entrent pas dans la valeur
-      en douane — qui reste le prix d'achat — mais ce sont eux qui déterminent la base imposable et
-      la TVA due à l'apurement.`
+   ? `Au retour, le <b>CA déclaré</b> est la contre-prestation encaissée en Suisse (paiements SumUp
+      convertis au taux du passage, et espèces), réparti par produit dans la liste des ventes jointe.
+      Il n'entre pas dans la valeur en douane, qui reste le prix d'achat. La <b>TVA</b> s'ajoute à ce CA.`
    : ''}
 </p>
 
 <h2>Détail par type de produit</h2>
 <table><thead>
-<tr><th colspan="11">Départ</th><th colspan="${closed ? 8 : 4}" class="retour">Retour</th></tr>
+<tr><th colspan="11">Départ</th><th colspan="${closed ? 7 : 4}" class="retour">Retour</th></tr>
 <tr>
  <th class="l">Objet</th><th class="l">Code SH</th><th class="l">Origine</th><th class="l">Type Ivy</th><th>Quantité</th><th>Poids net (kg)</th><th>Caisses (kg)</th><th>Poids brut (kg)</th>
  <th>Valeur douanière au départ<br>HT (EUR)</th><th>Valeur douanière au départ<br>HT (CHF)</th><th>TVA import CHF</th>
  ${closed
-    // Une fois cloture, le prix pratique n'est plus une indication de depart :
-    // c'est la contre-prestation encaissee, donc une donnee de RETOUR. Il se lit
-    // juste avant le CA qu'il produit — quantite vendue x prix = CA.
-    ? '<th class="retour">Qté restante</th><th>Qté vendue</th><th>Poids restant (kg)</th>' +
-      '<th>Valeur restante en douane (CHF)</th>' +
-      '<th>Prix de vente moyen<br>pondéré CHF TTC</th>' +
-      '<th>CA vendu TTC (CHF)</th><th>Base imposable HT (CHF)</th><th>TVA due (CHF)</th>'
+    // Aucun prix unitaire : une moyenne remultipliee par la quantite ne redonne
+    // jamais le CA au centime. Chaque case est une somme verifiable ; le detail des
+    // prix est dans la liste des ventes.
+    ? `<th class="retour">Qté restante</th><th>Qté sortie</th><th>dont offertes</th><th>Poids restant (kg)</th>` +
+      `<th>Valeur restante en douane (CHF)</th>` +
+      `<th${synthese ? '' : ' class="tofill"'}>CA déclaré (CHF)</th><th${synthese ? '' : ' class="tofill"'}>TVA ${passage.vat_pct} % (CHF)</th>`
     // A l'entree, aucun prix de vente : seul le prix d'achat se declare. Les
     // ventes se declarent apres le retour, sur WebDec.
     : '<th class="tofill retour">Qté restante</th><th class="tofill">Qté vendue</th><th class="tofill">Poids restant (kg)</th>' +
@@ -400,17 +394,6 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
     const brut = hasPackaging && brutParLigne ? o.netG / 1000 + pack : null;
     const reste = o.ret;
     const vendu = Math.max(0, o.qty - o.ret);
-    const unitG = o.qty > 0 ? o.netG / o.qty : 0;
-    const unitHt = o.qty > 0 ? o.chf / o.qty : 0;
-    // Prix de vente pratique en Suisse pour ce type. A defaut, le prix Ivy converti.
-    const prixVenteTtc = (() => {
-      const saisi = prices[objet];
-      if (saisi && saisi > 0) return saisi;
-      const lignes = items.filter(i => (i.product_type ?? '(sans type)') === objet);
-      const q = lignes.reduce((n, i) => n + i.qty_departed, 0);
-      const somme = lignes.reduce((n, i) => n + (Number(i.unit_price_eur) || 0) * i.qty_departed, 0);
-      return q > 0 ? (somme / q) * rate : 0;
-    })();
     html += `<tr><td class="l"><b>${esc(labelOf(objet))}</b></td>` +
       `<td class="l">${shOf(objet) || '<b style="color:#b00">—</b>'}</td>` +
       `<td class="l">${esc(origineOf(objet)) || '<b style="color:#b00">—</b>'}</td>` +
@@ -420,15 +403,13 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
       `<td>${num(o.chf / rate)}</td><td>${num(o.chf)}</td><td>${num(vatOnImport(o.chf))}</td>` +
       (closed
         ? (() => {
-            // Au retour, la TVA suisse porte sur la CONTRE-PRESTATION encaissee,
-            // pas sur le prix d'achat : base = CA TTC / (1 + TVA).
-            const caTtc = prixVenteTtc * vendu;
-            const base = caTtc / vatDiv;
-            return `<td class="retour">${reste}</td><td>${vendu}</td>` +
+            const s = syntheseDe(objet);
+            return `<td class="retour">${reste}</td><td>${vendu}</td><td>${synthese ? s.offertes : ''}</td>` +
               `<td>${kg(o.netRetG)}</td>` +
               `<td>${num(o.chfRet)}</td>` +
-              `<td>${prixVenteTtc > 0 ? num(prixVenteTtc) : '<b style="color:#b00">—</b>'}</td>` +
-              `<td>${num(caTtc)}</td><td>${num(base)}</td><td>${num(caTtc - base)}</td>`;
+              (synthese
+                ? `<td>${centimes(s.caCentimes)}</td><td>${centimes(s.tvaCentimes)}</td>`
+                : `<td class="tofill"></td><td class="tofill"></td>`);
           })()
         : `<td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
       `</tr>`;
@@ -447,10 +428,12 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
           // ne tient pas debout. Toute case de cette ligne doit etre une somme
           // verifiable, ou rester vide.
           return `<td class="retour">${returned}</td><td>${venduTotal}</td>` +
+            `<td>${synthese ? synthese.lignes.reduce((n, l) => n + l.offertes, 0) : ''}</td>` +
             `<td>${kg(netRetG)}</td>` +
             `<td>${num(chfRet)}</td>` +
-            `<td></td>` +
-            `<td>${num(caTtcTotal)}</td><td>${num(baseTotale)}</td><td>${num(tvaDue)}</td>`;
+            (synthese
+              ? `<td>${centimes(synthese.caCentimes)}</td><td>${centimes(synthese.tvaCentimes)}</td>`
+              : `<td class="tofill"></td><td class="tofill"></td>`);
         })()
       : `<td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
     `</tr></tfoot></table>`;
@@ -472,13 +455,16 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
        ? 'Le poids brut d\'un type vaut son poids net plus le poids de ses caisses.'
        : caisses.source === 'aucune' ? 'Le poids brut par type est réparti au prorata du poids net.' : ''}</p>`;
   } else if (closed) {
-    html += `<p style="font-size:7.5pt;color:#333;margin-top:2mm">
-     <b>TVA réellement due</b> : elle porte sur la contre-prestation encaissée en Suisse,
-     soit <b>${venduTotal}</b> pièce(s) vendues pour <b>${num(caTtcTotal)} CHF TTC</b>,
-     dont <b>${num(baseTotale)} CHF</b> de base imposable et <b>${num(tvaDue)} CHF</b> de TVA —
+    html += synthese
+      ? `<p style="font-size:7.5pt;color:#333;margin-top:2mm">
+     <b>TVA sur les ventes</b> : ${passage.vat_pct} % ajoutés au CA déclaré de <b>${centimes(synthese.caCentimes)} CHF</b>
+     (${venduTotal} pièce(s) sorties du stock), soit <b>${centimes(synthese.tvaCentimes)} CHF</b>,
+     <b>${centimes(synthese.tvaAPayerCentimes)} CHF</b> à payer après arrondi aux 5 centimes —
      à opposer aux ${num(vatOnImport(customsChf))} CHF avancés à l'entrée.
-     « Vendu » vaut ici « parti − revenu », ce qui a réellement quitté le stock ; le relevé de caisse,
-     lui, totalise ${sold} pièce(s).</p>`;
+     « Qté sortie » vaut « parti − revenu » ; chaque CA est la somme des ventes du type dans la liste jointe.</p>`
+      : `<p style="font-size:7.5pt;color:#333;margin-top:2mm">
+     Les colonnes <b>CA déclaré</b> et <b>TVA</b> sont à compléter : reconstituer d'abord les ventes
+     (paiements SumUp et espèces). « Qté sortie » vaut « parti − revenu ».</p>`;
   }
   // ---------- Matériel d'exposition ----------
   // Tableau à part : il n'entre dans AUCUN total de la marchandise ci-dessus. Les
@@ -511,13 +497,13 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
       `${Math.abs(e.delta)} pièce(s) manquante(s)</li>`;
 
     // Une piece MANQUANTE appelle une justification : elle a quitte le stock sans
-    // passer en caisse. Une piece EN PLUS n'est pas une anomalie douaniere — elle
-    // est declaree et elle ressort du territoire. L'encadre d'alerte, qui attire
-    // l'oeil et appelle la question, ne sert donc que pour le premier cas.
+    // mouvement de vente enregistre. Une piece EN PLUS n'est pas une anomalie
+    // douaniere — elle est declaree et elle ressort du territoire. L'encadre
+    // d'alerte ne sert donc que pour le premier cas.
     if (manquantes.length > 0) {
       html += `<div class="warn"><h3>${manquantes.length} ligne(s) avec un manque</h3>
-       <p style="margin:0 0 1mm">Sur ces lignes, « parti − revenu » dépasse les ventes enregistrées à la
-       caisse : casse, cadeau, ou pièce partie sans passer en caisse.</p>
+       <p style="margin:0 0 1mm">Sur ces lignes, « parti − revenu » dépasse les sorties enregistrées dans
+       les mouvements de stock : casse, cadeau, ou pièce vendue sans mouvement enregistré.</p>
        <ul style="margin:0;padding-left:4mm">${manquantes
          .sort((a, b) => b.delta - a.delta).slice(0, 12).map(nommer).join('')}</ul>
        ${manquantes.length > 12 ? `<p style="margin:1mm 0 0">… et ${manquantes.length - 12} autre(s).</p>` : ''}</div>`;
@@ -532,12 +518,11 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
     }
   }
 
-  const anyProblem = problems.noWeight || problems.noRule || problems.noPrice;
+  const anyProblem = problems.noWeight || problems.noRule;
   if (anyProblem) {
     html += `<div class="warn"><h3>Données incomplètes au moment de l'instantané</h3><ul>`;
     if (problems.noWeight) html += `<li><b>${problems.noWeight} ligne(s) sans poids</b> — comptées comme 0.</li>`;
     if (problems.noRule) html += `<li><b>${problems.noRule} ligne(s) sans règle de prix</b> — coût non décomposable.</li>`;
-    if (problems.noPrice) html += `<li><b>${problems.noPrice} ligne(s) sans prix de vente Ivy</b>.</li>`;
     html += `</ul></div>`;
   }
   html += `</div>`;
