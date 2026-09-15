@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   try {
     const { data: rows, error } = await supabase
       .from('customs_type_tariffs')
-      .select('product_type, code_sh, libelle, origine, updated_at')
+      .select('product_type, code_sh, libelle, origine, prix_affiche_chf, prix_minimal_chf, updated_at')
       .eq('shop_id', shopId);
     if (error) throw error;
 
@@ -55,6 +55,7 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   const body = (await request.json()) as {
     shopId?: string; productType?: string; codeSh?: string; libelle?: string; origine?: string;
+    prixAffiche?: number | null; prixMinimal?: number | null;
   };
   const { shopId, productType } = body;
   if (!shopId || !productType) {
@@ -72,6 +73,23 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "L'origine est un code pays à 2 lettres (ex. BD)" }, { status: 400 });
   }
 
+  // Prix de stand : envoyés seulement par qui les modifie ; absents, ils ne bougent pas.
+  const prix: Record<string, number | null> = {};
+  for (const [cle, colonne] of [['prixAffiche', 'prix_affiche_chf'], ['prixMinimal', 'prix_minimal_chf']] as const) {
+    if (!(cle in body)) continue;
+    const v = body[cle];
+    if (v !== null && !(typeof v === 'number' && Number.isFinite(v) && v >= 0)) {
+      return NextResponse.json({ error: 'Prix invalide' }, { status: 400 });
+    }
+    prix[colonne] = v === null ? null : Math.round(v * 100) / 100;
+  }
+  if (prix.prix_affiche_chf === 0) {
+    return NextResponse.json({ error: 'Le prix affiché doit être supérieur à 0' }, { status: 400 });
+  }
+  if (typeof prix.prix_affiche_chf === 'number' && typeof prix.prix_minimal_chf === 'number' && prix.prix_minimal_chf > prix.prix_affiche_chf) {
+    return NextResponse.json({ error: 'Le prix minimal ne peut pas dépasser le prix affiché' }, { status: 400 });
+  }
+
   const supabase = createServerClient();
   const { data, error } = await supabase
     .from('customs_type_tariffs')
@@ -82,11 +100,12 @@ export async function PUT(request: NextRequest) {
         code_sh: codeSh,
         libelle: (body.libelle ?? '').trim() || null,
         origine,
+        ...prix,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'shop_id,product_type' },
     )
-    .select('product_type, code_sh, libelle, origine, updated_at')
+    .select('product_type, code_sh, libelle, origine, prix_affiche_chf, prix_minimal_chf, updated_at')
     .single();
 
   if (error) {
