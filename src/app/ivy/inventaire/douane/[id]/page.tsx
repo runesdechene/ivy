@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Loader, Paper, Table, Button, Group, Modal, NumberInput, TextInput,
-  Stack, Text, Alert, SimpleGrid, ActionIcon, Anchor, Checkbox,
+  Stack, Text, Alert, SimpleGrid, ActionIcon, Anchor, Checkbox, FileInput,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
@@ -15,6 +15,7 @@ import {
 import { useDebounce } from '@/hooks/useDebounce';
 import { formatSh } from '@/lib/customs/tariffs';
 import { caissesParType, separerFournitures, totauxMateriel, type ObjetMateriel } from '@/lib/customs/materiel';
+import { syntheseParType, type Reconstitution } from '@/lib/customs/reconstitution';
 import styles from './douane-detail.module.scss';
 
 interface Passage {
@@ -39,6 +40,8 @@ interface Passage {
   /** Matériel d'exposition du voyage, copié du modèle de l'emplacement. */
   materiel: ObjetMateriel[];
   materiel_imprime: boolean;
+  /** Ventes reconstituées au retour (SumUp + espèces), figées avec leurs entrées. */
+  reconstitution: Reconstitution | null;
   customs_labels: Record<string, string>;
   doc_titre: string | null;
   raison_sociale: string | null;
@@ -97,7 +100,6 @@ interface FormState {
   vatPct: Saisie;
   grossWeightKg: Saisie;
   reference: string;
-  pricesChfTtc: Record<string, number | ''>;
   /** Titre et sous-titre de la feuille imprimée. */
   docTitre: string;
   docSousTitre: string;
@@ -167,6 +169,12 @@ export default function DouanePassageDetailPage() {
   const [saving, setSaving] = useState(false);
   const [closing, setClosing] = useState(false);
   const [closeModalOpened, closeModal] = useDisclosure(false);
+  // Ventes reconstituées : entrées du formulaire.
+  const [fichierSumUp, setFichierSumUp] = useState<File | null>(null);
+  const [especesChf, setEspecesChf] = useState<number | string>('');
+  const [especesEur, setEspecesEur] = useState<number | string>('');
+  const [ventesEnCours, setVentesEnCours] = useState(false);
+  const [erreurVentes, setErreurVentes] = useState<string | null>(null);
 
   const hydratedRef = useRef(false);
   const [form, setForm] = useState<FormState>({
@@ -174,7 +182,6 @@ export default function DouanePassageDetailPage() {
     vatPct: '',
     grossWeightKg: '',
     reference: '',
-    pricesChfTtc: {},
     docTitre: '',
     docSousTitre: '',
     departedOn: '',
@@ -204,17 +211,11 @@ export default function DouanePassageDetailPage() {
       setItems(data.items || []);
 
       if (!hydratedRef.current) {
-        const prices: Record<string, number | ''> = {};
-        for (const [k, v] of Object.entries((data.passage?.prices_chf_ttc ?? {}) as Record<string, unknown>)) {
-          const n = Number(v);
-          if (Number.isFinite(n)) prices[k] = n;
-        }
         setForm({
           eurToChf: data.passage?.eur_to_chf ?? '',
           vatPct: data.passage?.vat_pct ?? '',
           grossWeightKg: data.passage?.gross_weight_kg ?? '',
           reference: data.passage?.reference ?? '',
-          pricesChfTtc: prices,
           docTitre: data.passage?.doc_titre ?? '',
           docSousTitre: data.passage?.doc_sous_titre ?? '',
           departedOn: data.passage?.departed_on ?? '',
@@ -245,17 +246,11 @@ export default function DouanePassageDetailPage() {
 
   // --- Panneau de paramètres : PATCH débouncé ---
   const savePatch = useCallback(async (next: FormState) => {
-    const pricesChfTtc: Record<string, number> = {};
-    for (const [k, v] of Object.entries(next.pricesChfTtc)) {
-      if (typeof v === 'number' && v > 0) pricesChfTtc[k] = v;
-    }
-
     setSaving(true);
     try {
       const body: Record<string, unknown> = {
         reference: next.reference,
         grossWeightKg: nombre(next.grossWeightKg),
-        pricesChfTtc,
         // Libellés et codes SH ne partent plus d'ici : ils vivent dans le référentiel
         // douanier (Paramètres → Douane), et sont figés côté serveur à la clôture.
         docTitre: next.docTitre,
@@ -310,14 +305,6 @@ export default function DouanePassageDetailPage() {
     });
   }, [debouncedSave]);
 
-  const updatePrice = useCallback((type: string, value: number | '') => {
-    setForm((prev) => {
-      const next = { ...prev, pricesChfTtc: { ...prev.pricesChfTtc, [type]: value } };
-      debouncedSave(next);
-      return next;
-    });
-  }, [debouncedSave]);
-
   // La frappe vit dans le composant enfant. Ici on ne reçoit que la valeur
   // finale, à la sortie du champ : un seul rendu, une seule requête.
   const commitDocField = useCallback((
@@ -332,6 +319,50 @@ export default function DouanePassageDetailPage() {
       return next;
     });
   }, [savePatch]);
+
+  // --- Ventes reconstituées ---
+  const syntheseVentes = useMemo(
+    () => (passage?.reconstitution ? syntheseParType(passage.reconstitution, Number(passage.vat_pct)) : null),
+    [passage],
+  );
+
+  const reconstituerVentes = useCallback(async () => {
+    setErreurVentes(null);
+    const montant = (v: number | string) => String(v).trim().replace(',', '.');
+    if (!fichierSumUp && !Number(montant(especesChf)) && !Number(montant(especesEur))) {
+      setErreurVentes('Importe le rapport SumUp, ou saisis les espèces encaissées.');
+      return;
+    }
+    const form = new FormData();
+    if (fichierSumUp) form.append('fichier', fichierSumUp);
+    form.append('especesChf', montant(especesChf));
+    form.append('especesEur', montant(especesEur));
+    setVentesEnCours(true);
+    try {
+      const res = await fetch(`/api/customs/passages/${id}/reconstitution`, { method: 'POST', body: form });
+      const data = await res.json();
+      if (!res.ok) { setErreurVentes(data.error || 'Reconstitution impossible'); return; }
+      setPassage((prev) => (prev ? { ...prev, reconstitution: data.reconstitution } : prev));
+      notifications.show({ title: 'Ventes reconstituées', message: 'Liste enregistrée sur le passage.', color: 'green' });
+    } catch {
+      setErreurVentes('Reconstitution impossible : réseau ou serveur injoignable.');
+    } finally {
+      setVentesEnCours(false);
+    }
+  }, [id, fichierSumUp, especesChf, especesEur]);
+
+  const effacerVentes = useCallback(async () => {
+    setVentesEnCours(true);
+    try {
+      const res = await fetch(`/api/customs/passages/${id}/reconstitution`, { method: 'DELETE' });
+      if (!res.ok) throw new Error();
+      setPassage((prev) => (prev ? { ...prev, reconstitution: null } : prev));
+    } catch {
+      notifications.show({ title: 'Erreur', message: 'Suppression impossible', color: 'red' });
+    } finally {
+      setVentesEnCours(false);
+    }
+  }, [id]);
 
   // Enregistrement ponctuel, hors formulaire (la case « Imprimer le matériel »).
   const patchPassage = useCallback(async (body: Record<string, unknown>) => {
@@ -388,12 +419,7 @@ export default function DouanePassageDetailPage() {
     let importVat = 0;
 
     const lines = items.map((it) => {
-      const typedPrice = it.product_type ? form.pricesChfTtc[it.product_type] : undefined;
-      const priceTtc = typeof typedPrice === 'number' && typedPrice > 0
-        ? typedPrice
-        : (it.unit_price_eur ?? 0) * eurToChf;
       // Valeur en douane = prix d'ACHAT (textile + impression), déjà hors taxe.
-      // Le prix de vente ne sert qu'à situer la marchandise, il n'entre pas ici.
       const unitCustomsEur = (it.unit_cost_textile ?? 0) + (it.unit_cost_print ?? 0);
       const unitCustomsValue = unitCustomsEur * eurToChf;
       const lineCustomsEur = unitCustomsEur * it.qty_departed;
@@ -408,7 +434,7 @@ export default function DouanePassageDetailPage() {
       customsValueEur += lineCustomsEur;
       importVat += lineImportVat;
 
-      return { ...it, priceTtc, unitCustomsEur, unitCustomsValue, lineCustomsEur, lineCustomsValue, lineImportVat, lineWeightGrams };
+      return { ...it, unitCustomsEur, unitCustomsValue, lineCustomsEur, lineCustomsValue, lineImportVat, lineWeightGrams };
     });
 
     return {
@@ -424,7 +450,7 @@ export default function DouanePassageDetailPage() {
     };
     // Volontairement fin : les libellés douaniers n'entrent dans aucun calcul.
     // Les inclure ferait recalculer 489 lignes à chaque frappe.
-  }, [items, form.eurToChf, form.vatPct, form.grossWeightKg, form.pricesChfTtc, passage]);
+  }, [items, form.eurToChf, form.vatPct, form.grossWeightKg, passage]);
 
   const isClosed = passage?.status === 'closed';
 
@@ -930,29 +956,6 @@ export default function DouanePassageDetailPage() {
             onChange={(e) => updateForm({ reference: e.currentTarget.value })}
           />
         </SimpleGrid>
-
-        {/* Le prix de vente ne se déclare pas à l'entrée. Le document du passage
-            clôturé s'en sert encore, en attendant la refonte du retour. */}
-        {isClosed && productTypes.length > 0 && (
-          <>
-            <div className={styles.subLabel}>Prix de vente TTC par type (CHF)</div>
-            <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="xs">
-              {productTypes.map((type) => (
-                <NumberInput
-                  key={type}
-                  label={type}
-                  value={form.pricesChfTtc[type] ?? ''}
-                  onChange={(v) => updatePrice(type, typeof v === 'number' ? v : '')}
-                  suffix=" CHF"
-                  decimalScale={2}
-                  step={5}
-                  min={0}
-                  size="xs"
-                />
-              ))}
-            </SimpleGrid>
-          </>
-        )}
       </Paper>
 
       <Paper className={styles.panel} radius="md" mb="md">
@@ -1337,12 +1340,127 @@ export default function DouanePassageDetailPage() {
       </Paper>
 
       {passage.status === 'closed' && (
+        <Paper className={`${styles.panel} ${styles.panelRecopie}`} radius="md">
+          <div className={styles.panelHead}>
+            <h3 className={styles.panelTitle}>Ventes reconstituées</h3>
+            {passage.reconstitution && (
+              <Group gap="xs">
+                <Button
+                  variant="light"
+                  color="moss"
+                  size="xs"
+                  leftSection={<IconPrinter size={14} />}
+                  onClick={() => window.open(`/api/customs/passages/${id}/ventes`, '_blank')}
+                >
+                  Imprimer la liste des ventes
+                </Button>
+                <Button variant="subtle" color="gray" size="xs" onClick={effacerVentes} loading={ventesEnCours}>
+                  Effacer
+                </Button>
+              </Group>
+            )}
+          </div>
+          <Text size="xs" c="dimmed" mb="sm">
+            Importe le <b>rapport de ventes SumUp</b> (.xlsx) de la période du festival et saisis les espèces.
+            Ivy répartit l&apos;encaissé sur les pièces sorties du stock, selon les prix affichés et minimaux de{' '}
+            <Anchor component={Link} href="/parametres/douane" size="xs">Paramètres → Douane</Anchor>.
+            Le résultat est enregistré sur le passage : relancer le recalcule. Rien n&apos;est écrit dans le stock.
+          </Text>
+          <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm" mb="sm">
+            <FileInput
+              label="Rapport SumUp (.xlsx)"
+              placeholder="Choisir le fichier"
+              accept=".xlsx"
+              value={fichierSumUp}
+              onChange={setFichierSumUp}
+              clearable
+            />
+            <NumberInput
+              label="Espèces encaissées (CHF)"
+              value={especesChf}
+              onChange={setEspecesChf}
+              min={0}
+              decimalScale={2}
+              allowedDecimalSeparators={['.', ',']}
+              placeholder="0"
+            />
+            <NumberInput
+              label="Espèces encaissées (EUR)"
+              value={especesEur}
+              onChange={setEspecesEur}
+              min={0}
+              decimalScale={2}
+              allowedDecimalSeparators={['.', ',']}
+              placeholder="0"
+            />
+          </SimpleGrid>
+          <Group justify="flex-end" mb="sm">
+            <Button color="moss" onClick={reconstituerVentes} loading={ventesEnCours}>
+              {passage.reconstitution ? 'Reconstituer à nouveau' : 'Reconstituer les ventes'}
+            </Button>
+          </Group>
+          {erreurVentes && (
+            <Alert color="rust" icon={<IconAlertTriangle size={16} />} mb="sm" title="Reconstitution impossible">
+              {erreurVentes}
+            </Alert>
+          )}
+          {syntheseVentes && passage.reconstitution && (
+            <>
+              <Text size="xs" c="dimmed" mb={4}>
+                Calculée le {new Date(passage.reconstitution.genereLe).toLocaleString('fr-FR')} ·{' '}
+                {passage.reconstitution.paiements.filter((p) => p.source === 'sumup').length} paiement(s) SumUp ·{' '}
+                espèces {passage.reconstitution.entrees.especesChf.toFixed(2)} CHF + {passage.reconstitution.entrees.especesEur.toFixed(2)} EUR
+              </Text>
+              {passage.reconstitution.avertissements.map((a) => (
+                <Text size="xs" key={a}>• {a}</Text>
+              ))}
+              <Table withTableBorder striped mt="sm">
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>Objet</Table.Th>
+                    <Table.Th style={{ textAlign: 'right' }}>Qté sortie</Table.Th>
+                    <Table.Th style={{ textAlign: 'right' }}>dont offertes</Table.Th>
+                    <Table.Th style={{ textAlign: 'right' }}>CA déclaré</Table.Th>
+                    <Table.Th style={{ textAlign: 'right' }}>TVA {passage.vat_pct} %</Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {syntheseVentes.lignes.map((l) => (
+                    <Table.Tr key={l.type}>
+                      <Table.Td>{libelleOf(l.type) || l.type}</Table.Td>
+                      <Table.Td style={{ textAlign: 'right' }}>{l.sorties}</Table.Td>
+                      <Table.Td style={{ textAlign: 'right' }}>{l.offertes}</Table.Td>
+                      <Table.Td style={{ textAlign: 'right' }}>{formatChf(l.caCentimes / 100)}</Table.Td>
+                      <Table.Td style={{ textAlign: 'right' }}>{formatChf(l.tvaCentimes / 100)}</Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+                <Table.Tfoot>
+                  <Table.Tr>
+                    <Table.Td><b>TOTAL</b></Table.Td>
+                    <Table.Td style={{ textAlign: 'right' }}><b>{syntheseVentes.lignes.reduce((n, l) => n + l.sorties, 0)}</b></Table.Td>
+                    <Table.Td style={{ textAlign: 'right' }}><b>{syntheseVentes.lignes.reduce((n, l) => n + l.offertes, 0)}</b></Table.Td>
+                    <Table.Td style={{ textAlign: 'right' }}><b>{formatChf(syntheseVentes.caCentimes / 100)}</b></Table.Td>
+                    <Table.Td style={{ textAlign: 'right' }}>
+                      <b>{formatChf(syntheseVentes.tvaCentimes / 100)}</b>
+                      <Text size="xs">à payer : {formatChf(syntheseVentes.tvaAPayerCentimes / 100)}</Text>
+                    </Table.Td>
+                  </Table.Tr>
+                </Table.Tfoot>
+              </Table>
+            </>
+          )}
+        </Paper>
+      )}
+
+      {passage.status === 'closed' && (
         <Paper className={styles.panel} radius="md">
           <div className={styles.panelHead}>
             <h3 className={styles.panelTitle}>Réconciliation du retour</h3>
           </div>
           <Text size="xs" c="dimmed" mb="sm">
-            L&apos;écart correspond à de la casse, un cadeau, ou une pièce vendue sans passer en caisse.
+            Parti, revenu, et sorties enregistrées dans les mouvements de stock. Un écart correspond à de la casse,
+            un cadeau, une pièce vendue sans mouvement enregistré, ou une pièce rapportée par un client.
           </Text>
           <div className={styles.tableWrap}>
             <Table striped verticalSpacing="xs">
@@ -1353,7 +1471,7 @@ export default function DouanePassageDetailPage() {
                   <Table.Th>Couleur</Table.Th>
                   <Table.Th style={{ textAlign: 'right' }}>Parti</Table.Th>
                   <Table.Th style={{ textAlign: 'right' }}>Revenu</Table.Th>
-                  <Table.Th style={{ textAlign: 'right' }}>Vendu (caisse)</Table.Th>
+                  <Table.Th style={{ textAlign: 'right' }}>Sorties (mouvements)</Table.Th>
                   <Table.Th style={{ textAlign: 'right' }}>Écart</Table.Th>
                 </Table.Tr>
               </Table.Thead>
@@ -1384,7 +1502,7 @@ export default function DouanePassageDetailPage() {
         <Stack gap="sm">
           <Text size="sm">
             Ceci fige l&apos;<b>instantané de retour</b> du stock à l&apos;emplacement <b>{passage.location_name}</b>{' '}
-            et calcule la réconciliation (parti / revenu / vendu en caisse).
+            et calcule la réconciliation (parti / revenu / sorties des mouvements de stock).
           </Text>
           <Text size="sm" fw={600} c="rust">
             Fais-le AVANT tout transfert de rapatriement du stock : une fois le transfert passé,
