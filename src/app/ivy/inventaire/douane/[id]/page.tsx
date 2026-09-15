@@ -1420,8 +1420,8 @@ export default function DouanePassageDetailPage() {
                     <Table.Th>Objet</Table.Th>
                     <Table.Th style={{ textAlign: 'right' }}>Qté sortie</Table.Th>
                     <Table.Th style={{ textAlign: 'right' }}>dont offertes</Table.Th>
+                    <Table.Th style={{ textAlign: 'right' }}>Prix moyen</Table.Th>
                     <Table.Th style={{ textAlign: 'right' }}>CA déclaré</Table.Th>
-                    <Table.Th style={{ textAlign: 'right' }}>TVA {passage.vat_pct} %</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
@@ -1430,8 +1430,10 @@ export default function DouanePassageDetailPage() {
                       <Table.Td>{libelleOf(l.type) || l.type}</Table.Td>
                       <Table.Td style={{ textAlign: 'right' }}>{l.sorties}</Table.Td>
                       <Table.Td style={{ textAlign: 'right' }}>{l.offertes}</Table.Td>
+                      <Table.Td style={{ textAlign: 'right' }}>
+                        {l.sorties > l.offertes ? formatChf(Math.round(l.caCentimes / (l.sorties - l.offertes)) / 100) : '—'}
+                      </Table.Td>
                       <Table.Td style={{ textAlign: 'right' }}>{formatChf(l.caCentimes / 100)}</Table.Td>
-                      <Table.Td style={{ textAlign: 'right' }}>{formatChf(l.tvaCentimes / 100)}</Table.Td>
                     </Table.Tr>
                   ))}
                 </Table.Tbody>
@@ -1440,10 +1442,12 @@ export default function DouanePassageDetailPage() {
                     <Table.Td><b>TOTAL</b></Table.Td>
                     <Table.Td style={{ textAlign: 'right' }}><b>{syntheseVentes.lignes.reduce((n, l) => n + l.sorties, 0)}</b></Table.Td>
                     <Table.Td style={{ textAlign: 'right' }}><b>{syntheseVentes.lignes.reduce((n, l) => n + l.offertes, 0)}</b></Table.Td>
-                    <Table.Td style={{ textAlign: 'right' }}><b>{formatChf(syntheseVentes.caCentimes / 100)}</b></Table.Td>
+                    <Table.Td />
                     <Table.Td style={{ textAlign: 'right' }}>
-                      <b>{formatChf(syntheseVentes.tvaCentimes / 100)}</b>
-                      <Text size="xs">à payer : {formatChf(syntheseVentes.tvaAPayerCentimes / 100)}</Text>
+                      <b>{formatChf(syntheseVentes.caCentimes / 100)}</b>
+                      <Text size="xs">
+                        TVA {passage.vat_pct} % : {formatChf(syntheseVentes.tvaCentimes / 100)} · à payer : {formatChf(syntheseVentes.tvaAPayerCentimes / 100)}
+                      </Text>
                     </Table.Td>
                   </Table.Tr>
                 </Table.Tfoot>
