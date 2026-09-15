@@ -16,6 +16,21 @@ export interface TypeTariff {
   libelle: string | null;
   /** Pays de fabrication du textile, 2 lettres : BD. Distinct de la case 10 du 11.74. */
   origine: string | null;
+  /** Prix affiché au stand, CHF : plafond de la reconstitution des ventes. */
+  prix_affiche_chf: number | null;
+  /** Prix le plus bas plausible, CHF : en dessous, la pièce est offerte. */
+  prix_minimal_chf: number | null;
+}
+
+/** Les prix du référentiel, pour la reconstitution : seulement les types entièrement renseignés. */
+export function prixDuReferentiel(referentiel: Referentiel): Record<string, { affiche: number; minimal: number }> {
+  const out: Record<string, { affiche: number; minimal: number }> = {};
+  for (const [type, t] of Object.entries(referentiel)) {
+    if (t.prix_affiche_chf !== null && t.prix_minimal_chf !== null) {
+      out[type] = { affiche: t.prix_affiche_chf, minimal: t.prix_minimal_chf };
+    }
+  }
+  return out;
 }
 
 /** « bd », « BD » → BD. null si ce n'est pas un code pays à 2 lettres. */
@@ -41,12 +56,17 @@ export function parseSh(saisie: string): string | null {
 export async function loadReferentiel(supabase: SupabaseClient, shopId: string): Promise<Referentiel> {
   const { data, error } = await supabase
     .from('customs_type_tariffs')
-    .select('product_type, code_sh, libelle, origine')
+    .select('product_type, code_sh, libelle, origine, prix_affiche_chf, prix_minimal_chf')
     .eq('shop_id', shopId);
   if (error) throw new Error(error.message);
   const out: Referentiel = {};
+  const nombre = (v: unknown) => (v === null || v === undefined ? null : Number(v));
   for (const r of (data ?? []) as ({ product_type: string } & TypeTariff)[]) {
-    out[r.product_type] = { code_sh: r.code_sh, libelle: r.libelle, origine: r.origine };
+    out[r.product_type] = {
+      code_sh: r.code_sh, libelle: r.libelle, origine: r.origine,
+      // DECIMAL arrive en texte depuis PostgREST.
+      prix_affiche_chf: nombre(r.prix_affiche_chf), prix_minimal_chf: nombre(r.prix_minimal_chf),
+    };
   }
   return out;
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { TextInput, Loader, Select } from '@mantine/core';
+import { TextInput, Loader, Select, NumberInput } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useShop } from '@/context/ShopContext';
 import { formatSh, parseOrigine, parseSh } from '@/lib/customs/tariffs';
@@ -15,16 +15,31 @@ interface Row {
   libelle: string;
   codeSh: string;
   origine: string;
+  /** Prix de stand en CHF, tels que tapés (texte pendant la frappe). */
+  prixAffiche: number | string;
+  prixMinimal: number | string;
   /** Dernières valeurs enregistrées : on n'écrit que ce qui a changé. */
   savedLibelle: string;
   savedCodeSh: string;
   savedOrigine: string;
+  savedPrixAffiche: number | null;
+  savedPrixMinimal: number | null;
   saving: boolean;
   codeError: string | null;
   origineError: string | null;
+  prixError: string | null;
 }
 
-const complet = (r: Row) => !!r.savedLibelle && !!r.savedCodeSh && !!r.savedOrigine;
+/** Complet : de quoi déclarer à l'entrée (libellé, code, origine) ET reconstituer les ventes (prix). */
+const complet = (r: Row) => !!r.savedLibelle && !!r.savedCodeSh && !!r.savedOrigine
+  && r.savedPrixAffiche !== null && r.savedPrixMinimal !== null;
+
+/** « 12,5 » → 12.5 ; vide → null ; illisible → NaN. */
+const prixSaisi = (v: number | string): number | null => {
+  if (typeof v === 'number') return v;
+  const t = v.trim().replace(',', '.');
+  return t === '' ? null : Number(t);
+};
 
 export default function DouaneSettingsPage() {
   const { currentShop } = useShop();
@@ -38,19 +53,28 @@ export default function DouaneSettingsPage() {
       const res = await fetch(`/api/settings/customs-tariffs?shopId=${currentShop.id}`);
       if (!res.ok) throw new Error();
       const data = await res.json() as {
-        rows: { product_type: string; code_sh: string | null; libelle: string | null; origine: string | null }[];
+        rows: {
+          product_type: string; code_sh: string | null; libelle: string | null; origine: string | null;
+          prix_affiche_chf: string | number | null; prix_minimal_chf: string | number | null;
+        }[];
         productTypes: string[];
       };
       const byType = new Map(data.rows.map((r) => [r.product_type, r]));
+      // DECIMAL arrive en texte depuis PostgREST.
+      const prix = (v: string | number | null | undefined) => (v === null || v === undefined ? null : Number(v));
       setRows(data.productTypes.map((type) => {
         const r = byType.get(type);
         const libelle = r?.libelle ?? '';
         const codeSh = formatSh(r?.code_sh);
         const origine = r?.origine ?? '';
+        const affiche = prix(r?.prix_affiche_chf);
+        const minimal = prix(r?.prix_minimal_chf);
         return {
           productType: type, libelle, codeSh, origine,
+          prixAffiche: affiche ?? '', prixMinimal: minimal ?? '',
           savedLibelle: libelle, savedCodeSh: codeSh, savedOrigine: origine,
-          saving: false, codeError: null, origineError: null,
+          savedPrixAffiche: affiche, savedPrixMinimal: minimal,
+          saving: false, codeError: null, origineError: null, prixError: null,
         };
       }));
     } catch {
@@ -151,21 +175,37 @@ export default function DouaneSettingsPage() {
       patch(row.productType, { origineError: '2 lettres, ex. BD' });
       return;
     }
-    if (libelle === row.savedLibelle && codeSh === row.savedCodeSh && origine === row.savedOrigine) {
-      patch(row.productType, { codeError: null, origineError: null, codeSh, origine });
+    const prixAffiche = prixSaisi(row.prixAffiche);
+    const prixMinimal = prixSaisi(row.prixMinimal);
+    if ([prixAffiche, prixMinimal].some((p) => p !== null && (Number.isNaN(p) || p < 0)) || prixAffiche === 0) {
+      patch(row.productType, { prixError: 'Prix invalide' });
+      return;
+    }
+    if (prixAffiche !== null && prixMinimal !== null && prixMinimal > prixAffiche) {
+      patch(row.productType, { prixError: 'Le minimal dépasse le prix affiché' });
+      return;
+    }
+    if (libelle === row.savedLibelle && codeSh === row.savedCodeSh && origine === row.savedOrigine
+      && prixAffiche === row.savedPrixAffiche && prixMinimal === row.savedPrixMinimal) {
+      patch(row.productType, { codeError: null, origineError: null, prixError: null, codeSh, origine });
       return;
     }
 
-    patch(row.productType, { saving: true, codeError: null, origineError: null, codeSh, origine });
+    patch(row.productType, { saving: true, codeError: null, origineError: null, prixError: null, codeSh, origine });
     try {
       const res = await fetch('/api/settings/customs-tariffs', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shopId: currentShop.id, productType: row.productType, codeSh: code ?? '', libelle, origine }),
+        body: JSON.stringify({
+          shopId: currentShop.id, productType: row.productType, codeSh: code ?? '', libelle, origine, prixAffiche, prixMinimal,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Enregistrement impossible');
-      patch(row.productType, { savedLibelle: libelle, savedCodeSh: codeSh, savedOrigine: origine, libelle });
+      patch(row.productType, {
+        savedLibelle: libelle, savedCodeSh: codeSh, savedOrigine: origine,
+        savedPrixAffiche: prixAffiche, savedPrixMinimal: prixMinimal, libelle,
+      });
     } catch (err) {
       notifications.show({
         title: 'Erreur',
@@ -220,6 +260,8 @@ export default function DouaneSettingsPage() {
               Le libellé est ce que lit le douanier : un mot courant (« Sweat-shirt »), pas le nom commercial.
               Le code SH se choisit selon la matière — 6110.20 pour un sweat en coton, par exemple.
               L&apos;origine est le pays de fabrication du vêtement (code à 2 lettres), distinct de la case 10 du 11.74.
+              Le prix affiché et le prix minimal servent à reconstituer les ventes au retour : jamais au-dessus
+              du prix affiché, jamais sous le minimal (en dessous, la pièce est offerte).
               Un passage ouvert suit ce référentiel en direct ; un passage clôturé garde ses valeurs.
             </p>
           </div>
@@ -233,6 +275,8 @@ export default function DouaneSettingsPage() {
                   <th className={styles.th}>Libellé douanier</th>
                   <th className={styles.th} style={{ width: 170 }}>Code SH</th>
                   <th className={styles.th} style={{ width: 110 }}>Origine</th>
+                  <th className={styles.th} style={{ width: 120 }}>Prix affiché (CHF)</th>
+                  <th className={styles.th} style={{ width: 120 }}>Prix minimal (CHF)</th>
                   <th className={styles.th} style={{ width: 130 }} />
                 </tr>
               </thead>
@@ -273,6 +317,23 @@ export default function DouaneSettingsPage() {
                         styles={{ input: { backgroundColor: 'var(--cream)', borderColor: 'var(--divider)', textTransform: 'uppercase' } }}
                       />
                     </td>
+                    {(['prixAffiche', 'prixMinimal'] as const).map((champ) => (
+                      <td key={champ} className={styles.td}>
+                        <NumberInput
+                          value={row[champ]}
+                          placeholder={champ === 'prixAffiche' ? 'ex. 50' : 'ex. 20'}
+                          min={0}
+                          decimalScale={2}
+                          allowedDecimalSeparators={['.', ',']}
+                          hideControls
+                          error={champ === 'prixMinimal' ? row.prixError : undefined}
+                          onChange={(v) => patch(row.productType, { [champ]: v, prixError: null })}
+                          onBlur={() => save(row)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                          styles={{ input: { backgroundColor: 'var(--cream)', borderColor: 'var(--divider)', textAlign: 'right' } }}
+                        />
+                      </td>
+                    ))}
                     <td className={styles.td}>
                       {row.saving ? (
                         <Loader size="xs" />
