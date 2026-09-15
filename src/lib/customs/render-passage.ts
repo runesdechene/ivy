@@ -378,7 +378,7 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
 
 <h2>Détail par type de produit</h2>
 <table><thead>
-<tr><th colspan="11">Départ</th><th colspan="${closed ? (avecPrixMoyen ? 7 : 6) : 4}" class="retour">Retour</th></tr>
+<tr><th colspan="11">Départ</th><th colspan="${closed ? (avecPrixMoyen ? 7 : 6) : 5}" class="retour">Retour</th></tr>
 <tr>
  <th class="l">Objet</th><th class="l">Code SH</th><th class="l">Origine</th><th class="l">Type Ivy</th><th>Quantité</th><th>Poids net (kg)</th><th>Caisses (kg)</th><th>Poids brut (kg)</th>
  <th>Valeur douanière au départ<br>HT (EUR)</th><th>Valeur douanière au départ<br>HT (CHF)</th><th>TVA import CHF</th>
@@ -391,10 +391,11 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
       `<th>Valeur restante en douane (CHF)</th>` +
       (avecPrixMoyen ? `<th${synthese ? '' : ' class="tofill"'}>Prix moyen (CHF)</th>` : '') +
       `<th${synthese ? '' : ' class="tofill"'}>CA déclaré (CHF)</th>`
-    // A l'entree, aucun prix de vente : seul le prix d'achat se declare. Les
-    // ventes se declarent apres le retour, sur WebDec.
+    // A l'entree, aucun prix de vente : seul le prix d'achat se declare. Mais cette
+    // feuille est la seule imprimee : le retour s'y complete a la main, faute
+    // d'imprimante sur place. Le CA du festival y a donc sa colonne, vide.
     : '<th class="tofill retour">Qté restante</th><th class="tofill">Qté vendue</th><th class="tofill">Poids restant (kg)</th>' +
-      '<th class="tofill">Valeur restante en douane (CHF)</th>'}
+      '<th class="tofill">Valeur restante en douane (CHF)</th><th class="tofill">CA du festival (CHF)</th>'}
 </tr></thead><tbody>`;
 
   for (const [objet, o] of [...byObjet.entries()].sort((a, b) => b[1].qty - a[1].qty)) {
@@ -420,7 +421,7 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
                 ? `${avecPrixMoyen ? `<td>${prixMoyen(s)}</td>` : ''}<td>${centimes(s.caCentimes)}</td>`
                 : `${avecPrixMoyen ? '<td class="tofill"></td>' : ''}<td class="tofill"></td>`);
           })()
-        : `<td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
+        : `<td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
       `</tr>`;
   }
 
@@ -441,7 +442,7 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
               ? `${avecPrixMoyen ? '<td></td>' : ''}<td>${centimes(synthese.caCentimes)}</td>`
               : `${avecPrixMoyen ? '<td class="tofill"></td>' : ''}<td class="tofill"></td>`);
         })()
-      : `<td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
+      : `<td class="tofill retour"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td><td class="tofill"></td>`) +
     `</tr></tfoot></table>`;
 
   if (caisses.source === 'caisses') {
@@ -455,8 +456,8 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
 
   if (!closed) {
     html += `<p style="font-size:7.5pt;color:#333;margin-top:2mm">
-     Les quatre colonnes de droite sont à compléter au retour, avec le stock constaté
-     au passage de la frontière.
+     Les cinq colonnes de droite sont à compléter au retour, avec le stock constaté
+     au passage de la frontière et le chiffre d'affaires encaissé pendant le festival.
      ${caisses.source === 'types'
        ? 'Le poids brut d\'un type vaut son poids net plus le poids de ses caisses.'
        : caisses.source === 'aucune' ? 'Le poids brut par type est réparti au prorata du poids net.' : ''}</p>`;
