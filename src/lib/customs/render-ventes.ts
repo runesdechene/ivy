@@ -51,7 +51,8 @@ const dateCourte = (iso: string | null) => {
   return m ? `${m[3]}/${m[2]} ${m[4]}` : esc(iso);
 };
 
-export function renderVentes(passage: PassageVentes, r: Reconstitution): string {
+export function renderVentes(passage: PassageVentes, r: Reconstitution, options: { prixMoyen?: boolean } = {}): string {
+  const avecPrixMoyen = options.prixMoyen === true;
   const labels = passage.customs_labels ?? {};
   const libelle = (type: string) => labels[type] || type;
   const synthese = syntheseParType(r, Number(passage.vat_pct));
@@ -104,13 +105,15 @@ d'espèces sont reconstitués, faute d'autre enregistrement. Chaque montant déc
 
 <h2>Récapitulatif par produit</h2>
 <table><thead><tr>
- <th class="l">Objet</th><th class="l">Type Ivy</th><th>Qté sortie</th><th>dont offertes</th><th>CA déclaré (CHF)</th><th>TVA ${passage.vat_pct} % (CHF)</th>
+ <th class="l">Objet</th><th class="l">Type Ivy</th><th>Qté sortie</th><th>dont offertes</th>${avecPrixMoyen ? '<th>Prix moyen (CHF)</th>' : ''}<th>CA déclaré (CHF)</th>
 </tr></thead><tbody>${synthese.lignes.map((l) => `<tr>
  <td class="l">${esc(libelle(l.type))}</td><td class="l">${esc(l.type)}</td><td>${l.sorties}</td><td>${l.offertes}</td>
- <td>${chf(l.caCentimes)}</td><td>${chf(l.tvaCentimes)}</td></tr>`).join('')}</tbody>
+ ${avecPrixMoyen ? `<td>${l.sorties > l.offertes ? chf(Math.round(l.caCentimes / (l.sorties - l.offertes))) : '—'}</td>` : ''}
+ <td>${chf(l.caCentimes)}</td></tr>`).join('')}</tbody>
 <tfoot><tr><td class="l" colspan="2">TOTAL</td>
  <td>${synthese.lignes.reduce((n, l) => n + l.sorties, 0)}</td><td>${synthese.lignes.reduce((n, l) => n + l.offertes, 0)}</td>
- <td>${chf(synthese.caCentimes)}</td><td>${chf(synthese.tvaCentimes)}</td></tr></tfoot></table>
+ ${avecPrixMoyen ? '<td></td>' : ''}<td>${chf(synthese.caCentimes)}</td></tr></tfoot></table>
+${avecPrixMoyen ? '<p class="note">Prix moyen : CA du produit divisé par ses pièces vendues (hors offertes), arrondi au centime.</p>' : ''}
 <p class="note">TVA ajoutée au CA déclaré : <b>${chf(synthese.tvaCentimes)} CHF</b>, soit <b>${chf(synthese.tvaAPayerCentimes)} CHF</b>
 à payer après arrondi aux 5 centimes.</p>
 </body></html>`;

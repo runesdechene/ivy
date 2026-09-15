@@ -20,6 +20,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   const { id } = await context.params;
   // ?only=resume : la feuille de synthese seule, sans le detail par produit.
   const onlySummary = request.nextUrl.searchParams.get('only') === 'resume';
+  // ?prixMoyen=1 : colonne « Prix moyen » au retour, cochée avant d'imprimer.
+  const prixMoyen = request.nextUrl.searchParams.get('prixMoyen') === '1';
 
   const { data: passage, error } = await supabase
     .from('customs_declarations')
@@ -62,7 +64,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     return NextResponse.json({ error: 'Lecture des paramètres douaniers impossible' }, { status: 500 });
   }
 
-  const html = renderPassage(row, items, { onlySummary });
+  const html = renderPassage(row, items, { onlySummary, prixMoyen });
 
   return new NextResponse(html, {
     status: 200,

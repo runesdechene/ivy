@@ -175,6 +175,9 @@ export default function DouanePassageDetailPage() {
   const [especesEur, setEspecesEur] = useState<number | string>('');
   const [ventesEnCours, setVentesEnCours] = useState(false);
   const [erreurVentes, setErreurVentes] = useState<string | null>(null);
+  // Colonne « Prix moyen » sur les documents imprimés : optionnelle, décochée par défaut.
+  const [prixMoyenImprime, setPrixMoyenImprime] = useState(false);
+  const suffixePrixMoyen = prixMoyenImprime ? 'prixMoyen=1' : '';
 
   const hydratedRef = useRef(false);
   const [form, setForm] = useState<FormState>({
@@ -730,18 +733,26 @@ export default function DouanePassageDetailPage() {
       <Group gap="xs" className={styles.actions}>
         {/* La feuille de résumé est la seule que la douane demande. Les annexes
             par produit restent disponibles, sans être imposées. */}
+        {passage.status === 'closed' && passage.reconstitution && (
+          <Checkbox
+            label="Prix moyen sur les feuilles imprimées"
+            checked={prixMoyenImprime}
+            color="moss"
+            onChange={(e) => setPrixMoyenImprime(e.currentTarget.checked)}
+          />
+        )}
         <Button
           variant="light"
           color="slate"
           leftSection={<IconPrinter size={16} />}
-          onClick={() => window.open(`/api/customs/passages/${id}/document?only=resume`, '_blank')}
+          onClick={() => window.open(`/api/customs/passages/${id}/document?only=resume&${suffixePrixMoyen}`, '_blank')}
         >
           Imprimer la feuille de résumé
         </Button>
         <Button
           variant="subtle"
           color="slate"
-          onClick={() => window.open(`/api/customs/passages/${id}/document`, '_blank')}
+          onClick={() => window.open(`/api/customs/passages/${id}/document?${suffixePrixMoyen}`, '_blank')}
         >
           Avec les annexes par produit
         </Button>
@@ -966,7 +977,7 @@ export default function DouanePassageDetailPage() {
             color="moss"
             size="xs"
             leftSection={<IconPrinter size={14} />}
-            onClick={() => window.open(`/api/customs/passages/${id}/document?only=resume`, '_blank')}
+            onClick={() => window.open(`/api/customs/passages/${id}/document?only=resume&${suffixePrixMoyen}`, '_blank')}
           >
             Imprimer cette feuille
           </Button>
@@ -1350,7 +1361,7 @@ export default function DouanePassageDetailPage() {
                   color="moss"
                   size="xs"
                   leftSection={<IconPrinter size={14} />}
-                  onClick={() => window.open(`/api/customs/passages/${id}/ventes`, '_blank')}
+                  onClick={() => window.open(`/api/customs/passages/${id}/ventes?${suffixePrixMoyen}`, '_blank')}
                 >
                   Imprimer la liste des ventes
                 </Button>
@@ -1420,8 +1431,8 @@ export default function DouanePassageDetailPage() {
                     <Table.Th>Objet</Table.Th>
                     <Table.Th style={{ textAlign: 'right' }}>Qté sortie</Table.Th>
                     <Table.Th style={{ textAlign: 'right' }}>dont offertes</Table.Th>
+                    <Table.Th style={{ textAlign: 'right' }}>Prix moyen</Table.Th>
                     <Table.Th style={{ textAlign: 'right' }}>CA déclaré</Table.Th>
-                    <Table.Th style={{ textAlign: 'right' }}>TVA {passage.vat_pct} %</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
@@ -1430,8 +1441,10 @@ export default function DouanePassageDetailPage() {
                       <Table.Td>{libelleOf(l.type) || l.type}</Table.Td>
                       <Table.Td style={{ textAlign: 'right' }}>{l.sorties}</Table.Td>
                       <Table.Td style={{ textAlign: 'right' }}>{l.offertes}</Table.Td>
+                      <Table.Td style={{ textAlign: 'right' }}>
+                        {l.sorties > l.offertes ? formatChf(Math.round(l.caCentimes / (l.sorties - l.offertes)) / 100) : '—'}
+                      </Table.Td>
                       <Table.Td style={{ textAlign: 'right' }}>{formatChf(l.caCentimes / 100)}</Table.Td>
-                      <Table.Td style={{ textAlign: 'right' }}>{formatChf(l.tvaCentimes / 100)}</Table.Td>
                     </Table.Tr>
                   ))}
                 </Table.Tbody>
@@ -1440,10 +1453,12 @@ export default function DouanePassageDetailPage() {
                     <Table.Td><b>TOTAL</b></Table.Td>
                     <Table.Td style={{ textAlign: 'right' }}><b>{syntheseVentes.lignes.reduce((n, l) => n + l.sorties, 0)}</b></Table.Td>
                     <Table.Td style={{ textAlign: 'right' }}><b>{syntheseVentes.lignes.reduce((n, l) => n + l.offertes, 0)}</b></Table.Td>
-                    <Table.Td style={{ textAlign: 'right' }}><b>{formatChf(syntheseVentes.caCentimes / 100)}</b></Table.Td>
+                    <Table.Td />
                     <Table.Td style={{ textAlign: 'right' }}>
-                      <b>{formatChf(syntheseVentes.tvaCentimes / 100)}</b>
-                      <Text size="xs">à payer : {formatChf(syntheseVentes.tvaAPayerCentimes / 100)}</Text>
+                      <b>{formatChf(syntheseVentes.caCentimes / 100)}</b>
+                      <Text size="xs">
+                        TVA {passage.vat_pct} % : {formatChf(syntheseVentes.tvaCentimes / 100)} · à payer : {formatChf(syntheseVentes.tvaAPayerCentimes / 100)}
+                      </Text>
                     </Table.Td>
                   </Table.Tr>
                 </Table.Tfoot>
