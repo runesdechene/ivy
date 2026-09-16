@@ -172,6 +172,8 @@ export function renderPassage(
   // douanier, et l'entier ecraserait les petites lignes (0,72 kg -> 1 kg).
   const kg = (g: number) => (g / 1000).toFixed(1);
   const kgv = (v: number) => v.toFixed(1);
+  /** Poids d'une caisse : au centième près, sinon 0.83 s'affiche 0.8 et le total ne se retrouve plus. */
+  const kgPiece = (v: number) => v.toFixed(2).replace(/\.?0+$/, '');
   /** Poids sorti = poids parti − poids revenu, tels qu'AFFICHÉS : la case se vérifie de tête. */
   const kgSorti = (partiG: number, revenuG: number) => kgv(Math.max(0, Number(kg(partiG)) - Number(kg(revenuG))));
 
@@ -380,9 +382,11 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
 
 <h2>Détail par type de produit</h2>
 <table><thead>
-<tr><th colspan="11">Départ</th><th colspan="${closed ? (avecPrixMoyen ? 8 : 7) : 6}" class="retour">Retour</th></tr>
+<tr><th colspan="${brutParLigne ? 11 : 9}">Départ</th><th colspan="${closed ? (avecPrixMoyen ? 8 : 7) : 6}" class="retour">Retour</th></tr>
 <tr>
- <th class="l">Objet</th><th class="l">Code SH</th><th class="l">Origine</th><th class="l">Type Ivy</th><th>Quantité</th><th>Poids net (kg)</th><th>Caisses (kg)</th><th>Poids brut (kg)</th>
+ <th class="l">Objet</th><th class="l">Code SH</th><th class="l">Origine</th><th class="l">Type Ivy</th><th>Quantité</th><th>Poids net (kg)</th>
+ ${/* Caisses mutualisées : aucun brut par type n'a de sens, le détail est dans le tableau des caisses. */
+   brutParLigne ? '<th>Caisses (kg)</th><th>Poids brut (kg)</th>' : ''}
  <th>Valeur douanière au départ<br>HT (EUR)</th><th>Valeur douanière au départ<br>HT (CHF)</th><th>TVA import CHF</th>
  ${closed
     // Prix moyen au centime, demande par Uriel : la douane ne suit pas les decimales.
@@ -411,8 +415,9 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
       `<td class="l">${shOf(objet) || '<b style="color:#b00">—</b>'}</td>` +
       `<td class="l">${esc(origineOf(objet)) || '<b style="color:#b00">—</b>'}</td>` +
       `<td class="l">${esc(objet)}</td><td>${o.qty}</td><td>${kg(o.netG)}</td>` +
-      `<td>${hasPackaging && brutParLigne ? kgv(pack) : '—'}</td>` +
-      `<td>${brut !== null ? kgv(brut) : '—'}</td>` +
+      (brutParLigne
+        ? `<td>${hasPackaging ? kgv(pack) : '—'}</td><td>${brut !== null ? kgv(brut) : '—'}</td>`
+        : '') +
       `<td>${num(o.chf / rate)}</td><td>${num(o.chf)}</td><td>${num(vatOnImport(o.chf))}</td>` +
       (closed
         ? (() => {
@@ -429,8 +434,9 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
   }
 
   html += `</tbody><tfoot><tr><td class="l" colspan="4">TOTAL</td><td>${pieces}</td><td>${kg(netG)}</td>` +
-    `<td>${hasPackaging ? kgv(totalPackaging) : '—'}</td>` +
-    `<td>${grossKg !== null ? kgv(grossKg) : '—'}</td>` +
+    (brutParLigne
+      ? `<td>${hasPackaging ? kgv(totalPackaging) : '—'}</td><td>${grossKg !== null ? kgv(grossKg) : '—'}</td>`
+      : '') +
     `<td>${num(customsChf / rate)}</td><td>${num(customsChf)}</td><td>${num(vatOnImport(customsChf))}</td>` +
     (closed
       ? (() => {
@@ -449,12 +455,23 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
     `</tr></tfoot></table>`;
 
   if (caisses.source === 'caisses') {
-    html += `<p style="font-size:7.5pt;color:#333;margin-top:2mm">
-     <b>Tous les articles sont répartis dans ${caisses.nombre} caisse${caisses.nombre > 1 ? 's' : ''}</b>
-     (${listeCaisses.map((o) => `${o.quantite} × ${esc(o.designation)}`).join(', ')}),
-     soit ${kgv(caisses.totalKg)} kg compris dans le poids brut approximatif
-     (le poids des caisses et des articles peut varier légèrement en fonction de leur nature,
-     malgré un effort de mesure).</p>`;
+    // Les caisses mélangent les types : leur poids ne s'attribue à aucune ligne.
+    // Ce tableau montre d'où vient le poids brut, que la feuille annonce en haut.
+    html += `<h2>Caisses — ${caisses.nombre} caisse${caisses.nombre > 1 ? 's' : ''} contenant tous les articles</h2>
+<table><thead><tr>
+ <th class="l">Désignation</th><th>Quantité</th><th>Poids unitaire (kg)</th><th>Poids total (kg)</th>
+</tr></thead><tbody>${listeCaisses.map((o) => `<tr>
+ <td class="l">${esc(o.designation)}</td><td>${o.quantite}</td><td>${kgPiece(o.poids_kg)}</td>
+ <td>${kgv(o.quantite * o.poids_kg)}</td></tr>`).join('')}</tbody>
+<tfoot><tr><td class="l">TOTAL</td><td>${caisses.nombre}</td><td></td><td>${kgv(caisses.totalKg)}</td></tr></tfoot></table>
+<p style="font-size:7.5pt;color:#333;margin-top:2mm">
+ <b>Poids brut = poids net des articles + poids des caisses</b> :
+ ${kg(netG)} + ${kgv(caisses.totalKg)} = <b>${grossKg !== null ? kgv(grossKg) : '—'} kg</b>.
+ ${closed ? `Les caisses reviennent entières : au retour, ${kg(netRetG)} + ${kgv(caisses.totalKg)} =
+ <b>${grossRetKg !== null ? kgv(grossRetKg) : '—'} kg</b>. ` : ''}
+ Les articles étant répartis dans l'ensemble des caisses, aucun poids de caisse n'est attribué à un type.
+ Le poids brut reste approximatif : celui des caisses et des articles peut varier légèrement en fonction
+ de leur nature, malgré un effort de mesure.</p>`;
   }
 
   if (!closed) {
