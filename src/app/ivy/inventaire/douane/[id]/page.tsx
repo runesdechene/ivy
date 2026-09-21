@@ -175,6 +175,8 @@ export default function DouanePassageDetailPage() {
   const [especesEur, setEspecesEur] = useState<number | string>('');
   const [ventesEnCours, setVentesEnCours] = useState(false);
   const [erreurVentes, setErreurVentes] = useState<string | null>(null);
+  // Pièces offertes, par type : bénévoles, organisateurs, échanges. Saisies, jamais devinées.
+  const [offertes, setOffertes] = useState<Record<string, number | string>>({});
   // Colonne « Prix moyen » sur les documents imprimés : optionnelle, décochée par défaut.
   const [prixMoyenImprime, setPrixMoyenImprime] = useState(false);
   const suffixePrixMoyen = prixMoyenImprime ? 'prixMoyen=1' : '';
@@ -233,6 +235,8 @@ export default function DouanePassageDetailPage() {
           designationFormulaire: data.passage?.designation_formulaire ?? '',
           tarifFormulaire: data.passage?.tarif_formulaire ?? '',
         });
+        // Pièces offertes de la dernière reconstitution : relancer ne les perd pas.
+        setOffertes(data.passage?.reconstitution?.entrees?.offertes ?? {});
         hydratedRef.current = true;
       }
     } catch (err) {
@@ -340,6 +344,12 @@ export default function DouanePassageDetailPage() {
     if (fichierSumUp) form.append('fichier', fichierSumUp);
     form.append('especesChf', montant(especesChf));
     form.append('especesEur', montant(especesEur));
+    const cadeaux: Record<string, number> = {};
+    for (const [type, v] of Object.entries(offertes)) {
+      const n = Number(String(v).trim());
+      if (Number.isInteger(n) && n > 0) cadeaux[type] = n;
+    }
+    if (Object.keys(cadeaux).length) form.append('offertes', JSON.stringify(cadeaux));
     setVentesEnCours(true);
     try {
       const res = await fetch(`/api/customs/passages/${id}/reconstitution`, { method: 'POST', body: form });
@@ -352,7 +362,7 @@ export default function DouanePassageDetailPage() {
     } finally {
       setVentesEnCours(false);
     }
-  }, [id, fichierSumUp, especesChf, especesEur]);
+  }, [id, fichierSumUp, especesChf, especesEur, offertes]);
 
   const effacerVentes = useCallback(async () => {
     setVentesEnCours(true);
@@ -876,6 +886,25 @@ export default function DouanePassageDetailPage() {
               allowedDecimalSeparators={['.', ',']}
               placeholder="0"
             />
+          </SimpleGrid>
+          <Text size="xs" c="dimmed" mb={6}>
+            <b>Pièces offertes</b> — bénévoles, organisateurs, échanges. Elles sortent du stock sans
+            encaissement : Ivy les déclare à 0 CHF et répartit l&apos;argent sur les autres. Sans ça,
+            il finance chaque pièce sortie, et choisit lui-même quoi offrir quand l&apos;argent manque.
+          </Text>
+          <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="sm" mb="sm">
+            {summary.rows.filter((r) => r.vendu > 0).map((r) => (
+              <NumberInput
+                key={r.type}
+                label={`${libelleOf(r.type) || r.type} (${r.vendu} sortie${r.vendu > 1 ? 's' : ''})`}
+                value={offertes[r.type] ?? ''}
+                onChange={(v) => setOffertes((prev) => ({ ...prev, [r.type]: v }))}
+                min={0}
+                max={r.vendu}
+                allowDecimal={false}
+                placeholder="0"
+              />
+            ))}
           </SimpleGrid>
           <Group justify="flex-end" mb="sm">
             <Button color="moss" onClick={reconstituerVentes} loading={ventesEnCours}>

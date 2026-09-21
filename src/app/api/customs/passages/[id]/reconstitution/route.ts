@@ -15,7 +15,8 @@ const supabase = createClient(
  * Ventes reconstituées d'un passage clôturé.
  *
  * POST (multipart) : `fichier` (rapport SumUp .xlsx, facultatif si espèces seules),
- * `especesChf`, `especesEur`. Calcule la répartition et la FIGE sur le passage, avec
+ * `especesChf`, `especesEur`, `offertes` (JSON { type: nombre }, facultatif).
+ * Calcule la répartition et la FIGE sur le passage, avec
  * ses entrées : la liste ne bouge plus tant qu'on ne relance pas.
  * DELETE : efface la reconstitution.
  *
@@ -44,6 +45,24 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   const especesEur = montant('especesEur');
   if (Number.isNaN(especesChf) || Number.isNaN(especesEur)) {
     return NextResponse.json({ error: 'Montant des espèces invalide' }, { status: 400 });
+  }
+
+  // Pièces offertes saisies par le déclarant, par type.
+  const offertes: Record<string, number> = {};
+  const brutOffertes = String(form.get('offertes') ?? '').trim();
+  if (brutOffertes) {
+    let lu: unknown;
+    try { lu = JSON.parse(brutOffertes); } catch { lu = null; }
+    if (!lu || typeof lu !== 'object') {
+      return NextResponse.json({ error: 'Pièces offertes illisibles' }, { status: 400 });
+    }
+    for (const [type, v] of Object.entries(lu as Record<string, unknown>)) {
+      const n = Number(v);
+      if (!Number.isInteger(n) || n < 0) {
+        return NextResponse.json({ error: `Nombre de pièces offertes invalide pour ${type}` }, { status: 400 });
+      }
+      if (n > 0) offertes[type] = n;
+    }
   }
 
   let paiements: PaiementSumUp[] = [];
@@ -78,7 +97,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const prix = prixDuReferentiel(await loadReferentiel(supabase, passage.shop_id));
     const reconstitution = reconstituer({
       pieces: piecesVenduesDuPassage(items),
-      paiements, especesChf, especesEur,
+      paiements, especesChf, especesEur, offertes,
       taux: Number(passage.eur_to_chf),
       prix,
     });

@@ -61,6 +61,13 @@ export interface EntreesReconstitution {
   /** Taux du passage : 1 EUR = taux CHF. */
   taux: number;
   prix: Record<string, PrixType>;
+  /**
+   * Pièces offertes par le déclarant, par type : bénévoles, organisateurs, échanges.
+   * Elles sortent du stock sans encaissement, donc de la répartition, à 0 CHF. Sans
+   * elles, l'algorithme finance chaque pièce sortie et choisit lui-même quoi offrir
+   * quand l'argent manque — les pièces les plus chères, rarement les bonnes.
+   */
+  offertes?: Record<string, number>;
 }
 
 export interface Reconstitution {
@@ -223,6 +230,22 @@ export function reconstituer(e: EntreesReconstitution): Reconstitution {
     };
   });
 
+  // Pièces offertes déclarées : mises de côté avant toute répartition.
+  const cadeaux: Piece[] = [];
+  for (const [type, n] of Object.entries(e.offertes ?? {})) {
+    if (!n) continue;
+    const dispo = pieces.filter((p) => p.type === type && !p.offerte);
+    if (!types.includes(type)) {
+      throw new ErreurReconstitution(`${type} : aucune pièce de ce type n'a quitté le stock, elle ne peut pas être offerte.`);
+    }
+    if (n > dispo.length) {
+      throw new ErreurReconstitution(`${n} ${type} offert(e)s, alors que ${dispo.length} pièce(s) de ce type sont sorties du stock.`);
+    }
+    for (let k = 0; k < n; k++) { dispo[k].offerte = true; cadeaux.push(dispo[k]); }
+  }
+  const payantes = pieces.filter((p) => !p.offerte);
+  if (payantes.length === 0) throw new ErreurReconstitution('Toutes les pièces sorties sont déclarées offertes : rien à répartir.');
+
   interface Panier { pay: PaiementReconstitue; pieces: Piece[]; exact: number }
   const paniers: Panier[] = e.paiements.map((p) => ({
     pay: {
@@ -234,16 +257,16 @@ export function reconstituer(e: EntreesReconstitution): Reconstitution {
     exact: p.eur * e.taux * 100,
   }));
 
-  const catalogue = somme(pieces, (p) => p.afficheCentimes);
+  const catalogue = somme(payantes, (p) => p.afficheCentimes);
   const encaisseStand = somme(paniers, (p) => p.pay.standCentimes) + especesStand;
   if (encaisseStand > catalogue) {
     throw new ErreurReconstitution(
-      `Montant encaissé (${chf(encaisseStand)} CHF au stand) supérieur à la valeur affichée des pièces sorties (${chf(catalogue)} CHF) : ` +
+      `Montant encaissé (${chf(encaisseStand)} CHF au stand) supérieur à la valeur affichée des pièces à vendre (${chf(catalogue)} CHF) : ` +
       'prix affichés trop bas, ou pièces vendues manquantes.');
   }
 
   // ---------- 1. Panier de base de chaque paiement SumUp ----------
-  const libres = new Set(pieces.map((p) => p.i));
+  const libres = new Set(payantes.map((p) => p.i));
   const prendre = (type: string) => {
     const p = pieces.find((q) => libres.has(q.i) && q.type === type)!;
     libres.delete(p.i);
@@ -346,6 +369,11 @@ export function reconstituer(e: EntreesReconstitution): Reconstitution {
   // Les espèces gardent leur répartition interne : leur total, lui, est donné.
   const declaresEspeces = arrondirEnConservantLeTotal(paniersEspeces.map((pn) => pn.exact));
   const tous = [...paniers, ...paniersEspeces];
+  // Les cadeaux déclarés voyagent dans le plus gros panier : ils figurent sur la liste
+  // des ventes, à 0 CHF, sans rien changer aux montants.
+  if (cadeaux.length) {
+    [...tous].sort((a, b) => b.pay.standCentimes - a.pay.standCentimes)[0].pieces.push(...cadeaux);
+  }
   const declares = [...paniers.map((pn) => Math.round(pn.exact)), ...declaresEspeces];
   tous.forEach((pn, k) => {
     pn.pay.declareCentimes = declares[k];
@@ -355,8 +383,13 @@ export function reconstituer(e: EntreesReconstitution): Reconstitution {
     }));
   });
 
-  const offertes = pieces.filter((p) => p.offerte).length;
-  if (offertes) avertissements.push(`${offertes} pièce(s) offerte(s) : aucun panier ne pouvait les absorber au-dessus de leur prix minimal.`);
+  if (cadeaux.length) {
+    const parType = new Map<string, number>();
+    for (const p of cadeaux) parType.set(p.type, (parType.get(p.type) ?? 0) + 1);
+    avertissements.push(`${cadeaux.length} pièce(s) déclarée(s) offertes : ${[...parType].map(([t, n]) => `${n} ${t}`).join(', ')}.`);
+  }
+  const offertes = pieces.filter((p) => p.offerte).length - cadeaux.length;
+  if (offertes) avertissements.push(`${offertes} pièce(s) offerte(s) faute d'encaissement : aucun panier ne pouvait les absorber au-dessus de leur prix minimal.`);
   if (nonRonds) avertissements.push(`${nonRonds} paiement(s) SumUp au montant non multiple de 5 CHF : un prix non rond chacun.`);
   avertissements.push(`Taux SumUp retrouvé dans le rapport : 1 € = ${tauxSumUp} CHF.`);
 
