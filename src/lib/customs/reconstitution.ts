@@ -41,7 +41,8 @@ export interface LigneVente {
 }
 
 export interface PaiementReconstitue {
-  source: 'sumup' | 'especes';
+  /** « cadeaux » : les pièces offertes déclarées, hors encaissement, montants à zéro. */
+  source: 'sumup' | 'especes' | 'cadeaux';
   /** Référence SumUp ; null pour les espèces, qui n'existent nulle part ailleurs. */
   ref: string | null;
   date: string | null;
@@ -368,13 +369,21 @@ export function reconstituer(e: EntreesReconstitution): Reconstitution {
   // Le total déclaré est donc la somme des paiements, chacun vérifiable.
   // Les espèces gardent leur répartition interne : leur total, lui, est donné.
   const declaresEspeces = arrondirEnConservantLeTotal(paniersEspeces.map((pn) => pn.exact));
+  // Les cadeaux déclarés forment leur PROPRE ligne, à zéro : glissés dans un panier
+  // payant, ils donnaient à lire « 3 vestes à 90 et 2 t-shirts offerts » pour un même
+  // encaissement, alors qu'ils n'ont rien à voir avec cet argent.
   const tous = [...paniers, ...paniersEspeces];
-  // Les cadeaux déclarés voyagent dans le plus gros panier : ils figurent sur la liste
-  // des ventes, à 0 CHF, sans rien changer aux montants.
   if (cadeaux.length) {
-    [...tous].sort((a, b) => b.pay.standCentimes - a.pay.standCentimes)[0].pieces.push(...cadeaux);
+    tous.push({
+      pay: {
+        source: 'cadeaux', ref: null, date: null, montant: 0, devise: 'CHF',
+        standCentimes: 0, declareCentimes: 0, lignes: [],
+      },
+      pieces: cadeaux,
+      exact: 0,
+    });
   }
-  const declares = [...paniers.map((pn) => Math.round(pn.exact)), ...declaresEspeces];
+  const declares = [...paniers.map((pn) => Math.round(pn.exact)), ...declaresEspeces, ...(cadeaux.length ? [0] : [])];
   tous.forEach((pn, k) => {
     pn.pay.declareCentimes = declares[k];
     repartirDeclare(pn.pieces, declares[k]);
@@ -396,7 +405,10 @@ export function reconstituer(e: EntreesReconstitution): Reconstitution {
   return {
     genereLe: new Date().toISOString(),
     tauxSumUp,
-    entrees: { paiements: e.paiements, especesChf: e.especesChf, especesEur: e.especesEur, taux: e.taux, prix: e.prix },
+    entrees: {
+      paiements: e.paiements, especesChf: e.especesChf, especesEur: e.especesEur,
+      taux: e.taux, prix: e.prix, offertes: e.offertes ?? {},
+    },
     paiements: tous.map((pn) => pn.pay),
     avertissements,
   };
