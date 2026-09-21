@@ -83,26 +83,35 @@ const estRondEnEuros = (eur: number) => Math.round(eur * 100) % 100 === 0;
 
 /**
  * Taux auquel SumUp a converti les prix en CHF : celui qui ramène le plus de paiements
- * sur un franc rond. Un paiement déjà rond en euros est un client payé en euros (au pair).
+ * sur un MULTIPLE DE 5 francs. Un paiement déjà rond en euros est un client payé en
+ * euros (au pair).
+ *
+ * Le critère du franc entier ne suffit pas : sur Arcana il élisait 0.9776, qui donnait
+ * 20 paiements entiers mais un seul multiple de 5, et des prix de stand comme 27 ou
+ * 104 CHF. Les prix affichés sont ronds et les remises vont par tranches de 5 : un
+ * panier tombe donc sur un multiple de 5. Avec ce critère, Arcana retrouve 0.94 (19
+ * multiples de 5 sur 25) et août garde son 0.9378 (45 sur 54).
  */
 export function estimerTauxSumUp(paiements: PaiementSumUp[], repli: number): number {
   const convertis = paiements.filter((p) => !estRondEnEuros(p.eur));
   if (convertis.length === 0) return repli;
   let meilleur = repli;
-  let meilleurScore = -1;
+  let meilleurCinq = -1;
+  let meilleurEntiers = -1;
   let meilleurEcart = Infinity;
   for (let k = 9000; k <= 10000; k++) {
     const r = k / 10000;
-    let score = 0;
-    let ecart = 0;
+    let cinq = 0, entiers = 0, ecart = 0;
     for (const p of convertis) {
       const x = p.eur * r;
       const d = Math.abs(x - Math.round(x));
-      if (d <= 0.05) { score++; ecart += d; }
+      if (d <= 0.05) { entiers++; ecart += d; }
+      if (Math.abs(x - Math.round(x / 5) * 5) <= 0.05) cinq++;
     }
-    if (score > meilleurScore || (score === meilleurScore && ecart < meilleurEcart)) {
-      meilleur = r; meilleurScore = score; meilleurEcart = ecart;
-    }
+    const mieux = cinq > meilleurCinq
+      || (cinq === meilleurCinq && (entiers > meilleurEntiers
+        || (entiers === meilleurEntiers && ecart < meilleurEcart)));
+    if (mieux) { meilleur = r; meilleurCinq = cinq; meilleurEntiers = entiers; meilleurEcart = ecart; }
   }
   return meilleur;
 }
@@ -328,9 +337,16 @@ export function reconstituer(e: EntreesReconstitution): Reconstitution {
     if (fixerPrix(pn.pieces, pn.pay.standCentimes, `Paiement du ${pn.pay.date}`)) nonRonds++;
   }
 
-  // ---------- 4. Montants déclarés : total exact au centime, puis au prorata ----------
+  // ---------- 4. Montants déclarés ----------
+  // Un paiement SumUp s'arrondit SEUL : 106.38 € au taux du passage vaut 100.00 CHF,
+  // partout et à chaque fois. Répartir l'arrondi du total sur l'ensemble donnait
+  // 100.00 à un paiement et 99.99 à son jumeau — deux fois le même montant, deux
+  // résultats : un douanier qui refait la multiplication ne s'y retrouve pas.
+  // Le total déclaré est donc la somme des paiements, chacun vérifiable.
+  // Les espèces gardent leur répartition interne : leur total, lui, est donné.
+  const declaresEspeces = arrondirEnConservantLeTotal(paniersEspeces.map((pn) => pn.exact));
   const tous = [...paniers, ...paniersEspeces];
-  const declares = arrondirEnConservantLeTotal(tous.map((pn) => pn.exact));
+  const declares = [...paniers.map((pn) => Math.round(pn.exact)), ...declaresEspeces];
   tous.forEach((pn, k) => {
     pn.pay.declareCentimes = declares[k];
     repartirDeclare(pn.pieces, declares[k]);

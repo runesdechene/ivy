@@ -77,7 +77,9 @@ export function renderVentes(passage: PassageVentes, r: Reconstitution, options:
   ].filter(([, v]) => v).map(([k, v]) => `<span class="chip"><b>${k}</b> ${v}</span>`).join('')}</div>
 <p class="note">Répartition par produit établie à partir des encaissements : paiements du rapport SumUp d'origine
 (même date, heure et montant ; encaissés en euros, convertis au taux du passage) et espèces. Les paniers
-d'espèces sont reconstitués, faute d'autre enregistrement. Chaque montant déclaré est la somme de son panier.</p>
+d'espèces sont reconstitués, faute d'autre enregistrement. Chaque montant déclaré vaut le montant d'origine
+multiplié par le taux du passage, arrondi au centime, et se répartit sur les articles de son panier ;
+le total est la somme des paiements.</p>
 
 <table><thead><tr>
  <th class="l">Date</th><th class="l">Paiement</th><th>Montant d'origine</th><th>Déclaré (CHF)</th><th class="l">Articles (prix au stand, CHF)</th>
