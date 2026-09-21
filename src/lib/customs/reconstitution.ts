@@ -328,9 +328,16 @@ export function reconstituer(e: EntreesReconstitution): Reconstitution {
     if (fixerPrix(pn.pieces, pn.pay.standCentimes, `Paiement du ${pn.pay.date}`)) nonRonds++;
   }
 
-  // ---------- 4. Montants déclarés : total exact au centime, puis au prorata ----------
+  // ---------- 4. Montants déclarés ----------
+  // Un paiement SumUp s'arrondit SEUL : 106.38 € au taux du passage vaut 100.00 CHF,
+  // partout et à chaque fois. Répartir l'arrondi du total sur l'ensemble donnait
+  // 100.00 à un paiement et 99.99 à son jumeau — deux fois le même montant, deux
+  // résultats : un douanier qui refait la multiplication ne s'y retrouve pas.
+  // Le total déclaré est donc la somme des paiements, chacun vérifiable.
+  // Les espèces gardent leur répartition interne : leur total, lui, est donné.
+  const declaresEspeces = arrondirEnConservantLeTotal(paniersEspeces.map((pn) => pn.exact));
   const tous = [...paniers, ...paniersEspeces];
-  const declares = arrondirEnConservantLeTotal(tous.map((pn) => pn.exact));
+  const declares = [...paniers.map((pn) => Math.round(pn.exact)), ...declaresEspeces];
   tous.forEach((pn, k) => {
     pn.pay.declareCentimes = declares[k];
     repartirDeclare(pn.pieces, declares[k]);
