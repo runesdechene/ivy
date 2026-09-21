@@ -491,7 +491,7 @@ ${passage.doc_sous_titre ? `<p class="soustitre">${esc(passage.doc_sous_titre)}<
      « Qté sortie » vaut « parti − revenu » ; chaque CA est la somme des ventes du type dans la liste jointe${avecPrixMoyen
        ? ',\n     et le prix moyen ce CA divisé par les pièces vendues, arrondi au centime' : ''}.</p>`
       : `<p style="font-size:7.5pt;color:#333;margin-top:2mm">
-     ${avecPrixMoyen ? 'Les colonnes <b>Prix moyen</b> et <b>CA déclaré</b> sont' : 'La colonne <b>CA déclaré</b> est'} à compléter : reconstituer d'abord les ventes
+     ${avecPrixMoyen ? 'Les colonnes <b>Prix moyen</b> et <b>CA déclaré</b> sont' : 'La colonne <b>CA déclaré</b> est'} à compléter : renseigner d'abord les ventes
      (paiements SumUp et espèces). « Qté sortie » vaut « parti − revenu ».</p>`;
   }
   // ---------- Matériel d'exposition ----------

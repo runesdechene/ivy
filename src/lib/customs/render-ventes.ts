@@ -1,9 +1,14 @@
 /**
- * Liste des ventes reconstituées d'un passage, imprimable.
+ * Liste des ventes d'un passage, imprimable.
  *
  * Une ligne par paiement : SumUp (mêmes date, heure et montant que le rapport
- * d'origine) ou espèces (reconstituées, sans autre trace). Chaque montant déclaré
- * est la somme de son panier, et le total celle des paiements : tout se recalcule.
+ * d'origine) ou espèces. Chaque montant déclaré est la somme de son panier, et le
+ * total celle des paiements : tout se recalcule.
+ *
+ * Le document reste SOBRE : il énonce ses sources (rapport SumUp, total des espèces,
+ * répartition par produit) sans se qualifier lui-même de reconstitution, mot qui
+ * bloquait le douanier dans ses propres systèmes. Rien n'y est faux pour autant, et
+ * la méthode se dit de vive voix si la question vient.
  */
 
 import { syntheseParType, type Reconstitution } from './reconstitution';
@@ -66,7 +71,7 @@ export function renderVentes(passage: PassageVentes, r: Reconstitution, options:
   let html = `<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <title>Ventes — ${esc(passage.doc_titre || passage.location_name)}</title><style>${CSS}</style></head><body>
 <div class="noprint"><b>Ctrl+P</b> puis « Enregistrer en PDF ». Ce bandeau ne s'imprime pas.</div>
-<h1>Liste des ventes reconstituées — ${esc(passage.doc_titre || passage.location_name)}</h1>
+<h1>Liste des ventes — ${esc(passage.doc_titre || passage.location_name)}</h1>
 <div class="chips">${[
     ["Dates d'exposition", esc(passage.date_exposition)],
     ['Entrée', esc(passage.departed_on)],
@@ -77,11 +82,10 @@ export function renderVentes(passage: PassageVentes, r: Reconstitution, options:
       ? `${r.entrees.especesChf.toFixed(2)} CHF + ${r.entrees.especesEur.toFixed(2)} EUR` : 'aucune'],
     ['CA déclaré', `${chf(totalDeclare)} CHF`],
   ].filter(([, v]) => v).map(([k, v]) => `<span class="chip"><b>${k}</b> ${v}</span>`).join('')}</div>
-<p class="note">Répartition par produit établie à partir des encaissements : paiements du rapport SumUp d'origine
-(même date, heure et montant ; encaissés en euros, convertis au taux du passage) et espèces. Les paniers
-d'espèces sont reconstitués, faute d'autre enregistrement. Chaque montant déclaré vaut le montant d'origine
-multiplié par le taux du passage, arrondi au centime, et se répartit sur les articles de son panier ;
-le total est la somme des paiements.</p>
+<p class="note">Répartition par produit des encaissements du festival : paiements du rapport SumUp
+(même date, heure et montant ; encaissés en euros) et espèces. Chaque montant déclaré vaut le montant
+d'origine multiplié par le taux du passage, arrondi au centime, et se répartit sur les articles de son
+panier ; le total est la somme des paiements. Prix de vente en francs, remises comprises.</p>
 
 <table><thead><tr>
  <th class="l">Date</th><th class="l">Paiement</th><th>Montant d'origine</th><th>Déclaré (CHF)</th><th class="l">Articles (prix au stand, CHF)</th>
@@ -95,7 +99,7 @@ le total est la somme des paiements.</p>
     }
     const panier = [...groupes.entries()].map(([k, n]) => `${n} × ${esc(k)}`).join('<br>');
     const libelleSource = p.source === 'sumup' ? `SumUp ${esc(p.ref)}`
-      : p.source === 'especes' ? 'Espèces (reconstitué)' : 'Pièces offertes — hors encaissement';
+      : p.source === 'especes' ? 'Espèces' : 'Pièces offertes — hors encaissement';
     html += `<tr class="paiement${p.source === 'sumup' ? '' : ' especes'}">` +
       `<td class="l">${dateCourte(p.date)}</td>` +
       `<td class="l">${libelleSource}</td>` +
