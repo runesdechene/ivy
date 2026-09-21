@@ -822,6 +822,124 @@ export default function DouanePassageDetailPage() {
         </Alert>
       )}
 
+      {passage.status === 'closed' && (
+        <Paper className={`${styles.panel} ${styles.panelRecopie}`} radius="md">
+          <div className={styles.panelHead}>
+            <h3 className={styles.panelTitle}>Ventes reconstituées</h3>
+            {passage.reconstitution && (
+              <Group gap="xs">
+                <Button
+                  variant="light"
+                  color="moss"
+                  size="xs"
+                  leftSection={<IconPrinter size={14} />}
+                  onClick={() => window.open(`/api/customs/passages/${id}/ventes?${suffixePrixMoyen}`, '_blank')}
+                >
+                  Imprimer la liste des ventes
+                </Button>
+                <Button variant="subtle" color="gray" size="xs" onClick={effacerVentes} loading={ventesEnCours}>
+                  Effacer
+                </Button>
+              </Group>
+            )}
+          </div>
+          <Text size="xs" c="dimmed" mb="sm">
+            Importe le <b>rapport de ventes SumUp</b> (.xlsx) de la période du festival et saisis les espèces.
+            Ivy répartit l&apos;encaissé sur les pièces sorties du stock, selon les prix affichés et minimaux de{' '}
+            <Anchor component={Link} href="/parametres/douane" size="xs">Paramètres → Douane</Anchor>.
+            Le résultat est enregistré sur le passage : relancer le recalcule. Rien n&apos;est écrit dans le stock.
+          </Text>
+          <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm" mb="sm">
+            <FileInput
+              label="Rapport SumUp (.xlsx)"
+              placeholder="Choisir le fichier"
+              accept=".xlsx"
+              value={fichierSumUp}
+              onChange={setFichierSumUp}
+              clearable
+            />
+            <NumberInput
+              label="Espèces encaissées (CHF)"
+              value={especesChf}
+              onChange={setEspecesChf}
+              min={0}
+              decimalScale={2}
+              allowedDecimalSeparators={['.', ',']}
+              placeholder="0"
+            />
+            <NumberInput
+              label="Espèces encaissées (EUR)"
+              value={especesEur}
+              onChange={setEspecesEur}
+              min={0}
+              decimalScale={2}
+              allowedDecimalSeparators={['.', ',']}
+              placeholder="0"
+            />
+          </SimpleGrid>
+          <Group justify="flex-end" mb="sm">
+            <Button color="moss" onClick={reconstituerVentes} loading={ventesEnCours}>
+              {passage.reconstitution ? 'Reconstituer à nouveau' : 'Reconstituer les ventes'}
+            </Button>
+          </Group>
+          {erreurVentes && (
+            <Alert color="rust" icon={<IconAlertTriangle size={16} />} mb="sm" title="Reconstitution impossible">
+              {erreurVentes}
+            </Alert>
+          )}
+          {syntheseVentes && passage.reconstitution && (
+            <>
+              <Text size="xs" c="dimmed" mb={4}>
+                Calculée le {new Date(passage.reconstitution.genereLe).toLocaleString('fr-FR')} ·{' '}
+                {passage.reconstitution.paiements.filter((p) => p.source === 'sumup').length} paiement(s) SumUp ·{' '}
+                espèces {passage.reconstitution.entrees.especesChf.toFixed(2)} CHF + {passage.reconstitution.entrees.especesEur.toFixed(2)} EUR
+              </Text>
+              {passage.reconstitution.avertissements.map((a) => (
+                <Text size="xs" key={a}>• {a}</Text>
+              ))}
+              <Table withTableBorder striped mt="sm">
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>Objet</Table.Th>
+                    <Table.Th style={{ textAlign: 'right' }}>Qté sortie</Table.Th>
+                    <Table.Th style={{ textAlign: 'right' }}>dont offertes</Table.Th>
+                    <Table.Th style={{ textAlign: 'right' }}>Prix moyen</Table.Th>
+                    <Table.Th style={{ textAlign: 'right' }}>CA déclaré</Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {syntheseVentes.lignes.map((l) => (
+                    <Table.Tr key={l.type}>
+                      <Table.Td>{libelleOf(l.type) || l.type}</Table.Td>
+                      <Table.Td style={{ textAlign: 'right' }}>{l.sorties}</Table.Td>
+                      <Table.Td style={{ textAlign: 'right' }}>{l.offertes}</Table.Td>
+                      <Table.Td style={{ textAlign: 'right' }}>
+                        {l.sorties > l.offertes ? formatChf(Math.round(l.caCentimes / (l.sorties - l.offertes)) / 100) : '—'}
+                      </Table.Td>
+                      <Table.Td style={{ textAlign: 'right' }}>{formatChf(l.caCentimes / 100)}</Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+                <Table.Tfoot>
+                  <Table.Tr>
+                    <Table.Td><b>TOTAL</b></Table.Td>
+                    <Table.Td style={{ textAlign: 'right' }}><b>{syntheseVentes.lignes.reduce((n, l) => n + l.sorties, 0)}</b></Table.Td>
+                    <Table.Td style={{ textAlign: 'right' }}><b>{syntheseVentes.lignes.reduce((n, l) => n + l.offertes, 0)}</b></Table.Td>
+                    <Table.Td />
+                    <Table.Td style={{ textAlign: 'right' }}>
+                      <b>{formatChf(syntheseVentes.caCentimes / 100)}</b>
+                      <Text size="xs">
+                        TVA {passage.vat_pct} % : {formatChf(syntheseVentes.tvaCentimes / 100)} · à payer : {formatChf(syntheseVentes.tvaAPayerCentimes / 100)}
+                      </Text>
+                    </Table.Td>
+                  </Table.Tr>
+                </Table.Tfoot>
+              </Table>
+            </>
+          )}
+        </Paper>
+      )}
+
       <Paper className={`${styles.panel} ${styles.panelRecopie}`} radius="md">
         <div className={styles.panelHead}>
           <h3 className={styles.panelTitle}>À recopier sur le 11.74</h3>
@@ -1349,124 +1467,6 @@ export default function DouanePassageDetailPage() {
           </Table>
         </div>
       </Paper>
-
-      {passage.status === 'closed' && (
-        <Paper className={`${styles.panel} ${styles.panelRecopie}`} radius="md">
-          <div className={styles.panelHead}>
-            <h3 className={styles.panelTitle}>Ventes reconstituées</h3>
-            {passage.reconstitution && (
-              <Group gap="xs">
-                <Button
-                  variant="light"
-                  color="moss"
-                  size="xs"
-                  leftSection={<IconPrinter size={14} />}
-                  onClick={() => window.open(`/api/customs/passages/${id}/ventes?${suffixePrixMoyen}`, '_blank')}
-                >
-                  Imprimer la liste des ventes
-                </Button>
-                <Button variant="subtle" color="gray" size="xs" onClick={effacerVentes} loading={ventesEnCours}>
-                  Effacer
-                </Button>
-              </Group>
-            )}
-          </div>
-          <Text size="xs" c="dimmed" mb="sm">
-            Importe le <b>rapport de ventes SumUp</b> (.xlsx) de la période du festival et saisis les espèces.
-            Ivy répartit l&apos;encaissé sur les pièces sorties du stock, selon les prix affichés et minimaux de{' '}
-            <Anchor component={Link} href="/parametres/douane" size="xs">Paramètres → Douane</Anchor>.
-            Le résultat est enregistré sur le passage : relancer le recalcule. Rien n&apos;est écrit dans le stock.
-          </Text>
-          <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm" mb="sm">
-            <FileInput
-              label="Rapport SumUp (.xlsx)"
-              placeholder="Choisir le fichier"
-              accept=".xlsx"
-              value={fichierSumUp}
-              onChange={setFichierSumUp}
-              clearable
-            />
-            <NumberInput
-              label="Espèces encaissées (CHF)"
-              value={especesChf}
-              onChange={setEspecesChf}
-              min={0}
-              decimalScale={2}
-              allowedDecimalSeparators={['.', ',']}
-              placeholder="0"
-            />
-            <NumberInput
-              label="Espèces encaissées (EUR)"
-              value={especesEur}
-              onChange={setEspecesEur}
-              min={0}
-              decimalScale={2}
-              allowedDecimalSeparators={['.', ',']}
-              placeholder="0"
-            />
-          </SimpleGrid>
-          <Group justify="flex-end" mb="sm">
-            <Button color="moss" onClick={reconstituerVentes} loading={ventesEnCours}>
-              {passage.reconstitution ? 'Reconstituer à nouveau' : 'Reconstituer les ventes'}
-            </Button>
-          </Group>
-          {erreurVentes && (
-            <Alert color="rust" icon={<IconAlertTriangle size={16} />} mb="sm" title="Reconstitution impossible">
-              {erreurVentes}
-            </Alert>
-          )}
-          {syntheseVentes && passage.reconstitution && (
-            <>
-              <Text size="xs" c="dimmed" mb={4}>
-                Calculée le {new Date(passage.reconstitution.genereLe).toLocaleString('fr-FR')} ·{' '}
-                {passage.reconstitution.paiements.filter((p) => p.source === 'sumup').length} paiement(s) SumUp ·{' '}
-                espèces {passage.reconstitution.entrees.especesChf.toFixed(2)} CHF + {passage.reconstitution.entrees.especesEur.toFixed(2)} EUR
-              </Text>
-              {passage.reconstitution.avertissements.map((a) => (
-                <Text size="xs" key={a}>• {a}</Text>
-              ))}
-              <Table withTableBorder striped mt="sm">
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th>Objet</Table.Th>
-                    <Table.Th style={{ textAlign: 'right' }}>Qté sortie</Table.Th>
-                    <Table.Th style={{ textAlign: 'right' }}>dont offertes</Table.Th>
-                    <Table.Th style={{ textAlign: 'right' }}>Prix moyen</Table.Th>
-                    <Table.Th style={{ textAlign: 'right' }}>CA déclaré</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {syntheseVentes.lignes.map((l) => (
-                    <Table.Tr key={l.type}>
-                      <Table.Td>{libelleOf(l.type) || l.type}</Table.Td>
-                      <Table.Td style={{ textAlign: 'right' }}>{l.sorties}</Table.Td>
-                      <Table.Td style={{ textAlign: 'right' }}>{l.offertes}</Table.Td>
-                      <Table.Td style={{ textAlign: 'right' }}>
-                        {l.sorties > l.offertes ? formatChf(Math.round(l.caCentimes / (l.sorties - l.offertes)) / 100) : '—'}
-                      </Table.Td>
-                      <Table.Td style={{ textAlign: 'right' }}>{formatChf(l.caCentimes / 100)}</Table.Td>
-                    </Table.Tr>
-                  ))}
-                </Table.Tbody>
-                <Table.Tfoot>
-                  <Table.Tr>
-                    <Table.Td><b>TOTAL</b></Table.Td>
-                    <Table.Td style={{ textAlign: 'right' }}><b>{syntheseVentes.lignes.reduce((n, l) => n + l.sorties, 0)}</b></Table.Td>
-                    <Table.Td style={{ textAlign: 'right' }}><b>{syntheseVentes.lignes.reduce((n, l) => n + l.offertes, 0)}</b></Table.Td>
-                    <Table.Td />
-                    <Table.Td style={{ textAlign: 'right' }}>
-                      <b>{formatChf(syntheseVentes.caCentimes / 100)}</b>
-                      <Text size="xs">
-                        TVA {passage.vat_pct} % : {formatChf(syntheseVentes.tvaCentimes / 100)} · à payer : {formatChf(syntheseVentes.tvaAPayerCentimes / 100)}
-                      </Text>
-                    </Table.Td>
-                  </Table.Tr>
-                </Table.Tfoot>
-              </Table>
-            </>
-          )}
-        </Paper>
-      )}
 
       {passage.status === 'closed' && (
         <Paper className={styles.panel} radius="md">
