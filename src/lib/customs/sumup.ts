@@ -86,15 +86,27 @@ function lignesFeuille(fichiers: Map<string, () => Buffer>): string[][] {
   return lignes;
 }
 
+/**
+ * Mois écrits par SumUp, en entier (« août ») ou abrégés (« sept. »), avec ou
+ * sans accents. On compare sur les trois premières lettres sans accent : « jui »
+ * ne suffit pas à départager juin de juillet, d'où les entrées à quatre lettres.
+ */
 const MOIS: Record<string, string> = {
-  janvier: '01', février: '02', fevrier: '02', mars: '03', avril: '04', mai: '05', juin: '06', juillet: '07',
-  août: '08', aout: '08', septembre: '09', octobre: '10', novembre: '11', décembre: '12', decembre: '12',
+  jan: '01', fev: '02', mar: '03', avr: '04', mai: '05', juin: '06', juil: '07',
+  aou: '08', sep: '09', oct: '10', nov: '11', dec: '12',
 };
 
-/** « 27 août 2026 18:07 » → 2026-08-27T18:07. */
+const sansAccent = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+function moisSumUp(mot: string): string | undefined {
+  const m = sansAccent(mot).replace(/\.$/, '');
+  return MOIS[m.slice(0, 4)] ?? MOIS[m.slice(0, 3)];
+}
+
+/** « 27 août 2026 18:07 » ou « 21 sept. 2026 12:26 » → 2026-08-27T18:07. */
 function dateSumUp(texte: string): string {
   const m = /^(\d{1,2})\s+(\S+)\s+(\d{4})\s+(\d{1,2}):(\d{2})/.exec(texte.trim());
-  const mois = m && MOIS[m[2].toLowerCase()];
+  const mois = m && moisSumUp(m[2]);
   if (!m || !mois) throw new Error(`Date SumUp illisible : « ${texte} »`);
   return `${m[3]}-${mois}-${m[1].padStart(2, '0')}T${m[4].padStart(2, '0')}:${m[5]}`;
 }
