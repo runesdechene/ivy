@@ -58,6 +58,8 @@ export function renderVentes(passage: PassageVentes, r: Reconstitution, options:
   const synthese = syntheseParType(r, Number(passage.vat_pct));
   const sumup = r.paiements.filter((p) => p.source === 'sumup');
   const especes = r.paiements.filter((p) => p.source === 'especes');
+  // Les cadeaux ne sont pas un paiement : ils ne comptent dans aucun total d'encaissement.
+  const encaissements = r.paiements.filter((p) => p.source !== 'cadeaux');
   const totalDeclare = r.paiements.reduce((n, p) => n + p.declareCentimes, 0);
   const totalEur = Math.round(sumup.reduce((n, p) => n + p.montant * 100, 0));
 
@@ -92,15 +94,18 @@ le total est la somme des paiements.</p>
       groupes.set(cle, (groupes.get(cle) ?? 0) + 1);
     }
     const panier = [...groupes.entries()].map(([k, n]) => `${n} × ${esc(k)}`).join('<br>');
-    html += `<tr class="paiement${p.source === 'especes' ? ' especes' : ''}">` +
+    const libelleSource = p.source === 'sumup' ? `SumUp ${esc(p.ref)}`
+      : p.source === 'especes' ? 'Espèces (reconstitué)' : 'Pièces offertes — hors encaissement';
+    html += `<tr class="paiement${p.source === 'sumup' ? '' : ' especes'}">` +
       `<td class="l">${dateCourte(p.date)}</td>` +
-      `<td class="l">${p.source === 'sumup' ? `SumUp ${esc(p.ref)}` : 'Espèces (reconstitué)'}</td>` +
-      `<td>${p.source === 'sumup' ? `${p.montant.toFixed(2)} EUR` : `${chf(p.standCentimes)} CHF`}</td>` +
-      `<td>${chf(p.declareCentimes)}</td>` +
+      `<td class="l">${libelleSource}</td>` +
+      `<td>${p.source === 'sumup' ? `${p.montant.toFixed(2)} EUR`
+        : p.source === 'especes' ? `${chf(p.standCentimes)} CHF` : '—'}</td>` +
+      `<td>${p.source === 'cadeaux' ? '—' : chf(p.declareCentimes)}</td>` +
       `<td class="l">${panier}</td></tr>`;
   }
 
-  html += `</tbody><tfoot><tr><td class="l" colspan="2">TOTAL — ${r.paiements.length} paiement(s)` +
+  html += `</tbody><tfoot><tr><td class="l" colspan="2">TOTAL — ${encaissements.length} paiement(s)` +
     `${especes.length ? `, dont ${especes.length} en espèces` : ''}</td>` +
     `<td>${chf(totalEur)} EUR</td><td>${chf(totalDeclare)}</td>` +
     `<td class="l">${r.paiements.reduce((n, p) => n + p.lignes.length, 0)} article(s)</td></tr></tfoot></table>
