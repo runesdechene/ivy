@@ -50,7 +50,11 @@ __pycache__/
 # local tooling (OpenWolf archive, Claude project config, Graphify outputs)
 /.wolf
 /.wolf-archive
-/.claude
+# on ignore la config locale de Claude, MAIS pas les regles du depot :
+# elles portent les pieges techniques et doivent voyager avec le code.
+# (git ne descend pas dans un dossier exclu -> on exclut le contenu, pas le dossier)
+/.claude/*
+!/.claude/rules/
 /graphify-out
 /.superpowers
 /CLAUDE.md.openwolf-era
