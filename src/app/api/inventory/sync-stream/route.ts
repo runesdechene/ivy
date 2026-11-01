@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { syncVariantMetafields, deduplicateLocalVariants } from '@/lib/shopify-metafields';
+import { toIvyStatus } from '@/lib/shopify-status';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -224,7 +225,7 @@ async function phaseProducts(
     title: p.title,
     handle: p.handle,
     image_url: p.image?.src || p.images?.[0]?.src || null,
-    status: (p.status === 'draft' || p.status === 'archived') ? p.status : 'active',
+    status: toIvyStatus(p.status),
     product_type: p.product_type || null,
     option1_name: p.options?.[0]?.name || null,
     option2_name: p.options?.[1]?.name || null,

@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { syncVariantMetafields, deduplicateLocalVariants } from '@/lib/shopify-metafields';
+import { toIvyStatus } from '@/lib/shopify-status';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -170,7 +171,7 @@ export async function GET(request: NextRequest) {
             title: shopifyProduct.title,
             handle: shopifyProduct.handle,
             image_url: shopifyProduct.image?.src || shopifyProduct.images?.[0]?.src || null,
-            status: shopifyProduct.status,
+            status: toIvyStatus(shopifyProduct.status),
             product_type: shopifyProduct.product_type || null,
             option1_name: shopifyProduct.options?.[0]?.name || null,
             option2_name: shopifyProduct.options?.[1]?.name || null,
@@ -422,7 +423,7 @@ export async function GET(request: NextRequest) {
           supabaseId: productUuid,
           title: shopifyProduct.title,
           handle: shopifyProduct.handle,
-          status: shopifyProduct.status?.toUpperCase() || 'ACTIVE',
+          status: toIvyStatus(shopifyProduct.status).toUpperCase(),
           image: shopifyProduct.image?.src || shopifyProduct.images?.[0]?.src || null,
           imageAlt: shopifyProduct.title,
           productType: shopifyProduct.product_type || null,

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/supabase/client';
 import { syncVariantMetafields, deduplicateLocalVariants } from '@/lib/shopify-metafields';
+import { toIvyStatus } from '@/lib/shopify-status';
 
 // Sync Shopify → Supabase (récupérer les données depuis Shopify)
 export async function POST(request: Request) {
@@ -113,7 +114,7 @@ export async function POST(request: Request) {
       title: product.title,
       handle: product.handle,
       image_url: product.image?.src || product.images?.[0]?.src || null,
-      status: (product.status === 'draft' || product.status === 'archived') ? product.status : 'active',
+      status: toIvyStatus(product.status),
       option1_name: product.options?.[0]?.name || null,
       option2_name: product.options?.[1]?.name || null,
       option3_name: product.options?.[2]?.name || null,
