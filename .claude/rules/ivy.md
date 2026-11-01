@@ -1,6 +1,6 @@
 # IVY — pièges et conventions
 
-> Dépôt auto-déployé à chaque poussée sur `main`. L'état du produit vit dans le vault : `1. LE MÉTIER/4. IVY/_État.md`.
+> Dépôt auto-déployé à chaque poussée sur `main`. L'état du produit vit dans le vault : `3. L'ATELIER/IVY/_État.md` (projet sans relance).
 > Regroupé le 25/09/2026 depuis la mémoire locale, pour que ce savoir voyage avec le dépôt.
 
 ## ivy-dev-build-conflict
