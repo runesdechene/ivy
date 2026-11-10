@@ -185,10 +185,10 @@ export function Gabarits({ shopId }: { shopId: string }) {
                   {libelle(g)}
                   {g.face === 'recto' && !g.poitrine && <span className={styles.aRegler}> · poitrine à poser</span>}
                 </button>
-                {/* Copie : même modèle et même face, il reste à choisir la couleur (ou la face). */}
+                {/* Copie à l'identique : on change ensuite la face ou la couleur. */}
                 <ActionIcon
                   className={styles.ligneAction} size="sm" variant="subtle" color="gray" title="Dupliquer" aria-label={`Dupliquer ${libelle(g)}`}
-                  onClick={() => ouvrir({ ...depuis(g), id: null, copieDe: g.id, couleur: null })}
+                  onClick={() => ouvrir({ ...depuis(g), id: null, copieDe: g.id })}
                 >
                   <IconCopy size={14} />
                 </ActionIcon>
