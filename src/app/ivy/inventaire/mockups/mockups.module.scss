@@ -197,3 +197,34 @@
   right: 8px;
   z-index: 1;
 }
+
+/* Onglet Motifs : barre du motif, puis les quatre tailles côte à côte */
+.barreMotif {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.etiquette {
+  font-size: 12px;
+  font-weight: 500;
+  color: $slate-muted;
+  margin-bottom: 4px;
+}
+
+.espace { flex: 1; }
+
+.tailles {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+
+  .panneau { margin-bottom: 0; }
+}
+
+.apercu {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: $radius-md;
+}

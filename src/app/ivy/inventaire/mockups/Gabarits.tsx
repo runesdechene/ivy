@@ -40,13 +40,18 @@ function useUrlLocale(fichier: File | null): string | null {
   return url;
 }
 
-const libelle = (g: Pick<Gabarit, 'modele' | 'couleur' | 'face'>) => `${g.modele} · ${g.couleur} · ${g.face === 'recto' ? 'Recto' : 'Verso'}`;
+export const libelle = (g: Pick<Gabarit, 'modele' | 'couleur' | 'face'>) => `${g.modele} · ${g.couleur} · ${g.face === 'recto' ? 'Recto' : 'Verso'}`;
 
-export function Gabarits({ shopId }: { shopId: string }) {
-  const { data, refetch } = useQuery({
+/** Gabarits de la boutique et modèles Shopify (SKU → couleurs), partagés par les onglets. */
+export function useGabarits(shopId: string) {
+  return useQuery({
     queryKey: ['mockups-gabarits', shopId],
     queryFn: () => authJson<ReponseGabarits>(`/api/mockups/gabarits?shopId=${shopId}`),
   });
+}
+
+export function Gabarits({ shopId }: { shopId: string }) {
+  const { data, refetch } = useGabarits(shopId);
   const [brouillon, setBrouillon] = useState<Brouillon | null>(null);
   const [envoi, setEnvoi] = useState(false);
   const [confirmerSuppression, setConfirmerSuppression] = useState(false);
