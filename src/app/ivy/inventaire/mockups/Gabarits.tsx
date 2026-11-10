@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Button, FileInput, Group, NumberInput, SegmentedControl, Select, Slider, Stack } from '@mantine/core';
+import { ActionIcon, Button, FileInput, Group, NumberInput, SegmentedControl, Select, Slider, Stack } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
+import { IconCopy } from '@tabler/icons-react';
 import { authJson } from '@/lib/auth-fetch';
 import { CADRE_HAUTEUR_CM, CADRE_LARGEUR_CM, teinteReglee, type Cadre, type Face, type Gabarit, type Point, type Version } from '@/lib/mockups/regles';
 import { chargerGabarit, chargerSource, composerMockup, versBlob, type GabaritCharge, type Source } from '@/lib/mockups/composer';
@@ -104,6 +105,11 @@ export function Gabarits({ shopId }: { shopId: string }) {
     return groupes;
   }, [gabarits]);
 
+  const ouvrir = (b: Brouillon) => {
+    setConfirmerSuppression(false);
+    setBrouillon(b);
+  };
+
   const changer = (champs: Partial<Brouillon>) => {
     setConfirmerSuppression(false);
     setBrouillon((b) => (b ? { ...b, ...champs } : b));
@@ -167,21 +173,26 @@ export function Gabarits({ shopId }: { shopId: string }) {
       <section className={styles.panneau}>
         <Group justify="space-between" mb="xs">
           <h2 className={styles.panneauTitre}>Gabarits · {gabarits.length}</h2>
-          <Button size="compact-xs" variant="subtle" onClick={() => { setConfirmerSuppression(false); setBrouillon(nouveau()); }}>+ Ajouter</Button>
+          <Button size="compact-xs" variant="subtle" onClick={() => ouvrir(nouveau())}>+ Ajouter</Button>
         </Group>
         {gabarits.length === 0 && <div className={styles.vide}>Aucun gabarit.</div>}
         {Object.entries(parModele).map(([modele, liste]) => (
           <div key={modele}>
             <div className={styles.groupe}>{modele}</div>
             {liste.map((g) => (
-              <button
-                key={g.id}
-                className={`${styles.ligne} ${g.id === brouillon?.id ? styles.ligneActive : ''}`}
-                onClick={() => { setConfirmerSuppression(false); setBrouillon(depuis(g)); }}
-              >
-                {libelle(g)}
-                {g.face === 'recto' && !g.poitrine && <span className={styles.aRegler}> · poitrine à poser</span>}
-              </button>
+              <div key={g.id} className={`${styles.ligne} ${g.id === brouillon?.id ? styles.ligneActive : ''}`}>
+                <button className={styles.ligneNom} onClick={() => ouvrir(depuis(g))}>
+                  {libelle(g)}
+                  {g.face === 'recto' && !g.poitrine && <span className={styles.aRegler}> · poitrine à poser</span>}
+                </button>
+                {/* Copie : même modèle et même face, il reste à choisir la couleur (ou la face). */}
+                <ActionIcon
+                  className={styles.ligneAction} size="sm" variant="subtle" color="gray" title="Dupliquer" aria-label={`Dupliquer ${libelle(g)}`}
+                  onClick={() => ouvrir({ ...depuis(g), id: null, copieDe: g.id, couleur: null })}
+                >
+                  <IconCopy size={14} />
+                </ActionIcon>
+              </div>
             ))}
           </div>
         ))}
@@ -273,13 +284,9 @@ export function Gabarits({ shopId }: { shopId: string }) {
               </Group>
             </div>
             <Group justify="space-between" mt="sm">
-              {actuel ? (
-                <Group gap="xs">
-                  <Button size="xs" color="red" variant={confirmerSuppression ? 'filled' : 'subtle'} onClick={supprimer}>{confirmerSuppression ? 'Confirmer la suppression' : 'Supprimer'}</Button>
-                  {/* Même modèle et même face par défaut : il reste à choisir la couleur (ou la face). */}
-                  <Button size="xs" variant="default" onClick={() => { setConfirmerSuppression(false); setBrouillon({ ...depuis(actuel), id: null, copieDe: actuel.id, couleur: null }); }}>Dupliquer</Button>
-                </Group>
-              ) : <span />}
+              {actuel
+                ? <Button size="xs" color="red" variant={confirmerSuppression ? 'filled' : 'subtle'} onClick={supprimer}>{confirmerSuppression ? 'Confirmer la suppression' : 'Supprimer'}</Button>
+                : <span />}
               <Button size="xs" loading={envoi} disabled={!brouillon.modele || !brouillon.couleur || !photoUrl} onClick={enregistrer}>Enregistrer</Button>
             </Group>
           </Stack>

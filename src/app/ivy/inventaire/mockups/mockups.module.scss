@@ -95,18 +95,29 @@
 }
 
 .ligne {
-  display: block;
-  width: 100%;
+  display: flex;
+  align-items: center;
+  border-radius: $radius-md;
+
+  &:hover { background: rgba(0, 0, 0, 0.04); }
+  &:hover .ligneAction,
+  .ligneAction:focus-visible { opacity: 1; }
+}
+
+.ligneNom {
+  flex: 1;
   text-align: left;
   font: inherit;
   font-size: 13px;
   padding: 6px 8px;
   border: none;
-  border-radius: $radius-md;
   background: none;
   cursor: pointer;
+}
 
-  &:hover { background: rgba(0, 0, 0, 0.04); }
+.ligneAction {
+  opacity: 0; // discrète : n'apparaît qu'au survol de la ligne
+  margin-right: 4px;
 }
 
 .ligneActive {
