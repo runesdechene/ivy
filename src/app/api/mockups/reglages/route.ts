@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { autoriser, erreur, toutesLesLignes, urlPublique } from '@/lib/mockups/serveur';
-import { lireImpression, METACHAMPS, type Reglages } from '@/lib/mockups/regles';
+import { lireImpression, METACHAMPS, OPACITE_ENCRE, type Reglages } from '@/lib/mockups/regles';
 
 /** Teintes présentes dans les métachamps recto/verso des variantes de la boutique. */
 async function teintesUtilisees(svc: SupabaseClient, shopId: string): Promise<Set<string>> {
@@ -24,10 +24,10 @@ export async function GET(request: NextRequest) {
   if (!acces.ok) return acces.reponse;
   const { svc } = acces.auth;
 
-  const { data, error } = await svc.from('mockup_reglages').select('teintes, dtf_path').eq('shop_id', acces.shopId).maybeSingle();
+  const { data, error } = await svc.from('mockup_reglages').select('teintes, dtf_path, opacite_encre').eq('shop_id', acces.shopId).maybeSingle();
   if (error) return erreur(error.message, 500);
 
-  const reglages: Reglages = { teintes: { ...(data?.teintes ?? {}) } };
+  const reglages: Reglages = { teintes: { ...(data?.teintes ?? {}) }, opacite: data?.opacite_encre ?? OPACITE_ENCRE };
   try {
     for (const code of await teintesUtilisees(svc, acces.shopId)) {
       reglages.teintes[code] ??= { couleur: null, version: null };
@@ -51,8 +51,11 @@ export async function PUT(request: NextRequest) {
     if (t.version !== null && t.version !== 'CLAIR' && t.version !== 'SOMBRE') return erreur(`Version invalide pour ${code}`);
   }
 
+  const opacite = body?.reglages?.opacite;
+  if (typeof opacite !== 'number' || !(opacite > 0 && opacite <= 1)) return erreur('Opacité invalide (entre 1 et 100 %)');
+
   const { error } = await acces.auth.svc.from('mockup_reglages')
-    .upsert({ shop_id: acces.shopId, teintes, updated_at: new Date().toISOString() }, { onConflict: 'shop_id' });
+    .upsert({ shop_id: acces.shopId, teintes, opacite_encre: opacite, updated_at: new Date().toISOString() }, { onConflict: 'shop_id' });
   if (error) return erreur(error.message, 500);
   return NextResponse.json({ ok: true });
 }

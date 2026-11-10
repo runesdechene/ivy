@@ -18,6 +18,7 @@ const R: Reglages = {
     VR1: { couleur: '#202020', version: 'CLAIR' },
     DOR: { couleur: null, version: 'SOMBRE' },
   },
+  opacite: 0.75,
 };
 const F: FicheMotif = { nom: 'LOKI', hauteurs: { 'C-LARGE': 44.2, 'D-MAX': 45.7 } };
 const C: Cadre = { x: 100, y: 200, hauteur: 495 }; // 10 px par cm

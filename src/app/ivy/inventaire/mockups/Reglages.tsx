@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Button, ColorInput, FileInput, Group, SegmentedControl, Table } from '@mantine/core';
+import { Button, ColorInput, FileInput, Group, NumberInput, SegmentedControl, Table } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { authFetch, authJson } from '@/lib/auth-fetch';
 import type { Reglages as ReglagesTeintes, Version } from '@/lib/mockups/regles';
@@ -25,7 +25,13 @@ export function Reglages({ shopId }: { shopId: string }) {
   const [teintes, setTeintes] = useState<ReglagesTeintes['teintes']>({});
   const [enregistrement, setEnregistrement] = useState(false);
 
-  useEffect(() => { if (reglages) setTeintes(reglages.teintes); }, [reglages]);
+  const [opacite, setOpacite] = useState(0.75);
+
+  useEffect(() => {
+    if (!reglages) return;
+    setTeintes(reglages.teintes);
+    setOpacite(reglages.opacite);
+  }, [reglages]);
 
   const modifier = (code: string, champ: 'couleur' | 'version', valeur: string) =>
     setTeintes((t) => ({ ...t, [code]: { ...t[code], [champ]: valeur || null } }));
@@ -36,7 +42,7 @@ export function Reglages({ shopId }: { shopId: string }) {
       await authJson('/api/mockups/reglages', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shopId, reglages: { teintes } }),
+        body: JSON.stringify({ shopId, reglages: { teintes, opacite } }),
       });
       notifications.show({ color: 'green', message: 'Réglages enregistrés' });
       await recharger();
@@ -99,7 +105,11 @@ export function Reglages({ shopId }: { shopId: string }) {
             })}
           </Table.Tbody>
         </Table>
-        <Group justify="flex-end" mt="md">
+        <Group justify="space-between" align="flex-end" mt="md">
+          <NumberInput
+            size="xs" w={260} label="Opacité de l’encre sur les mockups" description="Les fichiers d’impression restent à 100 %."
+            suffix=" %" min={1} max={100} value={Math.round(opacite * 100)} onChange={(v) => setOpacite(Math.min(100, Math.max(1, Number(v) || 1)) / 100)}
+          />
           <Button size="xs" loading={enregistrement} onClick={enregistrer}>Enregistrer</Button>
         </Group>
       </section>

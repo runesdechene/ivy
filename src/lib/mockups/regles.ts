@@ -15,7 +15,10 @@ export type Impression =
   | { pose: 'motif'; teinte: string }                                  // DTG-xxx, et DTF-xxx au verso
   | { pose: 'dtf'; teinte: string }                                    // DTF-xxx au recto : logo de veste
   | { pose: 'marque'; teinte: string; support: 'UNI' | 'TSHIRT' };
-export interface Reglages { teintes: Record<string, { couleur: string | null; version: Version | null }> }
+export interface Reglages {
+  teintes: Record<string, { couleur: string | null; version: Version | null }>;
+  opacite: number; // encre sur les mockups, 0–1 ; les fichiers d'impression restent pleins
+}
 export interface FicheMotif { nom: string; hauteurs: Partial<Record<TailleImpression, number>> }
 export interface Cadre { x: number; y: number; hauteur: number }
 export interface Point { x: number; y: number }
@@ -40,7 +43,7 @@ export interface FichierImpression { nom: string; source: Version | 'MARQUE' | '
 export const CADRE_HAUTEUR_CM = 49.5;
 export const CADRE_LARGEUR_CM = 40.64; // 16 pouces
 export const PX_PAR_CM_300DPI = 300 / 2.54;
-export const OPACITE_ENCRE = 0.75;
+export const OPACITE_ENCRE = 0.75; // valeur par défaut du réglage
 export const PX_PAR_METRE_300DPI = 11811;
 export const TAILLES_IMPRESSION: TailleImpression[] = ['A-SMALL', 'B-MEDIUM', 'C-LARGE', 'D-MAX'];
 export const METACHAMPS = { recto: 'fichier_d_impression', verso: 'verso_impression', taille: 'taille_d_impression' } as const;

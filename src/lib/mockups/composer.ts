@@ -1,5 +1,5 @@
 import {
-  bornesDessin, placerMotif, placerPoitrine, teinteReglee, OPACITE_ENCRE,
+  bornesDessin, placerMotif, placerPoitrine, teinteReglee,
   type Cadre, type Gabarit, type Impression, type Point, type Rect, type Reglages, type Version,
 } from './regles';
 
@@ -60,7 +60,7 @@ export function peindre(source: Source, couleur: string, largeur: number, hauteu
   return canvas;
 }
 
-/** Photo + encre à 75 % + ombres du tissu limitées à l'encre. `hauteurCm` : null pour la marque et le DTF (taille réelle). */
+/** Photo + encre à l'opacité réglée + ombres du tissu limitées à l'encre. `hauteurCm` : null pour la marque et le DTF (taille réelle). */
 export function composerMockup(g: GabaritCharge, source: Source, impression: Impression, reglages: Reglages, hauteurCm: number | null): HTMLCanvasElement {
   const teinte = teinteReglee(reglages, impression.teinte);
   if (!teinte) throw new Error(`Teinte ${impression.teinte} à régler`);
@@ -79,7 +79,7 @@ export function composerMockup(g: GabaritCharge, source: Source, impression: Imp
   ctx.drawImage(g.photo, 0, 0);
 
   const encre = peindre(source, teinte.couleur, place.w, place.h);
-  ctx.globalAlpha = OPACITE_ENCRE;
+  ctx.globalAlpha = reglages.opacite;
   ctx.drawImage(encre, place.x, place.y, place.w, place.h);
 
   const ombres = g.ombres[teinte.version];
