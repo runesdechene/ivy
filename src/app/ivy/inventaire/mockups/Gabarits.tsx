@@ -17,19 +17,19 @@ interface Brouillon {
   id: string | null; // null = nouveau gabarit
   modele: string | null; couleur: string | null; face: Face;
   cadre: Cadre; poitrine: Point | null;
-  photo: File | null; ombresClair: File | null; ombresSombre: File | null;
-  retirer: Record<Version, boolean>; // ombre enregistrée à supprimer
+  photo: File | null; ombresClair: File | null; ombresSombre: File | null; masque: File | null;
+  retirer: Record<Version | 'MASQUE', boolean>; // fichier enregistré à supprimer
   intensites: Record<Version, number>;
 }
 
 const CADRE_DEPART: Cadre = { x: 100, y: 150, hauteur: 500 };
 const nouveau = (): Brouillon => ({
   id: null, modele: null, couleur: null, face: 'recto', cadre: CADRE_DEPART, poitrine: null, intensites: { CLAIR: 3, SOMBRE: 3 },
-  photo: null, ombresClair: null, ombresSombre: null, retirer: { CLAIR: false, SOMBRE: false },
+  photo: null, ombresClair: null, ombresSombre: null, masque: null, retirer: { CLAIR: false, SOMBRE: false, MASQUE: false },
 });
 const depuis = (g: Gabarit): Brouillon => ({
   id: g.id, modele: g.modele, couleur: g.couleur, face: g.face, cadre: g.cadre, poitrine: g.poitrine, intensites: g.intensites,
-  photo: null, ombresClair: null, ombresSombre: null, retirer: { CLAIR: false, SOMBRE: false },
+  photo: null, ombresClair: null, ombresSombre: null, masque: null, retirer: { CLAIR: false, SOMBRE: false, MASQUE: false },
 });
 /** URL locale d'un fichier choisi, libérée quand il change. */
 function useUrlLocale(fichier: File | null): string | null {
@@ -57,6 +57,7 @@ export function Gabarits({ shopId }: { shopId: string }) {
   const photoUrl = useUrlLocale(brouillon?.photo ?? null) ?? actuel?.photo_url ?? null;
   const ombreClair = useUrlLocale(brouillon?.ombresClair ?? null) ?? (brouillon?.retirer.CLAIR ? null : actuel?.ombres.CLAIR ?? null);
   const ombreSombre = useUrlLocale(brouillon?.ombresSombre ?? null) ?? (brouillon?.retirer.SOMBRE ? null : actuel?.ombres.SOMBRE ?? null);
+  const masqueUrl = useUrlLocale(brouillon?.masque ?? null) ?? (brouillon?.retirer.MASQUE ? null : actuel?.masque_url ?? null);
 
   // « Tester sur un motif » : montage avec le cadre en cours, enregistré ou non.
   const { reglages } = useReglages(shopId);
@@ -72,11 +73,11 @@ export function Gabarits({ shopId }: { shopId: string }) {
     setCharge(null);
     if (!photoUrl) return;
     let actif = true;
-    chargerGabarit({ photo_url: photoUrl, ombres: { CLAIR: ombreClair, SOMBRE: ombreSombre }, intensites: { CLAIR: 0, SOMBRE: 0 }, cadre: CADRE_DEPART, poitrine: null })
+    chargerGabarit({ photo_url: photoUrl, ombres: { CLAIR: ombreClair, SOMBRE: ombreSombre }, masque_url: masqueUrl, intensites: { CLAIR: 0, SOMBRE: 0 }, cadre: CADRE_DEPART, poitrine: null })
       .then((c) => { if (actif) setCharge(c); })
       .catch((e: Error) => notifications.show({ color: 'red', message: e.message }));
     return () => { actif = false; };
-  }, [photoUrl, ombreClair, ombreSombre]);
+  }, [photoUrl, ombreClair, ombreSombre, masqueUrl]);
 
   useEffect(() => {
     setSource(null);
@@ -126,6 +127,8 @@ export function Gabarits({ shopId }: { shopId: string }) {
     form.set('intensite_clair', String(brouillon.intensites.CLAIR));
     form.set('intensite_sombre', String(brouillon.intensites.SOMBRE));
     if (brouillon.retirer.SOMBRE) form.set('retirer_ombres_sombre', '1');
+    if (brouillon.masque) form.set('masque', brouillon.masque);
+    if (brouillon.retirer.MASQUE) form.set('retirer_masque', '1');
 
     setEnvoi(true);
     try {
@@ -240,6 +243,17 @@ export function Gabarits({ shopId }: { shopId: string }) {
                 </Stack>
               );
             })}
+            <Group gap="xs" align="flex-end" wrap="nowrap">
+              <FileInput
+                size="xs" style={{ flex: 1 }} label="Masque de l’encre (cordons…)" accept="image/png" clearable
+                placeholder={actuel?.masque_url && !brouillon.retirer.MASQUE ? 'Remplacer' : brouillon.retirer.MASQUE ? 'Retiré à l’enregistrement' : 'Aucun'}
+                value={brouillon.masque} onChange={(masque) => changer({ masque, retirer: { ...brouillon.retirer, MASQUE: false } })}
+              />
+              {actuel?.masque_url && !brouillon.retirer.MASQUE && !brouillon.masque && (
+                <Button size="xs" variant="subtle" color="red" onClick={() => changer({ retirer: { ...brouillon.retirer, MASQUE: true } })}>Retirer</Button>
+              )}
+            </Group>
+            <div className={styles.aide}>Masque : le masque de fusion du PSD, blanc où l’encre passe, noir sur les cordons, PNG à la taille de la photo.</div>
             <div className={styles.aide}>Sans fichier, IVY tire les ombres de la photo (curseur = intensité). Un fichier déposé l’emporte : calque d’ombres seul, PNG à la taille de la photo.</div>
             {brouillon.face === 'recto' && !brouillon.poitrine && (
               <Button size="xs" variant="default" onClick={() => changer({ poitrine: { x: brouillon.cadre.x + (brouillon.cadre.hauteur * CADRE_LARGEUR_CM / CADRE_HAUTEUR_CM) / 2, y: brouillon.cadre.y } })}>

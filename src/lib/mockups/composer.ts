@@ -7,6 +7,7 @@ import {
 
 export interface GabaritCharge {
   photo: HTMLImageElement; ombres: Record<Version, HTMLImageElement | null>; intensites: Record<Version, number>;
+  masque: HTMLCanvasElement | null; // déjà converti : blanc → opaque, noir → transparent
   cadre: Cadre; poitrine: Point | null;
 }
 export interface Source { image: HTMLImageElement; dessin: Rect } // dessin = pixels non transparents de l'image
@@ -43,13 +44,27 @@ export async function chargerSource(fichier: Blob): Promise<Source> {
   return { image, dessin };
 }
 
-export async function chargerGabarit(g: Pick<Gabarit, 'photo_url' | 'ombres' | 'intensites' | 'cadre' | 'poitrine'>): Promise<GabaritCharge> {
-  const [photo, clair, sombre] = await Promise.all([
+/** Masque de fusion façon Photoshop (gris) → toile dont l'opacité suit le gris, pour un « destination-in ». */
+function masqueEnAlpha(image: HTMLImageElement): HTMLCanvasElement {
+  const [canvas, ctx] = toile(image.naturalWidth, image.naturalHeight);
+  ctx.drawImage(image, 0, 0);
+  const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = pixels.data;
+  for (let i = 0; i < d.length; i += 4) {
+    d[i + 3] = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000 * (d[i + 3] / 255);
+  }
+  ctx.putImageData(pixels, 0, 0);
+  return canvas;
+}
+
+export async function chargerGabarit(g: Pick<Gabarit, 'photo_url' | 'ombres' | 'masque_url' | 'intensites' | 'cadre' | 'poitrine'>): Promise<GabaritCharge> {
+  const [photo, masque, clair, sombre] = await Promise.all([
     chargerImage(g.photo_url),
+    g.masque_url ? chargerImage(g.masque_url).then(masqueEnAlpha) : null,
     g.ombres.CLAIR ? chargerImage(g.ombres.CLAIR) : null,
     g.ombres.SOMBRE ? chargerImage(g.ombres.SOMBRE) : null,
   ]);
-  return { photo, ombres: { CLAIR: clair, SOMBRE: sombre }, intensites: g.intensites, cadre: g.cadre, poitrine: g.poitrine };
+  return { photo, ombres: { CLAIR: clair, SOMBRE: sombre }, masque, intensites: g.intensites, cadre: g.cadre, poitrine: g.poitrine };
 }
 
 /** Ombres calculées sur la photo du gabarit, recentrées sur le tissu du cadre. */
@@ -91,9 +106,15 @@ export function composerMockup(g: GabaritCharge, source: Source, impression: Imp
   const [canvas, ctx] = toile(l, h);
   ctx.drawImage(g.photo, 0, 0);
 
-  const encre = peindre(source, teinte.couleur, place.w, place.h);
+  // L'encre à sa place, sur une toile de la taille de la photo, effacée là où le masque est noir.
+  const [encre, e] = toile(l, h);
+  e.drawImage(peindre(source, teinte.couleur, place.w, place.h), place.x, place.y, place.w, place.h);
+  if (g.masque) {
+    e.globalCompositeOperation = 'destination-in';
+    e.drawImage(g.masque, 0, 0, l, h);
+  }
   ctx.globalAlpha = reglages.opacite;
-  ctx.drawImage(encre, place.x, place.y, place.w, place.h);
+  ctx.drawImage(encre, 0, 0);
 
   // Un fichier d'ombres déposé l'emporte sur les ombres tirées de la photo.
   const intensite = g.intensites[teinte.version];
@@ -102,7 +123,7 @@ export function composerMockup(g: GabaritCharge, source: Source, impression: Imp
     const [calque, c] = toile(l, h);
     c.drawImage(ombres, 0, 0, l, h);
     c.globalCompositeOperation = 'destination-in'; // les ombres ne tombent que sur l'encre
-    c.drawImage(encre, place.x, place.y, place.w, place.h);
+    c.drawImage(encre, 0, 0);
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'hard-light';
     ctx.drawImage(calque, 0, 0);

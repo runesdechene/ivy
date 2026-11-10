@@ -5,7 +5,7 @@ import type { Face, Gabarit } from '@/lib/mockups/regles';
 
 interface LigneGabarit {
   id: string; modele: string; couleur: string; face: Face;
-  photo_path: string; ombres_clair_path: string | null; ombres_sombre_path: string | null;
+  photo_path: string; ombres_clair_path: string | null; ombres_sombre_path: string | null; masque_path: string | null;
   ombres_clair_intensite: number; ombres_sombre_intensite: number;
   cadre_x: number; cadre_y: number; cadre_hauteur: number;
   poitrine_x: number | null; poitrine_y: number | null;
@@ -16,6 +16,7 @@ function versGabarit(svc: SupabaseClient, l: LigneGabarit): Gabarit {
     id: l.id, modele: l.modele, couleur: l.couleur, face: l.face,
     photo_url: urlPublique(svc, l.photo_path)!,
     ombres: { CLAIR: urlPublique(svc, l.ombres_clair_path), SOMBRE: urlPublique(svc, l.ombres_sombre_path) },
+    masque_url: urlPublique(svc, l.masque_path),
     intensites: { CLAIR: l.ombres_clair_intensite, SOMBRE: l.ombres_sombre_intensite },
     cadre: { x: l.cadre_x, y: l.cadre_y, hauteur: l.cadre_hauteur },
     poitrine: l.poitrine_x !== null && l.poitrine_y !== null ? { x: l.poitrine_x, y: l.poitrine_y } : null,
@@ -85,17 +86,18 @@ export async function POST(request: NextRequest) {
   if (cadre_x === null || cadre_y === null || cadre_hauteur === null || cadre_hauteur <= 0) return erreur('Cadre invalide');
 
   const { data: avant } = await svc.from('mockup_gabarits')
-    .select('photo_path, ombres_clair_path, ombres_sombre_path')
+    .select('photo_path, ombres_clair_path, ombres_sombre_path, masque_path')
     .eq('shop_id', acces.shopId).eq('modele', modele).eq('couleur', couleur).eq('face', face)
     .maybeSingle();
 
-  const envois = { photo_path: fichier(form.get('photo')), ombres_clair_path: fichier(form.get('ombres_clair')), ombres_sombre_path: fichier(form.get('ombres_sombre')) };
+  const envois = { photo_path: fichier(form.get('photo')), ombres_clair_path: fichier(form.get('ombres_clair')), ombres_sombre_path: fichier(form.get('ombres_sombre')), masque_path: fichier(form.get('masque')) };
   if (!avant && !envois.photo_path) return erreur('Photo requise pour un nouveau gabarit');
 
-  // Ombres retirées sans remplacement : la colonne repasse à null, le fichier part après l'écriture.
+  // Ombres ou masque retirés sans remplacement : la colonne repasse à null, le fichier part après l'écriture.
   const retraits: Partial<Record<keyof typeof envois, null>> = {};
   if (form.get('retirer_ombres_clair') === '1' && !envois.ombres_clair_path) retraits.ombres_clair_path = null;
   if (form.get('retirer_ombres_sombre') === '1' && !envois.ombres_sombre_path) retraits.ombres_sombre_path = null;
+  if (form.get('retirer_masque') === '1' && !envois.masque_path) retraits.masque_path = null;
 
   // Dépose d'abord les nouveaux fichiers ; on ne supprime les anciens qu'une fois la ligne écrite.
   const nouveaux: Partial<Record<keyof typeof envois, string>> = {};
@@ -134,9 +136,9 @@ export async function DELETE(request: NextRequest) {
 
   const { data, error } = await svc.from('mockup_gabarits').delete()
     .eq('shop_id', acces.shopId).eq('id', params.get('id') ?? '')
-    .select('photo_path, ombres_clair_path, ombres_sombre_path').maybeSingle();
+    .select('photo_path, ombres_clair_path, ombres_sombre_path, masque_path').maybeSingle();
   if (error) return erreur(error.message, 500);
   if (!data) return erreur('Gabarit introuvable', 404);
-  await retirer(svc, [data.photo_path, data.ombres_clair_path, data.ombres_sombre_path]);
+  await retirer(svc, [data.photo_path, data.ombres_clair_path, data.ombres_sombre_path, data.masque_path]);
   return NextResponse.json({ ok: true });
 }

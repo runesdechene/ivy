@@ -26,6 +26,7 @@ export interface Rect { x: number; y: number; w: number; h: number }
 export interface Gabarit {
   id: string; modele: string; couleur: string; face: Face;
   photo_url: string; ombres: Record<Version, string | null>;
+  masque_url: string | null; // blanc = l'encre passe, noir = effacée (cordons…)
   intensites: Record<Version, number>; // ombres tirées de la photo quand aucun fichier n'est déposé ; 0 = aucune
   cadre: Cadre; poitrine: Point | null;
 }
