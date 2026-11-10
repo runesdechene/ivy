@@ -78,3 +78,90 @@
   border-radius: $radius-md;
   padding: 8px;
 }
+
+/* Onglet Gabarits : liste · éditeur · réglages */
+.troisColonnes {
+  display: grid;
+  grid-template-columns: 260px auto 300px;
+  gap: 16px;
+  align-items: start;
+
+  .panneau { margin-bottom: 0; }
+}
+
+.groupe {
+  @include type-eyebrow;
+  margin: 10px 0 4px;
+}
+
+.ligne {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: $radius-md;
+  background: none;
+  cursor: pointer;
+
+  &:hover { background: rgba(0, 0, 0, 0.04); }
+}
+
+.ligneActive {
+  background: rgba(34, 139, 230, 0.12);
+  font-weight: 600;
+}
+
+.aide {
+  font-size: 12px;
+  color: $slate-muted;
+}
+
+.editeur {
+  position: relative;
+  user-select: none;
+  touch-action: none;
+
+  img { display: block; height: auto; border-radius: $radius-md; }
+}
+
+.cadre {
+  position: absolute;
+  border: 1.5px dashed #228be6;
+  background: rgba(34, 139, 230, 0.08);
+  cursor: move;
+}
+
+.poignee {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  border: 1.5px solid #228be6;
+  cursor: nwse-resize;
+}
+
+.cadreLegende {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #228be6;
+  white-space: nowrap;
+}
+
+.poitrine {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: #e8590c;
+  border: 2px solid #fff;
+  cursor: grab;
+}

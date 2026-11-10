@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { SegmentedControl } from '@mantine/core';
 import { useShop } from '@/context/ShopContext';
 import { Reglages } from './Reglages';
+import { Gabarits } from './Gabarits';
 import styles from './mockups.module.scss';
 
 const ONGLETS = [
@@ -40,6 +41,8 @@ export default function MockupsPage() {
         <div className={styles.vide}>Chargement de la boutique…</div>
       ) : onglet === 'reglages' ? (
         <Reglages shopId={currentShop.id} />
+      ) : onglet === 'gabarits' ? (
+        <Gabarits shopId={currentShop.id} />
       ) : (
         <div className={styles.vide}>Bientôt.</div>
       )}
