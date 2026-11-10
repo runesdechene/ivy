@@ -26,6 +26,7 @@ export interface Rect { x: number; y: number; w: number; h: number }
 export interface Gabarit {
   id: string; modele: string; couleur: string; face: Face;
   photo_url: string; ombres: Record<Version, string | null>;
+  intensites: Record<Version, number>; // ombres tirées de la photo quand aucun fichier n'est déposé ; 0 = aucune
   cadre: Cadre; poitrine: Point | null;
 }
 export interface VarianteImpression {
@@ -141,6 +142,33 @@ export function bornesDessin(alpha: Uint8ClampedArray, largeur: number, hauteur:
     }
   }
   return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+}
+
+/** Carte d'ombres tirée de la photo (RGBA) : chaque gris est recentré sur 128, le neutre de la lumière crue,
+ *  autour du gris moyen du tissu dans le cadre, et son écart multiplié par l'intensité. */
+export function carteOmbres(rgba: Uint8ClampedArray, largeur: number, cadre: Cadre, intensite: number): Uint8ClampedArray {
+  const hauteur = rgba.length / 4 / largeur;
+  const gris = (i: number) => (rgba[i] * 299 + rgba[i + 1] * 587 + rgba[i + 2] * 114) / 1000;
+  const x0 = Math.max(0, Math.round(cadre.x)), y0 = Math.max(0, Math.round(cadre.y));
+  const x1 = Math.min(largeur, Math.round(cadre.x + cadre.hauteur * CADRE_LARGEUR_CM / CADRE_HAUTEUR_CM));
+  const y1 = Math.min(hauteur, Math.round(cadre.y + cadre.hauteur));
+  let somme = 0, n = 0;
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      const i = (y * largeur + x) * 4;
+      if (rgba[i + 3] === 0) continue; // fond transparent de la photo : pas du tissu
+      somme += gris(i);
+      n++;
+    }
+  }
+  const reference = n ? somme / n : 128;
+  const carte = new Uint8ClampedArray(rgba.length); // Uint8ClampedArray borne seul à 0–255
+  for (let i = 0; i < rgba.length; i += 4) {
+    const v = 128 + (gris(i) - reference) * intensite;
+    carte[i] = carte[i + 1] = carte[i + 2] = v;
+    carte[i + 3] = 255;
+  }
+  return carte;
 }
 
 // --- Aperçus d'un produit -------------------------------------------------------

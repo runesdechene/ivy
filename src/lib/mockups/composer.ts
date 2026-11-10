@@ -1,11 +1,14 @@
 import {
-  bornesDessin, placerMotif, placerPoitrine, teinteReglee,
+  bornesDessin, carteOmbres, placerMotif, placerPoitrine, teinteReglee,
   type Cadre, type Gabarit, type Impression, type Point, type Rect, type Reglages, type Version,
 } from './regles';
 
 /** Montage d'un mockup dans le navigateur (canvas). Les règles de placement vivent dans regles.ts. */
 
-export interface GabaritCharge { photo: HTMLImageElement; ombres: Record<Version, HTMLImageElement | null>; cadre: Cadre; poitrine: Point | null }
+export interface GabaritCharge {
+  photo: HTMLImageElement; ombres: Record<Version, HTMLImageElement | null>; intensites: Record<Version, number>;
+  cadre: Cadre; poitrine: Point | null;
+}
 export interface Source { image: HTMLImageElement; dessin: Rect } // dessin = pixels non transparents de l'image
 
 /** <img> plutôt que createImageBitmap : Chrome ne décode pas les SVG avec ce dernier. */
@@ -40,13 +43,23 @@ export async function chargerSource(fichier: Blob): Promise<Source> {
   return { image, dessin };
 }
 
-export async function chargerGabarit(g: Pick<Gabarit, 'photo_url' | 'ombres' | 'cadre' | 'poitrine'>): Promise<GabaritCharge> {
+export async function chargerGabarit(g: Pick<Gabarit, 'photo_url' | 'ombres' | 'intensites' | 'cadre' | 'poitrine'>): Promise<GabaritCharge> {
   const [photo, clair, sombre] = await Promise.all([
     chargerImage(g.photo_url),
     g.ombres.CLAIR ? chargerImage(g.ombres.CLAIR) : null,
     g.ombres.SOMBRE ? chargerImage(g.ombres.SOMBRE) : null,
   ]);
-  return { photo, ombres: { CLAIR: clair, SOMBRE: sombre }, cadre: g.cadre, poitrine: g.poitrine };
+  return { photo, ombres: { CLAIR: clair, SOMBRE: sombre }, intensites: g.intensites, cadre: g.cadre, poitrine: g.poitrine };
+}
+
+/** Ombres calculées sur la photo du gabarit, recentrées sur le tissu du cadre. */
+function ombresDeLaPhoto(photo: HTMLImageElement, cadre: Cadre, intensite: number): HTMLCanvasElement {
+  const [canvas, ctx] = toile(photo.naturalWidth, photo.naturalHeight);
+  ctx.drawImage(photo, 0, 0);
+  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  image.data.set(carteOmbres(image.data, canvas.width, cadre, intensite));
+  ctx.putImageData(image, 0, 0);
+  return canvas;
 }
 
 /** Le dessin rogné, à la taille demandée, peint de la couleur de la teinte (le noir ou blanc d'origine disparaît). */
@@ -82,7 +95,9 @@ export function composerMockup(g: GabaritCharge, source: Source, impression: Imp
   ctx.globalAlpha = reglages.opacite;
   ctx.drawImage(encre, place.x, place.y, place.w, place.h);
 
-  const ombres = g.ombres[teinte.version];
+  // Un fichier d'ombres déposé l'emporte sur les ombres tirées de la photo.
+  const intensite = g.intensites[teinte.version];
+  const ombres = g.ombres[teinte.version] ?? (intensite > 0 ? ombresDeLaPhoto(g.photo, g.cadre, intensite) : null);
   if (ombres) {
     const [calque, c] = toile(l, h);
     c.drawImage(ombres, 0, 0, l, h);

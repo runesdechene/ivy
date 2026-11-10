@@ -6,6 +6,7 @@ import type { Face, Gabarit } from '@/lib/mockups/regles';
 interface LigneGabarit {
   id: string; modele: string; couleur: string; face: Face;
   photo_path: string; ombres_clair_path: string | null; ombres_sombre_path: string | null;
+  ombres_clair_intensite: number; ombres_sombre_intensite: number;
   cadre_x: number; cadre_y: number; cadre_hauteur: number;
   poitrine_x: number | null; poitrine_y: number | null;
 }
@@ -15,6 +16,7 @@ function versGabarit(svc: SupabaseClient, l: LigneGabarit): Gabarit {
     id: l.id, modele: l.modele, couleur: l.couleur, face: l.face,
     photo_url: urlPublique(svc, l.photo_path)!,
     ombres: { CLAIR: urlPublique(svc, l.ombres_clair_path), SOMBRE: urlPublique(svc, l.ombres_sombre_path) },
+    intensites: { CLAIR: l.ombres_clair_intensite, SOMBRE: l.ombres_sombre_intensite },
     cadre: { x: l.cadre_x, y: l.cadre_y, hauteur: l.cadre_hauteur },
     poitrine: l.poitrine_x !== null && l.poitrine_y !== null ? { x: l.poitrine_x, y: l.poitrine_y } : null,
   };
@@ -75,7 +77,10 @@ export async function POST(request: NextRequest) {
   const cadre_hauteur = nombre(form.get('cadre_hauteur'));
   const poitrine_x = nombre(form.get('poitrine_x'));
   const poitrine_y = nombre(form.get('poitrine_y'));
+  const ombres_clair_intensite = nombre(form.get('intensite_clair')) ?? 3;
+  const ombres_sombre_intensite = nombre(form.get('intensite_sombre')) ?? 3;
   if (!modele || !couleur) return erreur('Modèle et couleur requis');
+  if ([ombres_clair_intensite, ombres_sombre_intensite].some((v) => v < 0 || v > 10)) return erreur('Intensité des ombres entre 0 et 10');
   if (face !== 'recto' && face !== 'verso') return erreur('Face invalide');
   if (cadre_x === null || cadre_y === null || cadre_hauteur === null || cadre_hauteur <= 0) return erreur('Cadre invalide');
 
@@ -104,7 +109,7 @@ export async function POST(request: NextRequest) {
   }
 
   const { data, error } = await svc.from('mockup_gabarits').upsert({
-    shop_id: acces.shopId, modele, couleur, face, cadre_x, cadre_y, cadre_hauteur,
+    shop_id: acces.shopId, modele, couleur, face, cadre_x, cadre_y, cadre_hauteur, ombres_clair_intensite, ombres_sombre_intensite,
     poitrine_x: face === 'recto' ? poitrine_x : null,
     poitrine_y: face === 'recto' ? poitrine_y : null,
     // L'upsert insère une ligne complète avant de détecter le conflit : on repart des fichiers existants.

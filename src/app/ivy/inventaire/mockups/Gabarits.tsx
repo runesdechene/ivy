@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Button, FileInput, Group, NumberInput, SegmentedControl, Select, Stack } from '@mantine/core';
+import { Button, FileInput, Group, NumberInput, SegmentedControl, Select, Slider, Stack } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { authJson } from '@/lib/auth-fetch';
 import { CADRE_HAUTEUR_CM, CADRE_LARGEUR_CM, teinteReglee, type Cadre, type Face, type Gabarit, type Point, type Version } from '@/lib/mockups/regles';
@@ -19,15 +19,16 @@ interface Brouillon {
   cadre: Cadre; poitrine: Point | null;
   photo: File | null; ombresClair: File | null; ombresSombre: File | null;
   retirer: Record<Version, boolean>; // ombre enregistrée à supprimer
+  intensites: Record<Version, number>;
 }
 
 const CADRE_DEPART: Cadre = { x: 100, y: 150, hauteur: 500 };
 const nouveau = (): Brouillon => ({
-  id: null, modele: null, couleur: null, face: 'recto', cadre: CADRE_DEPART, poitrine: null,
+  id: null, modele: null, couleur: null, face: 'recto', cadre: CADRE_DEPART, poitrine: null, intensites: { CLAIR: 3, SOMBRE: 3 },
   photo: null, ombresClair: null, ombresSombre: null, retirer: { CLAIR: false, SOMBRE: false },
 });
 const depuis = (g: Gabarit): Brouillon => ({
-  id: g.id, modele: g.modele, couleur: g.couleur, face: g.face, cadre: g.cadre, poitrine: g.poitrine,
+  id: g.id, modele: g.modele, couleur: g.couleur, face: g.face, cadre: g.cadre, poitrine: g.poitrine, intensites: g.intensites,
   photo: null, ombresClair: null, ombresSombre: null, retirer: { CLAIR: false, SOMBRE: false },
 });
 /** URL locale d'un fichier choisi, libérée quand il change. */
@@ -71,7 +72,7 @@ export function Gabarits({ shopId }: { shopId: string }) {
     setCharge(null);
     if (!photoUrl) return;
     let actif = true;
-    chargerGabarit({ photo_url: photoUrl, ombres: { CLAIR: ombreClair, SOMBRE: ombreSombre }, cadre: CADRE_DEPART, poitrine: null })
+    chargerGabarit({ photo_url: photoUrl, ombres: { CLAIR: ombreClair, SOMBRE: ombreSombre }, intensites: { CLAIR: 0, SOMBRE: 0 }, cadre: CADRE_DEPART, poitrine: null })
       .then((c) => { if (actif) setCharge(c); })
       .catch((e: Error) => notifications.show({ color: 'red', message: e.message }));
     return () => { actif = false; };
@@ -88,7 +89,7 @@ export function Gabarits({ shopId }: { shopId: string }) {
     const remplacer = (url: string | null) => setApercuUrl((avant) => { if (avant) URL.revokeObjectURL(avant); return url; });
     if (!charge || !source || !teinte || !reglages || !brouillon) return remplacer(null);
     let actif = true;
-    const montage = composerMockup({ ...charge, cadre: brouillon.cadre, poitrine: brouillon.poitrine }, source, { pose: 'motif', teinte }, reglages, hauteurCm);
+    const montage = composerMockup({ ...charge, intensites: brouillon.intensites, cadre: brouillon.cadre, poitrine: brouillon.poitrine }, source, { pose: 'motif', teinte }, reglages, hauteurCm);
     versBlob(montage, 'image/webp').then((b) => { if (actif) remplacer(URL.createObjectURL(b)); });
     return () => { actif = false; };
   }, [charge, source, teinte, hauteurCm, reglages, brouillon]);
@@ -122,6 +123,8 @@ export function Gabarits({ shopId }: { shopId: string }) {
     if (brouillon.ombresClair) form.set('ombres_clair', brouillon.ombresClair);
     if (brouillon.ombresSombre) form.set('ombres_sombre', brouillon.ombresSombre);
     if (brouillon.retirer.CLAIR) form.set('retirer_ombres_clair', '1');
+    form.set('intensite_clair', String(brouillon.intensites.CLAIR));
+    form.set('intensite_sombre', String(brouillon.intensites.SOMBRE));
     if (brouillon.retirer.SOMBRE) form.set('retirer_ombres_sombre', '1');
 
     setEnvoi(true);
@@ -217,19 +220,27 @@ export function Gabarits({ shopId }: { shopId: string }) {
               const cle = v === 'CLAIR' ? 'ombresClair' : 'ombresSombre';
               const enregistree = !!actuel?.ombres[v] && !brouillon.retirer[v];
               return (
-                <Group key={v} gap="xs" align="flex-end" wrap="nowrap">
-                  <FileInput
-                    size="xs" style={{ flex: 1 }} label={`Ombres · vêtement ${v === 'CLAIR' ? 'clair' : 'sombre'}`} accept="image/png" clearable
-                    placeholder={enregistree ? 'Remplacer' : brouillon.retirer[v] ? 'Retirée à l’enregistrement' : 'Aucune'}
-                    value={brouillon[cle]} onChange={(f) => changer({ [cle]: f, retirer: { ...brouillon.retirer, [v]: false } })}
-                  />
-                  {enregistree && !brouillon[cle] && (
-                    <Button size="xs" variant="subtle" color="red" onClick={() => changer({ retirer: { ...brouillon.retirer, [v]: true } })}>Retirer</Button>
+                <Stack key={v} gap={4}>
+                  <Group gap="xs" align="flex-end" wrap="nowrap">
+                    <FileInput
+                      size="xs" style={{ flex: 1 }} label={`Ombres · vêtement ${v === 'CLAIR' ? 'clair' : 'sombre'}`} accept="image/png" clearable
+                      placeholder={enregistree ? 'Remplacer' : brouillon.retirer[v] ? 'Retirée à l’enregistrement' : 'Tirées de la photo'}
+                      value={brouillon[cle]} onChange={(f) => changer({ [cle]: f, retirer: { ...brouillon.retirer, [v]: false } })}
+                    />
+                    {enregistree && !brouillon[cle] && (
+                      <Button size="xs" variant="subtle" color="red" onClick={() => changer({ retirer: { ...brouillon.retirer, [v]: true } })}>Retirer</Button>
+                    )}
+                  </Group>
+                  {!enregistree && !brouillon[cle] && (
+                    <Slider
+                      size="xs" min={0} max={6} step={0.5} label={(x) => (x === 0 ? 'sans ombres' : `×${x}`)}
+                      value={brouillon.intensites[v]} onChange={(x) => changer({ intensites: { ...brouillon.intensites, [v]: x } })}
+                    />
                   )}
-                </Group>
+                </Stack>
               );
             })}
-            <div className={styles.aide}>Calque d’ombres seul, exporté à son opacité, PNG à la taille de la photo.</div>
+            <div className={styles.aide}>Sans fichier, IVY tire les ombres de la photo (curseur = intensité). Un fichier déposé l’emporte : calque d’ombres seul, PNG à la taille de la photo.</div>
             {brouillon.face === 'recto' && !brouillon.poitrine && (
               <Button size="xs" variant="default" onClick={() => changer({ poitrine: { x: brouillon.cadre.x + (brouillon.cadre.hauteur * CADRE_LARGEUR_CM / CADRE_HAUTEUR_CM) / 2, y: brouillon.cadre.y } })}>
                 Poser le point poitrine

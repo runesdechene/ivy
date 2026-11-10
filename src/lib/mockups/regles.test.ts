@@ -4,7 +4,7 @@ import { crc32 } from 'node:zlib';
 import {
   lireImpression, lireTaille, tailleDansNom, rangTaille, teinteReglee, trouverFichier,
   hauteurMax, placerMotif, placerPoitrine, planifierApercus, profilSuivi, profilsDepuisExistants,
-  fichiersImpression, bornesDessin, avec300dpi, cleMotif,
+  fichiersImpression, bornesDessin, avec300dpi, cleMotif, carteOmbres,
 } from './regles.ts';
 import type { Reglages, FicheMotif, Cadre, Gabarit, VarianteImpression, Profil, Rect } from './regles.ts';
 
@@ -174,6 +174,17 @@ test('bornesDessin : rectangle des pixels non transparents', () => {
   alpha[2 * 5 + 3] = 10;
   assert.deepEqual(bornesDessin(alpha, 5, 4), { x: 1, y: 1, w: 3, h: 2 });
   assert.equal(bornesDessin(new Uint8ClampedArray(20), 5, 4), null);
+});
+
+test('carteOmbres : tissu moyen = 128, écarts multipliés, fond transparent ignoré', () => {
+  // 3 px : tissu gris 30, pli gris 40, fond transparent blanc
+  const rgba = new Uint8ClampedArray([30, 30, 30, 255, 40, 40, 40, 255, 255, 255, 255, 0]);
+  const carte = carteOmbres(rgba, 3, { x: 0, y: 0, hauteur: 100 }, 3);
+  assert.equal(carte[0], 113); // 128 + (30 - 35) × 3
+  assert.equal(carte[4], 143); // 128 + (40 - 35) × 3
+  assert.equal(carte[8], 255); // borné
+  assert.equal(carte[3], 255);
+  assert.equal(carteOmbres(rgba, 3, { x: 0, y: 0, hauteur: 100 }, 0)[4], 128); // intensité 0 = neutre
 });
 
 test('cleMotif : majuscules, sans accents, espaces simples', () => {
