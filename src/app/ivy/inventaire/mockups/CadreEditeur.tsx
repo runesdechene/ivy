@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, type PointerEvent } from 'react';
+import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { CADRE_HAUTEUR_CM, CADRE_LARGEUR_CM, type Cadre, type Point } from '@/lib/mockups/regles';
 import styles from './mockups.module.scss';
 
@@ -9,6 +9,8 @@ const RATIO = CADRE_LARGEUR_CM / CADRE_HAUTEUR_CM;
 const HAUTEUR_MIN = 40; // px de la photo, pour garder une poignée saisissable
 
 type Prise = 'cadre' | 'poignee' | 'poitrine';
+
+const FLECHES: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
 
 interface Props {
   photoUrl: string;
@@ -45,6 +47,19 @@ export function CadreEditeur({ photoUrl, apercuUrl, cadre, poitrine, onChange }:
   }
 
   const lacher = () => { depart.current = null; };
+
+  /** Flèches : 1 px de la photo, 10 px avec Maj. Le cadre ou le point poitrine, selon celui qui a le focus. */
+  function auClavier(prise: 'cadre' | 'poitrine') {
+    return (e: KeyboardEvent<HTMLDivElement>) => {
+      const fleche = FLECHES[e.key];
+      if (!fleche) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const [dx, dy] = fleche.map((v) => v * (e.shiftKey ? 10 : 1));
+      if (prise === 'cadre') onChange({ ...cadre, x: cadre.x + dx, y: cadre.y + dy }, poitrine);
+      else if (poitrine) onChange(cadre, { x: poitrine.x + dx, y: poitrine.y + dy });
+    };
+  }
   const px = (v: number) => `${v * echelle}px`;
 
   return (
@@ -57,12 +72,13 @@ export function CadreEditeur({ photoUrl, apercuUrl, cadre, poitrine, onChange }:
             className={styles.cadre}
             style={{ left: px(cadre.x), top: px(cadre.y), width: px(cadre.hauteur * RATIO), height: px(cadre.hauteur) }}
             onPointerDown={saisir('cadre')}
+            tabIndex={0} onKeyDown={auClavier('cadre')} aria-label="Cadre maximal : flèches pour le déplacer"
           >
             <div className={styles.poignee} onPointerDown={saisir('poignee')} />
             <span className={styles.cadreLegende}>Cadre maximal · {CADRE_HAUTEUR_CM} × {CADRE_LARGEUR_CM.toFixed(1)} cm</span>
           </div>
           {poitrine && (
-            <div className={styles.poitrine} style={{ left: px(poitrine.x), top: px(poitrine.y) }} onPointerDown={saisir('poitrine')} title="Point poitrine (marque, logo DTF)" />
+            <div className={styles.poitrine} style={{ left: px(poitrine.x), top: px(poitrine.y) }} onPointerDown={saisir('poitrine')} tabIndex={0} onKeyDown={auClavier('poitrine')} title="Point poitrine (marque, logo DTF) : flèches pour le déplacer" />
           )}
         </>
       )}

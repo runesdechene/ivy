@@ -15,6 +15,7 @@ interface ReponseGabarits { gabarits: Gabarit[]; modeles: Record<string, string[
 
 interface Brouillon {
   id: string | null; // null = nouveau gabarit
+  copieDe: string | null; // duplication : gabarit dont on reprend réglages et fichiers
   modele: string | null; couleur: string | null; face: Face;
   cadre: Cadre; poitrine: Point | null;
   photo: File | null; ombresClair: File | null; ombresSombre: File | null; masque: File | null;
@@ -24,11 +25,11 @@ interface Brouillon {
 
 const CADRE_DEPART: Cadre = { x: 100, y: 150, hauteur: 500 };
 const nouveau = (): Brouillon => ({
-  id: null, modele: null, couleur: null, face: 'recto', cadre: CADRE_DEPART, poitrine: null, intensites: { CLAIR: 3, SOMBRE: 3 },
+  id: null, copieDe: null, modele: null, couleur: null, face: 'recto', cadre: CADRE_DEPART, poitrine: null, intensites: { CLAIR: 3, SOMBRE: 3 },
   photo: null, ombresClair: null, ombresSombre: null, masque: null, retirer: { CLAIR: false, SOMBRE: false, MASQUE: false },
 });
 const depuis = (g: Gabarit): Brouillon => ({
-  id: g.id, modele: g.modele, couleur: g.couleur, face: g.face, cadre: g.cadre, poitrine: g.poitrine, intensites: g.intensites,
+  id: g.id, copieDe: null, modele: g.modele, couleur: g.couleur, face: g.face, cadre: g.cadre, poitrine: g.poitrine, intensites: g.intensites,
   photo: null, ombresClair: null, ombresSombre: null, masque: null, retirer: { CLAIR: false, SOMBRE: false, MASQUE: false },
 });
 /** URL locale d'un fichier choisi, libérée quand il change. */
@@ -52,12 +53,14 @@ export function Gabarits({ shopId }: { shopId: string }) {
   const gabarits = data?.gabarits ?? [];
   const modeles = data?.modeles ?? {};
   const actuel = gabarits.find((g) => g.id === brouillon?.id) ?? null;
+  // Fichiers déjà en place : ceux du gabarit ouvert, ou du gabarit qu'on duplique.
+  const enPlace = actuel ?? gabarits.find((g) => g.id === brouillon?.copieDe) ?? null;
 
   // Fichiers choisis mais pas encore enregistrés, sinon ceux du bucket.
-  const photoUrl = useUrlLocale(brouillon?.photo ?? null) ?? actuel?.photo_url ?? null;
-  const ombreClair = useUrlLocale(brouillon?.ombresClair ?? null) ?? (brouillon?.retirer.CLAIR ? null : actuel?.ombres.CLAIR ?? null);
-  const ombreSombre = useUrlLocale(brouillon?.ombresSombre ?? null) ?? (brouillon?.retirer.SOMBRE ? null : actuel?.ombres.SOMBRE ?? null);
-  const masqueUrl = useUrlLocale(brouillon?.masque ?? null) ?? (brouillon?.retirer.MASQUE ? null : actuel?.masque_url ?? null);
+  const photoUrl = useUrlLocale(brouillon?.photo ?? null) ?? enPlace?.photo_url ?? null;
+  const ombreClair = useUrlLocale(brouillon?.ombresClair ?? null) ?? (brouillon?.retirer.CLAIR ? null : enPlace?.ombres.CLAIR ?? null);
+  const ombreSombre = useUrlLocale(brouillon?.ombresSombre ?? null) ?? (brouillon?.retirer.SOMBRE ? null : enPlace?.ombres.SOMBRE ?? null);
+  const masqueUrl = useUrlLocale(brouillon?.masque ?? null) ?? (brouillon?.retirer.MASQUE ? null : enPlace?.masque_url ?? null);
 
   // « Tester sur un motif » : montage avec le cadre en cours, enregistré ou non.
   const { reglages } = useReglages(shopId);
@@ -120,6 +123,7 @@ export function Gabarits({ shopId }: { shopId: string }) {
       form.set('poitrine_x', String(brouillon.poitrine.x));
       form.set('poitrine_y', String(brouillon.poitrine.y));
     }
+    if (brouillon.copieDe) form.set('copie_de', brouillon.copieDe);
     if (brouillon.photo) form.set('photo', brouillon.photo);
     if (brouillon.ombresClair) form.set('ombres_clair', brouillon.ombresClair);
     if (brouillon.ombresSombre) form.set('ombres_sombre', brouillon.ombresSombre);
@@ -189,7 +193,7 @@ export function Gabarits({ shopId }: { shopId: string }) {
         ) : (
           <>
             <Group justify="space-between" mb="xs">
-              <h2 className={styles.panneauTitre}>{brouillon.modele && brouillon.couleur ? libelle({ ...brouillon, modele: brouillon.modele, couleur: brouillon.couleur }) : 'Nouveau gabarit'}</h2>
+              <h2 className={styles.panneauTitre}>{brouillon.modele && brouillon.couleur ? libelle({ ...brouillon, modele: brouillon.modele, couleur: brouillon.couleur }) : (enPlace ? `Copie de ${libelle(enPlace)}` : 'Nouveau gabarit')}</h2>
               <span className={styles.sousTitre}>Glisse le cadre, agrandis-le par son coin</span>
             </Group>
             {photoUrl
@@ -218,10 +222,10 @@ export function Gabarits({ shopId }: { shopId: string }) {
               onChange={(v) => changer({ face: v as Face, poitrine: v === 'verso' ? null : brouillon.poitrine })}
               data={[{ label: 'Recto', value: 'recto' }, { label: 'Verso', value: 'verso' }]}
             />
-            <FileInput size="xs" label="Photo" accept="image/png,image/webp,image/jpeg" placeholder={actuel ? 'Remplacer la photo' : 'Déposer la photo'} value={brouillon.photo} onChange={(photo) => changer({ photo })} clearable />
+            <FileInput size="xs" label="Photo" accept="image/png,image/webp,image/jpeg" placeholder={enPlace ? 'Remplacer la photo' : 'Déposer la photo'} value={brouillon.photo} onChange={(photo) => changer({ photo })} clearable />
             {(['CLAIR', 'SOMBRE'] as const).map((v) => {
               const cle = v === 'CLAIR' ? 'ombresClair' : 'ombresSombre';
-              const enregistree = !!actuel?.ombres[v] && !brouillon.retirer[v];
+              const enregistree = !!enPlace?.ombres[v] && !brouillon.retirer[v];
               return (
                 <Stack key={v} gap={4}>
                   <Group gap="xs" align="flex-end" wrap="nowrap">
@@ -246,10 +250,10 @@ export function Gabarits({ shopId }: { shopId: string }) {
             <Group gap="xs" align="flex-end" wrap="nowrap">
               <FileInput
                 size="xs" style={{ flex: 1 }} label="Masque de l’encre (cordons…)" accept="image/png" clearable
-                placeholder={actuel?.masque_url && !brouillon.retirer.MASQUE ? 'Remplacer' : brouillon.retirer.MASQUE ? 'Retiré à l’enregistrement' : 'Aucun'}
+                placeholder={enPlace?.masque_url && !brouillon.retirer.MASQUE ? 'Remplacer' : brouillon.retirer.MASQUE ? 'Retiré à l’enregistrement' : 'Aucun'}
                 value={brouillon.masque} onChange={(masque) => changer({ masque, retirer: { ...brouillon.retirer, MASQUE: false } })}
               />
-              {actuel?.masque_url && !brouillon.retirer.MASQUE && !brouillon.masque && (
+              {enPlace?.masque_url && !brouillon.retirer.MASQUE && !brouillon.masque && (
                 <Button size="xs" variant="subtle" color="red" onClick={() => changer({ retirer: { ...brouillon.retirer, MASQUE: true } })}>Retirer</Button>
               )}
             </Group>
@@ -269,9 +273,13 @@ export function Gabarits({ shopId }: { shopId: string }) {
               </Group>
             </div>
             <Group justify="space-between" mt="sm">
-              {actuel
-                ? <Button size="xs" color="red" variant={confirmerSuppression ? 'filled' : 'subtle'} onClick={supprimer}>{confirmerSuppression ? 'Confirmer la suppression' : 'Supprimer'}</Button>
-                : <span />}
+              {actuel ? (
+                <Group gap="xs">
+                  <Button size="xs" color="red" variant={confirmerSuppression ? 'filled' : 'subtle'} onClick={supprimer}>{confirmerSuppression ? 'Confirmer la suppression' : 'Supprimer'}</Button>
+                  {/* Même modèle et même face par défaut : il reste à choisir la couleur (ou la face). */}
+                  <Button size="xs" variant="default" onClick={() => { setConfirmerSuppression(false); setBrouillon({ ...depuis(actuel), id: null, copieDe: actuel.id, couleur: null }); }}>Dupliquer</Button>
+                </Group>
+              ) : <span />}
               <Button size="xs" loading={envoi} disabled={!brouillon.modele || !brouillon.couleur || !photoUrl} onClick={enregistrer}>Enregistrer</Button>
             </Group>
           </Stack>

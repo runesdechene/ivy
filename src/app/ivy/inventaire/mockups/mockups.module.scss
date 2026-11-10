@@ -173,3 +173,9 @@
   padding-top: 8px;
   border-top: 1px solid $divider;
 }
+
+.cadre:focus,
+.poitrine:focus {
+  outline: 2px solid #e8590c;
+  outline-offset: 2px;
+}

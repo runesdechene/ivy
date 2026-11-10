@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SupabaseClient } from '@supabase/supabase-js';
-import { autoriser, deposerImage, erreur, retirer, toutesLesLignes, urlPublique } from '@/lib/mockups/serveur';
+import { autoriser, copierImage, deposerImage, erreur, retirer, toutesLesLignes, urlPublique } from '@/lib/mockups/serveur';
 import type { Face, Gabarit } from '@/lib/mockups/regles';
 
 interface LigneGabarit {
@@ -91,7 +91,19 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
 
   const envois = { photo_path: fichier(form.get('photo')), ombres_clair_path: fichier(form.get('ombres_clair')), ombres_sombre_path: fichier(form.get('ombres_sombre')), masque_path: fichier(form.get('masque')) };
-  if (!avant && !envois.photo_path) return erreur('Photo requise pour un nouveau gabarit');
+
+  // Duplication : les fichiers du gabarit d'origine qui ne sont ni remplacés ni retirés sont copiés.
+  const copieDe = texte(form.get('copie_de'));
+  let origine: Record<keyof typeof envois, string | null> | null = null;
+  if (copieDe) {
+    if (avant) return erreur('Ce gabarit existe déjà');
+    const { data: o } = await svc.from('mockup_gabarits')
+      .select('photo_path, ombres_clair_path, ombres_sombre_path, masque_path')
+      .eq('shop_id', acces.shopId).eq('id', copieDe).maybeSingle();
+    if (!o) return erreur('Gabarit d’origine introuvable', 404);
+    origine = o;
+  }
+  if (!avant && !envois.photo_path && !origine?.photo_path) return erreur('Photo requise pour un nouveau gabarit');
 
   // Ombres ou masque retirés sans remplacement : la colonne repasse à null, le fichier part après l'écriture.
   const retraits: Partial<Record<keyof typeof envois, null>> = {};
@@ -99,11 +111,13 @@ export async function POST(request: NextRequest) {
   if (form.get('retirer_ombres_sombre') === '1' && !envois.ombres_sombre_path) retraits.ombres_sombre_path = null;
   if (form.get('retirer_masque') === '1' && !envois.masque_path) retraits.masque_path = null;
 
-  // Dépose d'abord les nouveaux fichiers ; on ne supprime les anciens qu'une fois la ligne écrite.
+  // Dépose (ou copie) d'abord les nouveaux fichiers ; on ne supprime les anciens qu'une fois la ligne écrite.
   const nouveaux: Partial<Record<keyof typeof envois, string>> = {};
   try {
     for (const [colonne, f] of Object.entries(envois) as [keyof typeof envois, File | null][]) {
+      const copie = origine?.[colonne];
       if (f) nouveaux[colonne] = await deposerImage(svc, acces.shopId, 'gabarits', f);
+      else if (copie && !(colonne in retraits)) nouveaux[colonne] = await copierImage(svc, acces.shopId, 'gabarits', copie);
     }
   } catch (e) {
     await retirer(svc, Object.values(nouveaux));

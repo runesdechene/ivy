@@ -40,6 +40,14 @@ export async function deposerImage(svc: SupabaseClient, shopId: string, dossier:
   return path;
 }
 
+/** Copie un fichier du bucket sous un nom unique (duplication d'un gabarit) ; renvoie le nouveau chemin. */
+export async function copierImage(svc: SupabaseClient, shopId: string, dossier: string, depuis: string): Promise<string> {
+  const path = `${shopId}/${dossier}/${crypto.randomUUID()}.${depuis.split('.').pop()}`;
+  const { error } = await svc.storage.from(BUCKET).copy(depuis, path);
+  if (error) throw new Error(error.message);
+  return path;
+}
+
 /** Supprime des fichiers du bucket ; les chemins vides sont ignorés. */
 export async function retirer(svc: SupabaseClient, paths: (string | null | undefined)[]): Promise<void> {
   const aRetirer = paths.filter((p): p is string => !!p);
