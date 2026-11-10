@@ -1,6 +1,8 @@
 'use client';
 
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { ActionIcon } from '@mantine/core';
+import { IconEye, IconEyeOff } from '@tabler/icons-react';
 import { CADRE_HAUTEUR_CM, CADRE_LARGEUR_CM, type Cadre, type Point } from '@/lib/mockups/regles';
 import styles from './mockups.module.scss';
 
@@ -24,7 +26,7 @@ interface Props {
  *  Toutes les coordonnées sont en pixels de la photo d'origine. */
 export function CadreEditeur({ photoUrl, apercuUrl, cadre, poitrine, onChange }: Props) {
   const [largeurPhoto, setLargeurPhoto] = useState<number | null>(null);
-  const [cadreVisible, setCadreVisible] = useState(true); // un clic sur la photo hors du cadre le masque ou le réaffiche
+  const [cadreVisible, setCadreVisible] = useState(true); // l'œil masque cadre et point pour voir le mockup seul
   const depart = useRef<{ prise: Prise; x: number; y: number; cadre: Cadre; poitrine: Point | null } | null>(null);
   const echelle = largeurPhoto ? LARGEUR_AFFICHEE / largeurPhoto : 1;
 
@@ -64,9 +66,16 @@ export function CadreEditeur({ photoUrl, apercuUrl, cadre, poitrine, onChange }:
   const px = (v: number) => `${v * echelle}px`;
 
   return (
-    <div className={styles.editeur} style={{ width: LARGEUR_AFFICHEE }} onPointerMove={bouger} onPointerUp={lacher} onPointerCancel={lacher} onPointerDown={() => setCadreVisible((v) => !v)}>
+    <div className={styles.editeur} style={{ width: LARGEUR_AFFICHEE }} onPointerMove={bouger} onPointerUp={lacher} onPointerCancel={lacher}>
       {/* eslint-disable-next-line @next/next/no-img-element -- photo du bucket, taille d'origine requise */}
       <img src={apercuUrl ?? photoUrl} alt="" draggable={false} width={LARGEUR_AFFICHEE} onLoad={(e) => setLargeurPhoto(e.currentTarget.naturalWidth)} />
+      <ActionIcon
+        className={styles.oeil} variant="default" size="sm"
+        title={cadreVisible ? 'Masquer le cadre' : 'Afficher le cadre'} aria-label={cadreVisible ? 'Masquer le cadre' : 'Afficher le cadre'}
+        onClick={() => setCadreVisible((v) => !v)}
+      >
+        {cadreVisible ? <IconEyeOff size={14} /> : <IconEye size={14} />}
+      </ActionIcon>
       {largeurPhoto && cadreVisible && (
         <>
           <div

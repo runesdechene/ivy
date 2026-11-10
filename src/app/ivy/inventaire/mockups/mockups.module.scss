@@ -190,3 +190,10 @@
   outline: 2px solid #e8590c;
   outline-offset: 2px;
 }
+
+.oeil {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+}
