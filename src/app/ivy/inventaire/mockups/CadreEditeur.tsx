@@ -12,6 +12,7 @@ type Prise = 'cadre' | 'poignee' | 'poitrine';
 
 interface Props {
   photoUrl: string;
+  apercuUrl?: string | null; // montage à la place de la photo (même taille), le cadre reste par-dessus
   cadre: Cadre;
   poitrine: Point | null;
   onChange: (cadre: Cadre, poitrine: Point | null) => void;
@@ -19,7 +20,7 @@ interface Props {
 
 /** Photo du gabarit avec son cadre maximal (déplaçable, redimensionnable) et le point poitrine.
  *  Toutes les coordonnées sont en pixels de la photo d'origine. */
-export function CadreEditeur({ photoUrl, cadre, poitrine, onChange }: Props) {
+export function CadreEditeur({ photoUrl, apercuUrl, cadre, poitrine, onChange }: Props) {
   const [largeurPhoto, setLargeurPhoto] = useState<number | null>(null);
   const depart = useRef<{ prise: Prise; x: number; y: number; cadre: Cadre; poitrine: Point | null } | null>(null);
   const echelle = largeurPhoto ? LARGEUR_AFFICHEE / largeurPhoto : 1;
@@ -49,7 +50,7 @@ export function CadreEditeur({ photoUrl, cadre, poitrine, onChange }: Props) {
   return (
     <div className={styles.editeur} style={{ width: LARGEUR_AFFICHEE }} onPointerMove={bouger} onPointerUp={lacher} onPointerCancel={lacher}>
       {/* eslint-disable-next-line @next/next/no-img-element -- photo du bucket, taille d'origine requise */}
-      <img src={photoUrl} alt="" draggable={false} width={LARGEUR_AFFICHEE} onLoad={(e) => setLargeurPhoto(e.currentTarget.naturalWidth)} />
+      <img src={apercuUrl ?? photoUrl} alt="" draggable={false} width={LARGEUR_AFFICHEE} onLoad={(e) => setLargeurPhoto(e.currentTarget.naturalWidth)} />
       {largeurPhoto && (
         <>
           <div

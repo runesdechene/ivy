@@ -68,6 +68,7 @@ test('trouverFichier prend la source de la version, ignore cachés, autres forma
   assert.equal(trouverFichier(['LOKI DTF.png'], { pose: 'dtf', teinte: 'CUI' }, R), 'LOKI DTF.png');
   assert.equal(trouverFichier(['LOKI CLAIR.png'], { pose: 'motif', teinte: 'CUI' }, R), null);
   assert.equal(trouverFichier(['LOKI SOMBRE.psd'], { pose: 'motif', teinte: 'CUI' }, R), null);
+  assert.equal(trouverFichier(['LOKI CLAIR.svg', 'LOKI SOMBRE.svg'], { pose: 'motif', teinte: 'CUI' }, R), 'LOKI SOMBRE.svg');
 });
 
 test('hauteurMax respecte 49,5 cm de haut et 40,64 cm de large', () => {

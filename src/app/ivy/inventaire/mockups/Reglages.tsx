@@ -70,7 +70,7 @@ export function Reglages({ shopId }: { shopId: string }) {
         <h2 className={styles.panneauTitre}>Teintes</h2>
         <Table verticalSpacing="xs">
           <Table.Thead>
-            <Table.Tr><Table.Th>Teinte</Table.Th><Table.Th>Couleur</Table.Th><Table.Th>Dessin</Table.Th><Table.Th /></Table.Tr>
+            <Table.Tr><Table.Th>Teinte</Table.Th><Table.Th>Couleur</Table.Th><Table.Th>Pour vêtement</Table.Th><Table.Th /></Table.Tr>
           </Table.Thead>
           <Table.Tbody>
             {codes.map((code) => {

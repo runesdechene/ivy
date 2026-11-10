@@ -85,14 +85,14 @@ export function teinteReglee(reglages: Reglages, teinte: string): { couleur: str
 
 // --- Fichiers du dossier d'un motif ------------------------------------------
 
-/** Le fichier source d'une impression : dernier mot du nom = CLAIR, SOMBRE, MARQUE ou DTF. */
+/** Le fichier source d'une impression (PNG ou SVG) : dernier mot du nom = CLAIR, SOMBRE, MARQUE ou DTF. */
 export function trouverFichier(noms: string[], impression: Impression, reglages: Reglages): string | null {
   const mot = impression.pose === 'motif' ? teinteReglee(reglages, impression.teinte)?.version
     : impression.pose === 'marque' ? 'MARQUE' : 'DTF';
   if (!mot) return null;
   return noms.find((nom) => {
-    if (nom.startsWith('.') || !/\.png$/i.test(nom)) return false;
-    const base = nom.slice(0, -4).toUpperCase();
+    if (nom.startsWith('.') || !/\.(png|svg)$/i.test(nom)) return false;
+    const base = nom.slice(0, -4).toUpperCase(); // « .png » et « .svg » font quatre caractères
     // Les fichiers d'impression déjà écrits dans le dossier (« LOKI DTG-CUI MARQUE.png ») ne sont pas des sources.
     if (/(?:^|\s)(DTG|DTF)-/.test(base)) return false;
     return base.split(/\s+/).pop() === mot;

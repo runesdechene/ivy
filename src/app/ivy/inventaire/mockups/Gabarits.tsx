@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Button, FileInput, Group, SegmentedControl, Select, Stack } from '@mantine/core';
+import { Button, FileInput, Group, NumberInput, SegmentedControl, Select, Stack } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { authJson } from '@/lib/auth-fetch';
-import { CADRE_HAUTEUR_CM, CADRE_LARGEUR_CM, type Cadre, type Face, type Gabarit, type Point } from '@/lib/mockups/regles';
+import { CADRE_HAUTEUR_CM, CADRE_LARGEUR_CM, teinteReglee, type Cadre, type Face, type Gabarit, type Point } from '@/lib/mockups/regles';
+import { chargerGabarit, chargerSource, composerMockup, versBlob, type GabaritCharge, type Source } from '@/lib/mockups/composer';
+import { useReglages } from './Reglages';
 import { CadreEditeur } from './CadreEditeur';
 import styles from './mockups.module.scss';
 
@@ -27,6 +29,13 @@ const depuis = (g: Gabarit): Brouillon => ({
   id: g.id, modele: g.modele, couleur: g.couleur, face: g.face, cadre: g.cadre, poitrine: g.poitrine,
   photo: null, ombresClair: null, ombresSombre: null,
 });
+/** URL locale d'un fichier choisi, libérée quand il change. */
+function useUrlLocale(fichier: File | null): string | null {
+  const url = useMemo(() => (fichier ? URL.createObjectURL(fichier) : null), [fichier]);
+  useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
+  return url;
+}
+
 const libelle = (g: Pick<Gabarit, 'modele' | 'couleur' | 'face'>) => `${g.modele} · ${g.couleur} · ${g.face === 'recto' ? 'Recto' : 'Verso'}`;
 
 export function Gabarits({ shopId }: { shopId: string }) {
@@ -42,10 +51,46 @@ export function Gabarits({ shopId }: { shopId: string }) {
   const modeles = data?.modeles ?? {};
   const actuel = gabarits.find((g) => g.id === brouillon?.id) ?? null;
 
-  // Aperçu local de la photo choisie, sinon celle du bucket.
-  const photoLocale = useMemo(() => (brouillon?.photo ? URL.createObjectURL(brouillon.photo) : null), [brouillon?.photo]);
-  useEffect(() => () => { if (photoLocale) URL.revokeObjectURL(photoLocale); }, [photoLocale]);
-  const photoUrl = photoLocale ?? actuel?.photo_url ?? null;
+  // Fichiers choisis mais pas encore enregistrés, sinon ceux du bucket.
+  const photoUrl = useUrlLocale(brouillon?.photo ?? null) ?? actuel?.photo_url ?? null;
+  const ombreClair = useUrlLocale(brouillon?.ombresClair ?? null) ?? actuel?.ombres.CLAIR ?? null;
+  const ombreSombre = useUrlLocale(brouillon?.ombresSombre ?? null) ?? actuel?.ombres.SOMBRE ?? null;
+
+  // « Tester sur un motif » : montage avec le cadre en cours, enregistré ou non.
+  const { reglages } = useReglages(shopId);
+  const [motif, setMotif] = useState<File | null>(null);
+  const [teinte, setTeinte] = useState<string | null>(null);
+  const [hauteurCm, setHauteurCm] = useState(45);
+  const [charge, setCharge] = useState<GabaritCharge | null>(null);
+  const [source, setSource] = useState<Source | null>(null);
+  const [apercuUrl, setApercuUrl] = useState<string | null>(null);
+  const teintesReglees = reglages ? Object.keys(reglages.teintes).filter((t) => teinteReglee(reglages, t)).sort() : [];
+
+  useEffect(() => {
+    setCharge(null);
+    if (!photoUrl) return;
+    let actif = true;
+    chargerGabarit({ photo_url: photoUrl, ombres: { CLAIR: ombreClair, SOMBRE: ombreSombre }, cadre: CADRE_DEPART, poitrine: null })
+      .then((c) => { if (actif) setCharge(c); })
+      .catch((e: Error) => notifications.show({ color: 'red', message: e.message }));
+    return () => { actif = false; };
+  }, [photoUrl, ombreClair, ombreSombre]);
+
+  useEffect(() => {
+    setSource(null);
+    if (!motif) return;
+    chargerSource(motif).then(setSource).catch((e: Error) => notifications.show({ color: 'red', message: e.message }));
+  }, [motif]);
+
+  useEffect(() => {
+    // L'ancien montage n'est libéré qu'une fois le nouveau affiché : pas d'image cassée pendant qu'on glisse le cadre.
+    const remplacer = (url: string | null) => setApercuUrl((avant) => { if (avant) URL.revokeObjectURL(avant); return url; });
+    if (!charge || !source || !teinte || !reglages || !brouillon) return remplacer(null);
+    let actif = true;
+    const montage = composerMockup({ ...charge, cadre: brouillon.cadre, poitrine: brouillon.poitrine }, source, { pose: 'motif', teinte }, reglages, hauteurCm);
+    versBlob(montage, 'image/webp').then((b) => { if (actif) remplacer(URL.createObjectURL(b)); });
+    return () => { actif = false; };
+  }, [charge, source, teinte, hauteurCm, reglages, brouillon]);
 
   const parModele = useMemo(() => {
     const groupes: Record<string, Gabarit[]> = {};
@@ -139,7 +184,7 @@ export function Gabarits({ shopId }: { shopId: string }) {
               <span className={styles.sousTitre}>Glisse le cadre, agrandis-le par son coin</span>
             </Group>
             {photoUrl
-              ? <CadreEditeur photoUrl={photoUrl} cadre={brouillon.cadre} poitrine={brouillon.poitrine} onChange={(cadre, poitrine) => changer({ cadre, poitrine })} />
+              ? <CadreEditeur photoUrl={photoUrl} apercuUrl={apercuUrl} cadre={brouillon.cadre} poitrine={brouillon.poitrine} onChange={(cadre, poitrine) => changer({ cadre, poitrine })} />
               : <div className={styles.vide}>Dépose une photo à droite.</div>}
           </>
         )}
@@ -165,14 +210,22 @@ export function Gabarits({ shopId }: { shopId: string }) {
               data={[{ label: 'Recto', value: 'recto' }, { label: 'Verso', value: 'verso' }]}
             />
             <FileInput size="xs" label="Photo" accept="image/png,image/webp,image/jpeg" placeholder={actuel ? 'Remplacer la photo' : 'Déposer la photo'} value={brouillon.photo} onChange={(photo) => changer({ photo })} clearable />
-            <FileInput size="xs" label="Ombres · dessin CLAIR" accept="image/png" placeholder={actuel?.ombres.CLAIR ? 'Remplacer' : 'Aucune'} value={brouillon.ombresClair} onChange={(ombresClair) => changer({ ombresClair })} clearable />
-            <FileInput size="xs" label="Ombres · dessin SOMBRE" accept="image/png" placeholder={actuel?.ombres.SOMBRE ? 'Remplacer' : 'Aucune'} value={brouillon.ombresSombre} onChange={(ombresSombre) => changer({ ombresSombre })} clearable />
+            <FileInput size="xs" label="Ombres · vêtement clair" accept="image/png" placeholder={actuel?.ombres.CLAIR ? 'Remplacer' : 'Aucune'} value={brouillon.ombresClair} onChange={(ombresClair) => changer({ ombresClair })} clearable />
+            <FileInput size="xs" label="Ombres · vêtement sombre" accept="image/png" placeholder={actuel?.ombres.SOMBRE ? 'Remplacer' : 'Aucune'} value={brouillon.ombresSombre} onChange={(ombresSombre) => changer({ ombresSombre })} clearable />
             <div className={styles.aide}>Calque d’ombres seul, exporté à son opacité, PNG à la taille de la photo.</div>
             {brouillon.face === 'recto' && !brouillon.poitrine && (
               <Button size="xs" variant="default" onClick={() => changer({ poitrine: { x: brouillon.cadre.x + (brouillon.cadre.hauteur * CADRE_LARGEUR_CM / CADRE_HAUTEUR_CM) / 2, y: brouillon.cadre.y } })}>
                 Poser le point poitrine
               </Button>
             )}
+            <div className={styles.test}>
+              <div className={styles.groupe}>Tester sur un motif</div>
+              <FileInput size="xs" accept="image/png,image/svg+xml" placeholder="Motif (PNG ou SVG)" value={motif} onChange={setMotif} clearable />
+              <Group grow gap="xs">
+                <Select size="xs" placeholder="Teinte" data={teintesReglees} value={teinte} onChange={setTeinte} />
+                <NumberInput size="xs" suffix=" cm" min={1} max={CADRE_HAUTEUR_CM} step={0.1} decimalScale={1} value={hauteurCm} onChange={(v) => setHauteurCm(Number(v) || 0)} />
+              </Group>
+            </div>
             <Group justify="space-between" mt="sm">
               {actuel
                 ? <Button size="xs" color="red" variant={confirmerSuppression ? 'filled' : 'subtle'} onClick={supprimer}>{confirmerSuppression ? 'Confirmer la suppression' : 'Supprimer'}</Button>
