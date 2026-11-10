@@ -24,6 +24,7 @@ interface Props {
  *  Toutes les coordonnées sont en pixels de la photo d'origine. */
 export function CadreEditeur({ photoUrl, apercuUrl, cadre, poitrine, onChange }: Props) {
   const [largeurPhoto, setLargeurPhoto] = useState<number | null>(null);
+  const [cadreVisible, setCadreVisible] = useState(true); // un clic sur la photo hors du cadre le masque ou le réaffiche
   const depart = useRef<{ prise: Prise; x: number; y: number; cadre: Cadre; poitrine: Point | null } | null>(null);
   const echelle = largeurPhoto ? LARGEUR_AFFICHEE / largeurPhoto : 1;
 
@@ -63,10 +64,10 @@ export function CadreEditeur({ photoUrl, apercuUrl, cadre, poitrine, onChange }:
   const px = (v: number) => `${v * echelle}px`;
 
   return (
-    <div className={styles.editeur} style={{ width: LARGEUR_AFFICHEE }} onPointerMove={bouger} onPointerUp={lacher} onPointerCancel={lacher}>
+    <div className={styles.editeur} style={{ width: LARGEUR_AFFICHEE }} onPointerMove={bouger} onPointerUp={lacher} onPointerCancel={lacher} onPointerDown={() => setCadreVisible((v) => !v)}>
       {/* eslint-disable-next-line @next/next/no-img-element -- photo du bucket, taille d'origine requise */}
       <img src={apercuUrl ?? photoUrl} alt="" draggable={false} width={LARGEUR_AFFICHEE} onLoad={(e) => setLargeurPhoto(e.currentTarget.naturalWidth)} />
-      {largeurPhoto && (
+      {largeurPhoto && cadreVisible && (
         <>
           <div
             className={styles.cadre}
