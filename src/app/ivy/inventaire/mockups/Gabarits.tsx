@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ActionIcon, Button, FileInput, Group, NumberInput, SegmentedControl, Select, Slider, Stack } from '@mantine/core';
+import { ActionIcon, Button, FileInput, Group, SegmentedControl, Select, Slider, Stack } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconCopy } from '@tabler/icons-react';
 import { authJson } from '@/lib/auth-fetch';
-import { CADRE_HAUTEUR_CM, CADRE_LARGEUR_CM, teinteReglee, type Cadre, type Face, type Gabarit, type Point, type Version } from '@/lib/mockups/regles';
+import { CADRE_HAUTEUR_CM, CADRE_LARGEUR_CM, hauteurMax, teinteReglee, type Cadre, type Face, type Gabarit, type Point, type Version } from '@/lib/mockups/regles';
 import { chargerGabarit, chargerSource, composerMockup, versBlob, type GabaritCharge, type Source } from '@/lib/mockups/composer';
 import { useReglages } from './Reglages';
 import { CadreEditeur } from './CadreEditeur';
@@ -67,7 +67,6 @@ export function Gabarits({ shopId }: { shopId: string }) {
   const { reglages } = useReglages(shopId);
   const [motif, setMotif] = useState<File | null>(null);
   const [teinte, setTeinte] = useState<string | null>(null);
-  const [hauteurCm, setHauteurCm] = useState(45);
   const [charge, setCharge] = useState<GabaritCharge | null>(null);
   const [source, setSource] = useState<Source | null>(null);
   const [apercuUrl, setApercuUrl] = useState<string | null>(null);
@@ -94,10 +93,11 @@ export function Gabarits({ shopId }: { shopId: string }) {
     const remplacer = (url: string | null) => setApercuUrl((avant) => { if (avant) URL.revokeObjectURL(avant); return url; });
     if (!charge || !source || !teinte || !reglages || !brouillon) return remplacer(null);
     let actif = true;
-    const montage = composerMockup({ ...charge, intensites: brouillon.intensites, cadre: brouillon.cadre, poitrine: brouillon.poitrine }, source, { pose: 'motif', teinte }, reglages, hauteurCm);
+    const montage = composerMockup({ ...charge, intensites: brouillon.intensites, cadre: brouillon.cadre, poitrine: brouillon.poitrine }, source, { pose: 'motif', teinte }, reglages,
+      hauteurMax(source.dessin.w, source.dessin.h)); // test : toujours la plus grande taille qui tient dans le cadre
     versBlob(montage, 'image/webp').then((b) => { if (actif) remplacer(URL.createObjectURL(b)); });
     return () => { actif = false; };
-  }, [charge, source, teinte, hauteurCm, reglages, brouillon]);
+  }, [charge, source, teinte, reglages, brouillon]);
 
   const parModele = useMemo(() => {
     const groupes: Record<string, Gabarit[]> = {};
@@ -278,10 +278,7 @@ export function Gabarits({ shopId }: { shopId: string }) {
             <div className={styles.test}>
               <div className={styles.groupe}>Tester sur un motif</div>
               <FileInput size="xs" accept="image/png,image/svg+xml" placeholder="Motif (PNG ou SVG)" value={motif} onChange={setMotif} clearable />
-              <Group grow gap="xs">
-                <Select size="xs" placeholder="Teinte" data={teintesReglees} value={teinte} onChange={setTeinte} />
-                <NumberInput size="xs" suffix=" cm" min={1} max={CADRE_HAUTEUR_CM} step={0.1} decimalScale={1} value={hauteurCm} onChange={(v) => setHauteurCm(Number(v) || 0)} />
-              </Group>
+              <Select size="xs" placeholder="Teinte" data={teintesReglees} value={teinte} onChange={setTeinte} />
             </div>
             <Group justify="space-between" mt="sm">
               {actuel
