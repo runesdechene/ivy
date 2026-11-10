@@ -1,0 +1,58 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { SupabaseClient } from '@supabase/supabase-js';
+import { authorizeRequest, ownsShop, type AuthResult } from '@/lib/hub-ledger/server-auth';
+
+/** Côté serveur uniquement : accès, stockage et petites aides communes aux routes /api/mockups. */
+
+export const BUCKET = 'mockups';
+const TAILLE_MAX = 10 * 1024 * 1024;
+const EXTENSIONS = ['png', 'webp', 'jpg', 'jpeg'];
+
+/** Authentifie la requête et vérifie que la boutique demandée appartient à l'utilisateur. */
+export async function autoriser(
+  request: NextRequest, shopId: string | null | undefined,
+): Promise<{ ok: true; auth: AuthResult; shopId: string } | { ok: false; reponse: NextResponse }> {
+  const res = await authorizeRequest(request);
+  if (!res.ok) return { ok: false, reponse: NextResponse.json({ error: res.error }, { status: res.status }) };
+  if (!shopId || !ownsShop(res.auth, shopId)) return { ok: false, reponse: NextResponse.json({ error: 'Interdit' }, { status: 403 }) };
+  return { ok: true, auth: res.auth, shopId };
+}
+
+export function erreur(message: string, status = 400): NextResponse {
+  return NextResponse.json({ error: message }, { status });
+}
+
+export function urlPublique(svc: SupabaseClient, path: string | null): string | null {
+  return path ? svc.storage.from(BUCKET).getPublicUrl(path).data.publicUrl : null;
+}
+
+/** Dépose une image dans `${shopId}/${dossier}/` sous un nom unique (pas de cache périmé) ; renvoie le chemin. */
+export async function deposerImage(svc: SupabaseClient, shopId: string, dossier: string, fichier: File): Promise<string> {
+  const ext = (fichier.name.split('.').pop() || '').toLowerCase();
+  if (!EXTENSIONS.includes(ext)) throw new Error('Format refusé (png, webp ou jpg)');
+  if (fichier.size > TAILLE_MAX) throw new Error('Fichier trop volumineux (10 Mo max)');
+  const path = `${shopId}/${dossier}/${crypto.randomUUID()}.${ext}`;
+  const { error } = await svc.storage.from(BUCKET).upload(path, new Uint8Array(await fichier.arrayBuffer()), {
+    contentType: fichier.type || `image/${ext}`,
+    upsert: false,
+  });
+  if (error) throw new Error(error.message);
+  return path;
+}
+
+/** Supprime des fichiers du bucket ; les chemins vides sont ignorés. */
+export async function retirer(svc: SupabaseClient, paths: (string | null | undefined)[]): Promise<void> {
+  const aRetirer = paths.filter((p): p is string => !!p);
+  if (aRetirer.length) await svc.storage.from(BUCKET).remove(aRetirer);
+}
+
+/** Lit toutes les lignes d'une requête paginée (PostgREST plafonne à 1 000 lignes). */
+export async function toutesLesLignes<T>(page: (de: number, a: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>): Promise<T[]> {
+  const lignes: T[] = [];
+  for (let de = 0; ; de += 1000) {
+    const { data, error } = await page(de, de + 999);
+    if (error) throw new Error(error.message);
+    lignes.push(...(data ?? []));
+    if (!data || data.length < 1000) return lignes;
+  }
+}
