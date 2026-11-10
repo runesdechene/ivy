@@ -87,6 +87,11 @@ export async function POST(request: NextRequest) {
   const envois = { photo_path: fichier(form.get('photo')), ombres_clair_path: fichier(form.get('ombres_clair')), ombres_sombre_path: fichier(form.get('ombres_sombre')) };
   if (!avant && !envois.photo_path) return erreur('Photo requise pour un nouveau gabarit');
 
+  // Ombres retirées sans remplacement : la colonne repasse à null, le fichier part après l'écriture.
+  const retraits: Partial<Record<keyof typeof envois, null>> = {};
+  if (form.get('retirer_ombres_clair') === '1' && !envois.ombres_clair_path) retraits.ombres_clair_path = null;
+  if (form.get('retirer_ombres_sombre') === '1' && !envois.ombres_sombre_path) retraits.ombres_sombre_path = null;
+
   // Dépose d'abord les nouveaux fichiers ; on ne supprime les anciens qu'une fois la ligne écrite.
   const nouveaux: Partial<Record<keyof typeof envois, string>> = {};
   try {
@@ -104,6 +109,7 @@ export async function POST(request: NextRequest) {
     poitrine_y: face === 'recto' ? poitrine_y : null,
     // L'upsert insère une ligne complète avant de détecter le conflit : on repart des fichiers existants.
     ...avant,
+    ...retraits,
     ...nouveaux,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'shop_id,modele,couleur,face' }).select('*').single();
@@ -111,7 +117,7 @@ export async function POST(request: NextRequest) {
     await retirer(svc, Object.values(nouveaux));
     return erreur(error.message, 500);
   }
-  if (avant) await retirer(svc, (Object.keys(nouveaux) as (keyof typeof envois)[]).map((c) => avant[c]));
+  if (avant) await retirer(svc, (Object.keys({ ...nouveaux, ...retraits }) as (keyof typeof envois)[]).map((c) => avant[c]));
   return NextResponse.json({ gabarit: versGabarit(svc, data as LigneGabarit) });
 }
 

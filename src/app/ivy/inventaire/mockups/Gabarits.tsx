@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Button, FileInput, Group, NumberInput, SegmentedControl, Select, Stack } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { authJson } from '@/lib/auth-fetch';
-import { CADRE_HAUTEUR_CM, CADRE_LARGEUR_CM, teinteReglee, type Cadre, type Face, type Gabarit, type Point } from '@/lib/mockups/regles';
+import { CADRE_HAUTEUR_CM, CADRE_LARGEUR_CM, teinteReglee, type Cadre, type Face, type Gabarit, type Point, type Version } from '@/lib/mockups/regles';
 import { chargerGabarit, chargerSource, composerMockup, versBlob, type GabaritCharge, type Source } from '@/lib/mockups/composer';
 import { useReglages } from './Reglages';
 import { CadreEditeur } from './CadreEditeur';
@@ -18,16 +18,17 @@ interface Brouillon {
   modele: string | null; couleur: string | null; face: Face;
   cadre: Cadre; poitrine: Point | null;
   photo: File | null; ombresClair: File | null; ombresSombre: File | null;
+  retirer: Record<Version, boolean>; // ombre enregistrée à supprimer
 }
 
 const CADRE_DEPART: Cadre = { x: 100, y: 150, hauteur: 500 };
 const nouveau = (): Brouillon => ({
   id: null, modele: null, couleur: null, face: 'recto', cadre: CADRE_DEPART, poitrine: null,
-  photo: null, ombresClair: null, ombresSombre: null,
+  photo: null, ombresClair: null, ombresSombre: null, retirer: { CLAIR: false, SOMBRE: false },
 });
 const depuis = (g: Gabarit): Brouillon => ({
   id: g.id, modele: g.modele, couleur: g.couleur, face: g.face, cadre: g.cadre, poitrine: g.poitrine,
-  photo: null, ombresClair: null, ombresSombre: null,
+  photo: null, ombresClair: null, ombresSombre: null, retirer: { CLAIR: false, SOMBRE: false },
 });
 /** URL locale d'un fichier choisi, libérée quand il change. */
 function useUrlLocale(fichier: File | null): string | null {
@@ -53,8 +54,8 @@ export function Gabarits({ shopId }: { shopId: string }) {
 
   // Fichiers choisis mais pas encore enregistrés, sinon ceux du bucket.
   const photoUrl = useUrlLocale(brouillon?.photo ?? null) ?? actuel?.photo_url ?? null;
-  const ombreClair = useUrlLocale(brouillon?.ombresClair ?? null) ?? actuel?.ombres.CLAIR ?? null;
-  const ombreSombre = useUrlLocale(brouillon?.ombresSombre ?? null) ?? actuel?.ombres.SOMBRE ?? null;
+  const ombreClair = useUrlLocale(brouillon?.ombresClair ?? null) ?? (brouillon?.retirer.CLAIR ? null : actuel?.ombres.CLAIR ?? null);
+  const ombreSombre = useUrlLocale(brouillon?.ombresSombre ?? null) ?? (brouillon?.retirer.SOMBRE ? null : actuel?.ombres.SOMBRE ?? null);
 
   // « Tester sur un motif » : montage avec le cadre en cours, enregistré ou non.
   const { reglages } = useReglages(shopId);
@@ -120,6 +121,8 @@ export function Gabarits({ shopId }: { shopId: string }) {
     if (brouillon.photo) form.set('photo', brouillon.photo);
     if (brouillon.ombresClair) form.set('ombres_clair', brouillon.ombresClair);
     if (brouillon.ombresSombre) form.set('ombres_sombre', brouillon.ombresSombre);
+    if (brouillon.retirer.CLAIR) form.set('retirer_ombres_clair', '1');
+    if (brouillon.retirer.SOMBRE) form.set('retirer_ombres_sombre', '1');
 
     setEnvoi(true);
     try {
@@ -210,8 +213,22 @@ export function Gabarits({ shopId }: { shopId: string }) {
               data={[{ label: 'Recto', value: 'recto' }, { label: 'Verso', value: 'verso' }]}
             />
             <FileInput size="xs" label="Photo" accept="image/png,image/webp,image/jpeg" placeholder={actuel ? 'Remplacer la photo' : 'Déposer la photo'} value={brouillon.photo} onChange={(photo) => changer({ photo })} clearable />
-            <FileInput size="xs" label="Ombres · vêtement clair" accept="image/png" placeholder={actuel?.ombres.CLAIR ? 'Remplacer' : 'Aucune'} value={brouillon.ombresClair} onChange={(ombresClair) => changer({ ombresClair })} clearable />
-            <FileInput size="xs" label="Ombres · vêtement sombre" accept="image/png" placeholder={actuel?.ombres.SOMBRE ? 'Remplacer' : 'Aucune'} value={brouillon.ombresSombre} onChange={(ombresSombre) => changer({ ombresSombre })} clearable />
+            {(['CLAIR', 'SOMBRE'] as const).map((v) => {
+              const cle = v === 'CLAIR' ? 'ombresClair' : 'ombresSombre';
+              const enregistree = !!actuel?.ombres[v] && !brouillon.retirer[v];
+              return (
+                <Group key={v} gap="xs" align="flex-end" wrap="nowrap">
+                  <FileInput
+                    size="xs" style={{ flex: 1 }} label={`Ombres · vêtement ${v === 'CLAIR' ? 'clair' : 'sombre'}`} accept="image/png" clearable
+                    placeholder={enregistree ? 'Remplacer' : brouillon.retirer[v] ? 'Retirée à l’enregistrement' : 'Aucune'}
+                    value={brouillon[cle]} onChange={(f) => changer({ [cle]: f, retirer: { ...brouillon.retirer, [v]: false } })}
+                  />
+                  {enregistree && !brouillon[cle] && (
+                    <Button size="xs" variant="subtle" color="red" onClick={() => changer({ retirer: { ...brouillon.retirer, [v]: true } })}>Retirer</Button>
+                  )}
+                </Group>
+              );
+            })}
             <div className={styles.aide}>Calque d’ombres seul, exporté à son opacité, PNG à la taille de la photo.</div>
             {brouillon.face === 'recto' && !brouillon.poitrine && (
               <Button size="xs" variant="default" onClick={() => changer({ poitrine: { x: brouillon.cadre.x + (brouillon.cadre.hauteur * CADRE_LARGEUR_CM / CADRE_HAUTEUR_CM) / 2, y: brouillon.cadre.y } })}>
