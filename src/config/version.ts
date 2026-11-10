@@ -1,1 +1,1 @@
-export const APP_VERSION = '0.5.192 - Ivy';
+export const APP_VERSION = '0.5.193 - Ivy';

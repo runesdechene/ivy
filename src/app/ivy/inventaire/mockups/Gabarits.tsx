@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ActionIcon, Button, FileInput, Group, SegmentedControl, Select, Slider, Stack } from '@mantine/core';
+import { ActionIcon, Button, FileInput, Group, NumberInput, SegmentedControl, Select, Slider, Stack } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconCopy } from '@tabler/icons-react';
 import { authJson } from '@/lib/auth-fetch';
@@ -69,6 +69,9 @@ export function Gabarits({ shopId }: { shopId: string }) {
   const [teinte, setTeinte] = useState<string | null>(null);
   const [charge, setCharge] = useState<GabaritCharge | null>(null);
   const [source, setSource] = useState<Source | null>(null);
+  const [hauteurChoisie, setHauteurChoisie] = useState<number | null>(null); // null = la plus grande qui tient dans le cadre
+  const hauteurPlafond = source ? hauteurMax(source.dessin.w, source.dessin.h) : CADRE_HAUTEUR_CM;
+  const hauteurCm = Math.min(hauteurChoisie ?? hauteurPlafond, hauteurPlafond);
   const [apercuUrl, setApercuUrl] = useState<string | null>(null);
   const teintesReglees = reglages ? Object.keys(reglages.teintes).filter((t) => teinteReglee(reglages, t)).sort() : [];
 
@@ -84,6 +87,7 @@ export function Gabarits({ shopId }: { shopId: string }) {
 
   useEffect(() => {
     setSource(null);
+    setHauteurChoisie(null); // chaque nouveau motif repart de sa taille maximale
     if (!motif) return;
     chargerSource(motif).then(setSource).catch((e: Error) => notifications.show({ color: 'red', message: e.message }));
   }, [motif]);
@@ -93,11 +97,10 @@ export function Gabarits({ shopId }: { shopId: string }) {
     const remplacer = (url: string | null) => setApercuUrl((avant) => { if (avant) URL.revokeObjectURL(avant); return url; });
     if (!charge || !source || !teinte || !reglages || !brouillon) return remplacer(null);
     let actif = true;
-    const montage = composerMockup({ ...charge, intensites: brouillon.intensites, cadre: brouillon.cadre, poitrine: brouillon.poitrine }, source, { pose: 'motif', teinte }, reglages,
-      hauteurMax(source.dessin.w, source.dessin.h)); // test : toujours la plus grande taille qui tient dans le cadre
+    const montage = composerMockup({ ...charge, intensites: brouillon.intensites, cadre: brouillon.cadre, poitrine: brouillon.poitrine }, source, { pose: 'motif', teinte }, reglages, hauteurCm);
     versBlob(montage, 'image/webp').then((b) => { if (actif) remplacer(URL.createObjectURL(b)); });
     return () => { actif = false; };
-  }, [charge, source, teinte, reglages, brouillon]);
+  }, [charge, source, teinte, hauteurCm, reglages, brouillon]);
 
   const parModele = useMemo(() => {
     const groupes: Record<string, Gabarit[]> = {};
@@ -278,7 +281,13 @@ export function Gabarits({ shopId }: { shopId: string }) {
             <div className={styles.test}>
               <div className={styles.groupe}>Tester sur un motif</div>
               <FileInput size="xs" accept="image/png,image/svg+xml" placeholder="Motif (PNG ou SVG)" value={motif} onChange={setMotif} clearable />
-              <Select size="xs" placeholder="Teinte" data={teintesReglees} value={teinte} onChange={setTeinte} />
+              <Group grow gap="xs">
+                <Select size="xs" placeholder="Teinte" data={teintesReglees} value={teinte} onChange={setTeinte} />
+                <NumberInput
+                  size="xs" suffix=" cm" min={1} max={Math.floor(hauteurPlafond * 10) / 10} step={0.1} decimalScale={1}
+                  value={Math.round(hauteurCm * 10) / 10} onChange={(v) => setHauteurChoisie(Number(v) || null)}
+                />
+              </Group>
             </div>
             <Group justify="space-between" mt="sm">
               {actuel
