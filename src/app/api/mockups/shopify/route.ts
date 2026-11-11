@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
   try {
     const lu = await lireProduit(svc, acces.shopId, body?.productId ?? '');
     if (!lu) return erreur('Produit introuvable', 404);
-    const { data: mockups, error } = await svc.from('mockups').select('couleur, face, image_path')
+    const { data: mockups, error } = await svc.from('mockups').select('id, couleur, face, image_path')
       .eq('shop_id', acces.shopId).eq('product_id', lu.produit.id);
     if (error) throw new Error(error.message);
     // Seulement les couleurs encore en vente : un mockup d'une couleur retirée n'a plus rien à faire sur Shopify.
@@ -66,6 +66,8 @@ export async function POST(request: NextRequest) {
       { productId: gid, media: aEnvoyer.map((m) => ({ originalSource: m.url, alt: m.alt, mediaContentType: 'IMAGE' })), variants });
 
     const nouveaux = d.productVariantsBulkUpdate.product.media.nodes.filter((m) => !anciens.includes(m.id)).map((m) => m.id);
+    // Repère « à jour sur Shopify » : un mockup régénéré après cette date redevient à envoyer.
+    await svc.from('mockups').update({ envoye_le: new Date().toISOString() }).in('id', aEnvoyer.map((m) => m.id));
     return NextResponse.json({ anciens, nouveaux, envoyees: aEnvoyer.length, rattachees: variants.length });
   } catch (e) {
     return erreur((e as Error).message, 502);
@@ -94,10 +96,10 @@ export async function PATCH(request: NextRequest) {
 
     const aSupprimer = anciens.filter((id) => etat(id)); // déjà parties : rien à faire
     if (aSupprimer.length) {
-      // shortcut: productDeleteMedia est dépréciée ; passer à fileUpdate/fileDelete quand le jeton aura write_files.
-      await shopifyGraphql(shop, `mutation($productId: ID!, $mediaIds: [ID!]!) {
-        productDeleteMedia(productId: $productId, mediaIds: $mediaIds) { deletedMediaIds userErrors: mediaUserErrors { message } }
-      }`, { productId: gid, mediaIds: aSupprimer });
+      // Une image de produit est un fichier Shopify : le supprimer la retire du produit et de ses variantes.
+      await shopifyGraphql(shop, `mutation($fileIds: [ID!]!) {
+        fileDelete(fileIds: $fileIds) { deletedFileIds userErrors { message } }
+      }`, { fileIds: aSupprimer });
     }
     return NextResponse.json({ supprimees: aSupprimer.length });
   } catch (e) {

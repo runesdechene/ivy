@@ -11,11 +11,11 @@ export async function GET(request: NextRequest) {
   const acces = await autoriser(request, params.get('shopId'));
   if (!acces.ok) return acces.reponse;
   const { svc } = acces.auth;
-  const { data, error } = await svc.from('mockups').select('couleur, face, image_path, updated_at')
+  const { data, error } = await svc.from('mockups').select('couleur, face, image_path, updated_at, envoye_le')
     .eq('shop_id', acces.shopId).eq('product_id', params.get('productId') ?? '');
   if (error) return erreur(error.message, 500);
   return NextResponse.json({
-    mockups: (data ?? []).map((m) => ({ couleur: m.couleur, face: m.face as Face, image_url: urlPublique(svc, m.image_path)!, updated_at: m.updated_at })),
+    mockups: (data ?? []).map((m) => ({ couleur: m.couleur, face: m.face as Face, image_url: urlPublique(svc, m.image_path)!, updated_at: m.updated_at, envoye_le: m.envoye_le })),
   });
 }
 

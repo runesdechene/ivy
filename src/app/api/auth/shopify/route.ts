@@ -12,7 +12,8 @@ export async function GET(request: NextRequest) {
   // Credentials de l'app Ivy depuis le Dev Dashboard
   const clientId = process.env.SHOPIFY_CLIENT_ID;
   const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/auth/shopify/callback`;
-  const scopes = 'read_orders,read_products,read_inventory,read_locations';
+  // Alignés sur les droits réels de l'app (un droit write_ inclut le read_) : une réinstallation ne doit rien perdre.
+  const scopes = 'read_orders,write_products,write_inventory,write_locations,read_metaobjects,write_files';
 
   if (!clientId) {
     return NextResponse.json({ error: 'Missing SHOPIFY_CLIENT_ID in env' }, { status: 500 });

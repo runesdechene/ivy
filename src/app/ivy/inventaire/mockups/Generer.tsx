@@ -85,10 +85,12 @@ export function Generer({ shopId, onReglerTailles }: { shopId: string; onReglerT
   // Mockups enregistrés dans IVY (montés côté serveur, comme ceux de `pnpm mockups`).
   const enregistres = useQuery({
     queryKey: ['mockups-enregistres', shopId, produitId],
-    queryFn: () => authJson<{ mockups: { couleur: string; face: Face; image_url: string }[] }>(`/api/mockups/generer?shopId=${shopId}&productId=${produitId}`),
+    queryFn: () => authJson<{ mockups: { couleur: string; face: Face; image_url: string; updated_at: string; envoye_le: string | null }[] }>(`/api/mockups/generer?shopId=${shopId}&productId=${produitId}`),
     enabled: !!produitId,
   });
   const images = Object.fromEntries((enregistres.data?.mockups ?? []).map((m) => [cle(m), m.image_url]));
+  // À jour sur Shopify = envoyé après sa dernière génération.
+  const aJour = (enregistres.data?.mockups ?? []).filter((m) => m.envoye_le && m.envoye_le >= m.updated_at && apercus.some((a) => cle(a) === cle(m))).length;
   const [enCours, setEnCours] = useState<Set<string>>(new Set());
   const [erreurs, setErreurs] = useState<Record<string, string>>({});
   const aGenerer = apercus.filter((a) => !a.manque);
@@ -117,13 +119,15 @@ export function Generer({ shopId, onReglerTailles }: { shopId: string; onReglerT
   const [rattacher, setRattacher] = useState(true);
   const [envoi, setEnvoi] = useState<string | null>(null); // étape en cours, affichée sur le bouton
 
-  function confirmerEnvoi() {
-    if (!remplacer) return envoyer();
+  /** Envoie (après confirmation si les photos actuelles seront remplacées) ; `regenerer` refait d'abord les mockups. */
+  function confirmerEnvoi(regenerer = false) {
+    const action = async () => { if (regenerer) await generer(aGenerer); await envoyer(); };
+    if (!remplacer) return action();
     modals.openConfirmModal({
       title: 'Remplacer les photos sur Shopify ?',
       children: <div>Les photos actuelles de « {produit.data?.produit.title} » seront <strong>supprimées</strong> une fois les nouvelles prêtes. C’est définitif.</div>,
-      labels: { confirm: `Envoyer et remplacer`, cancel: 'Annuler' },
-      onConfirm: envoyer,
+      labels: { confirm: regenerer ? 'Générer, envoyer et remplacer' : 'Envoyer et remplacer', cancel: 'Annuler' },
+      onConfirm: action,
     });
   }
 
@@ -148,6 +152,7 @@ export function Generer({ shopId, onReglerTailles }: { shopId: string; onReglerT
           await new Promise((ok) => setTimeout(ok, 2000));
         }
       }
+      await enregistres.refetch(); // repère « à jour sur Shopify »
       notifications.show({ color: 'green', message: `${r.envoyees} image(s) envoyée(s)${rattacher ? `, ${r.rattachees} variante(s) rattachée(s)` : ''}${remplacer ? ', anciennes photos retirées' : ''}` });
     } catch (e) {
       notifications.show({ color: 'red', message: (e as Error).message });
@@ -262,9 +267,12 @@ export function Generer({ shopId, onReglerTailles }: { shopId: string; onReglerT
             <h2 className={styles.panneauTitre}>Shopify</h2>
             <Checkbox size="xs" label="Remplacer les photos actuelles" checked={remplacer} onChange={(e) => setRemplacer(e.currentTarget.checked)} />
             <Checkbox size="xs" mt={6} label="Rattacher chaque image à sa couleur" checked={rattacher} onChange={(e) => setRattacher(e.currentTarget.checked)} />
-            <Button size="xs" mt="sm" fullWidth loading={envoi !== null} onClick={confirmerEnvoi}>
+            <Button size="xs" mt="sm" fullWidth loading={envoi !== null} onClick={() => confirmerEnvoi()}>
               {envoi ?? `Envoyer ${pretes.length} image(s) sur Shopify`}
             </Button>
+            <div className={styles.aide} style={{ marginTop: 6 }}>
+              {aJour === pretes.length ? 'À jour sur Shopify.' : <span className={styles.aRegler}>{pretes.length - aJour} image(s) pas à jour sur Shopify.</span>}
+            </div>
           </section>
         )}
 
@@ -291,6 +299,9 @@ export function Generer({ shopId, onReglerTailles }: { shopId: string; onReglerT
             </Button>
             <Button size="xs" disabled={aGenerer.length === 0} loading={enCours.size > 0} onClick={() => generer(aGenerer)}>
               {pretes.length ? 'Tout régénérer' : 'Générer'} ({aGenerer.length})
+            </Button>
+            <Button size="xs" color="teal" disabled={aGenerer.length === 0} loading={enCours.size > 0 || envoi !== null} onClick={() => confirmerEnvoi(true)}>
+              Générer et envoyer
             </Button>
           </Group>
         </Group>

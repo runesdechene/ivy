@@ -1,6 +1,7 @@
 // Génère les mockups d'un produit ou de tous les produits d'un motif, sans navigateur.
 //   pnpm mockups "Loki | T-shirt unisexe"
 //   pnpm mockups Loki
+//   pnpm mockups Loki --envoyer      puis envoie sur Shopify (remplace les photos, rattache chaque couleur)
 // Appelle les routes d'IVY (local par défaut, IVY_URL=https://ivy.runesdechene.com pour la prod) avec la clé
 // d'automatisation MOCKUPS_CLE_AUTOMATE et la boutique MOCKUPS_SHOP_ID, lues dans .env.local.
 import { readFileSync } from 'node:fs';
@@ -10,20 +11,21 @@ const env = Object.fromEntries(readFileSync('.env.local', 'utf8').split(/\r?\n/)
   .map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1).trim().replace(/^"|"$/g, '')]));
 const base = process.env.IVY_URL ?? 'http://localhost:3000';
 const shopId = env.MOCKUPS_SHOP_ID;
-const recherche = process.argv.slice(2).join(' ');
+const envoyerAussi = process.argv.includes('--envoyer');
+const recherche = process.argv.slice(2).filter((a) => a !== '--envoyer').join(' ');
 if (!recherche || !shopId || !env.MOCKUPS_CLE_AUTOMATE) {
   console.error('Usage : pnpm mockups "<titre du produit>" | <motif>   (MOCKUPS_SHOP_ID et MOCKUPS_CLE_AUTOMATE dans .env.local)');
   process.exit(1);
 }
 
-async function appel(chemin, corps) {
+async function appel(chemin, corps, methode) {
   const r = await fetch(`${base}${chemin}`, {
-    method: corps ? 'POST' : 'GET',
+    method: methode ?? (corps ? 'POST' : 'GET'),
     headers: { 'x-ivy-automate': env.MOCKUPS_CLE_AUTOMATE, 'Content-Type': 'application/json' },
     body: corps ? JSON.stringify(corps) : undefined,
   });
   const json = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(json.error ?? `HTTP ${r.status}`);
+  if (!r.ok) throw Object.assign(new Error(json.error ?? `HTTP ${r.status}`), { status: r.status });
   return json;
 }
 
@@ -43,6 +45,19 @@ for (const p of produits) {
       else { manques++; console.log(`  ⚠ ${couleur} · ${face}  ${r.manque}`); }
     } catch (e) {
       manques++; console.log(`  ✗ ${couleur} · ${face}  ${e.message}`);
+    }
+  }
+  if (envoyerAussi) {
+    try {
+      const r = await appel('/api/mockups/shopify', { shopId, productId: p.id, rattacher: true });
+      // Les anciennes photos ne partent qu'une fois les nouvelles traitées par Shopify (409 = pas encore).
+      for (let essai = 1; r.anciens.length; essai++) {
+        try { await appel('/api/mockups/shopify', { shopId, productId: p.id, anciens: r.anciens, nouveaux: r.nouveaux }, 'PATCH'); break; }
+        catch (e) { if (e.status !== 409 || essai >= 15) throw e; await new Promise((ok) => setTimeout(ok, 2000)); }
+      }
+      console.log(`  → Shopify : ${r.envoyees} image(s), ${r.rattachees} variante(s) rattachée(s), ${r.anciens.length} ancienne(s) retirée(s)`);
+    } catch (e) {
+      manques++; console.log(`  ✗ Shopify : ${e.message}`);
     }
   }
 }
