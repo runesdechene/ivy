@@ -1,6 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Canvas, createCanvas, loadImage } from '@napi-rs/canvas';
-import { chargerGabarit, chargerSource, composerMockup, peindre, utiliserPlateforme, versBlob, type Img } from './composer';
+import { centrer, chargerGabarit, chargerSource, composerMockup, peindre, utiliserPlateforme, versBlob, type Img } from './composer';
 import { lireGabarits, lireMotif, lireProduit, lireReglages } from './donnees';
 import { BUCKET, retirer, urlPublique } from './serveur';
 import {
@@ -44,10 +44,11 @@ export async function genererMockup(svc: SupabaseClient, shopId: string, product
 
   const urlSource = a.fichier ? motif.fichiers[roleDuFichier(a.fichier)!]!.url : dtfUrl; // DTF sans fichier propre : logo commun
   if (!urlSource) return { manque: 'fichier' };
-  const [charge, source] = await Promise.all([
+  const [charge, brut] = await Promise.all([
     chargerGabarit(gabarits.find((g) => g.id === a.gabaritId)!),
     fetch(urlSource).then((r) => r.blob()).then(chargerSource),
   ]);
+  const source = a.impression.pose === 'motif' ? centrer(brut, motif.axe) : brut;
   const hauteur = a.impression.pose === 'motif' ? motif.hauteurs['D-MAX'] ?? null : null;
   const image = await versBlob(composerMockup(charge, source, a.impression, reglages, hauteur), 'image/webp');
 
@@ -81,7 +82,8 @@ export async function fichierImpression(svc: SupabaseClient, shopId: string, pro
   const url = fichier && (motif.fichiers[fichier.source]?.url ?? (fichier.source === 'DTF' ? dtfUrl : null));
   if (!fichier || !teinte || !url) return null;
 
-  const source = await chargerSource(await (await fetch(url)).blob());
+  const brut = await chargerSource(await (await fetch(url)).blob());
+  const source = fichier.hauteurCm ? centrer(brut, motif.axe) : brut; // marque et DTF : pas d'axe
   const { w, h } = source.dessin;
   const hauteur = fichier.hauteurCm ? fichier.hauteurCm * PX_PAR_CM_300DPI : h;
   const png = await versBlob(peindre(source, teinte.couleur, w * hauteur / h, hauteur), 'image/png');

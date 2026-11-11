@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
 
   const [produits, fiches] = await Promise.all([
     svc.from('products').select('title').eq('shop_id', acces.shopId).eq('status', 'active').like('title', '% | %'),
-    svc.from('mockup_motifs').select('nom, hauteurs').eq('shop_id', acces.shopId),
+    svc.from('mockup_motifs').select('nom, hauteurs, axe').eq('shop_id', acces.shopId),
   ]);
   if (produits.error || fiches.error) return erreur((produits.error ?? fiches.error)!.message, 500);
 
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     motifs.set(nom, m);
   }
   for (const f of fiches.data as FicheMotif[]) {
-    motifs.set(f.nom, { ...(motifs.get(f.nom) ?? { nom: f.nom, libelle: f.nom, produits: 0 }), hauteurs: f.hauteurs });
+    motifs.set(f.nom, { ...(motifs.get(f.nom) ?? { nom: f.nom, libelle: f.nom, produits: 0 }), hauteurs: f.hauteurs, axe: f.axe ?? null });
   }
 
   const liste: Motif[] = await Promise.all([...motifs.values()].map(async (m) => ({
@@ -41,6 +41,7 @@ export async function PUT(request: NextRequest) {
 
   const nom = cleMotif(body?.fiche?.nom ?? '');
   const hauteurs = body?.fiche?.hauteurs;
+  const axe = body?.fiche?.axe ?? null;
   if (!nom) return erreur('Nom du motif manquant');
   if (!hauteurs || typeof hauteurs !== 'object') return erreur('Hauteurs manquantes');
   for (const [taille, cm] of Object.entries(hauteurs)) {
@@ -48,8 +49,10 @@ export async function PUT(request: NextRequest) {
     if (typeof cm !== 'number' || !(cm > 0 && cm <= CADRE_HAUTEUR_CM)) return erreur(`Hauteur invalide pour ${taille}`);
   }
 
+  if (axe !== null && !(typeof axe === 'number' && axe > 0 && axe < 1)) return erreur('Axe invalide');
+
   const { error } = await acces.auth.svc.from('mockup_motifs')
-    .upsert({ shop_id: acces.shopId, nom, hauteurs, updated_at: new Date().toISOString() }, { onConflict: 'shop_id,nom' });
+    .upsert({ shop_id: acces.shopId, nom, hauteurs, axe, updated_at: new Date().toISOString() }, { onConflict: 'shop_id,nom' });
   if (error) return erreur(error.message, 500);
   return NextResponse.json({ ok: true });
 }

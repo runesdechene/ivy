@@ -343,3 +343,14 @@
   padding-top: 12px;
   border-top: 1px solid $divider;
 }
+
+// Axe du motif : le dessin et son reflet, le curseur juste dessous, à la même largeur.
+.axe {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+
+  canvas { max-width: 100%; height: auto; background: #fff; border-radius: 4px; }
+  > :global(.mantine-Slider-root) { width: 420px; max-width: 100%; }
+}

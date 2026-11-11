@@ -1,5 +1,5 @@
 import {
-  bornesDessin, carteOmbres, placerMotif, placerPoitrine, teinteReglee,
+  bornesDessin, carteOmbres, elargir, placerMotif, placerPoitrine, teinteReglee,
   type Cadre, type Gabarit, type Impression, type Point, type Rect, type Reglages, type Version,
 } from './regles';
 
@@ -57,6 +57,16 @@ export async function chargerSource(fichier: Blob): Promise<Source> {
   const dessin = bornesDessin(alpha, l, h);
   if (!dessin) throw new Error('Image vide : aucun pixel visible');
   return { image, dessin };
+}
+
+/** Le dessin élargi de transparent pour que son axe tombe au milieu (voir `elargir`) ; inchangé si l'axe n'est pas réglé. */
+export function centrer(source: Source, axe: number | null | undefined): Source {
+  if (axe == null) return source;
+  const { dessin } = source;
+  const { largeur, decalage } = elargir(dessin.w, axe);
+  const [canvas, ctx] = toile(largeur, dessin.h);
+  ctx.drawImage(source.image, dessin.x, dessin.y, dessin.w, dessin.h, decalage, 0, dessin.w, dessin.h);
+  return { image: canvas as unknown as Img, dessin: { x: 0, y: 0, w: largeur, h: dessin.h } };
 }
 
 /** Masque de fusion façon Photoshop (gris) → toile dont l'opacité suit le gris, pour un « destination-in ». */

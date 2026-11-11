@@ -19,7 +19,8 @@ export interface Reglages {
   teintes: Record<string, { couleur: string | null; version: Version | null }>;
   opacite: number; // encre sur les mockups, 0–1 ; les fichiers d'impression restent pleins
 }
-export interface FicheMotif { nom: string; hauteurs: Partial<Record<TailleImpression, number>> }
+/** `axe` : où tombe le centre voulu du motif (souvent le milieu de son cadre), en fraction de la largeur du dessin ; null = au milieu. */
+export interface FicheMotif { nom: string; hauteurs: Partial<Record<TailleImpression, number>>; axe?: number | null }
 export interface FichierDepose { url: string; taille: number; depose_le: string; ext: 'png' | 'svg' }
 /** Un motif tel qu'IVY le connaît : nom affiché, fiche de tailles (`nom` = clé), fichiers déposés, nombre de produits. */
 export interface Motif extends FicheMotif { libelle: string; fichiers: Partial<Record<Role, FichierDepose>>; produits: number }
@@ -129,6 +130,34 @@ export function motifDuTitre(titre: string): string | null {
 }
 
 // --- Géométrie ----------------------------------------------------------------
+
+/**
+ * Élargit un dessin de transparent du côté court pour que son axe tombe au milieu :
+ * un élément qui déborde (une queue de serpent) ne décale plus le motif à l'impression.
+ */
+export function elargir(largeur: number, axe: number): { largeur: number; decalage: number } {
+  const moitie = Math.max(axe, 1 - axe) * largeur;
+  return { largeur: Math.round(2 * moitie), decalage: Math.round(moitie - axe * largeur) };
+}
+
+/**
+ * L'axe (fraction de la largeur) où le dessin et son reflet en miroir se superposent le mieux :
+ * pour un motif encadré, le milieu du cadre, même si un élément déborde d'un côté.
+ */
+export function axeSymetrique(alpha: Uint8ClampedArray, largeur: number, hauteur: number): number {
+  let meilleur = 0.5, score = -1;
+  for (let c2 = Math.round(largeur * 0.7); c2 <= Math.round(largeur * 1.3); c2++) { // c2 = deux fois l'axe, en pixels
+    let s = 0;
+    for (let y = 0; y < hauteur; y++) {
+      const ligne = y * largeur;
+      for (let x = Math.max(0, c2 - largeur + 1); x < Math.min(largeur, c2 + 1); x++) {
+        if (alpha[ligne + x] > 127 && alpha[ligne + c2 - x] > 127) s++;
+      }
+    }
+    if (s > score) { score = s; meilleur = c2 / 2 / largeur; }
+  }
+  return meilleur;
+}
 
 /** Hauteur maximale (cm) d'un dessin pour qu'il tienne dans 49,5 × 40,64 cm. */
 export function hauteurMax(dessinLargeurPx: number, dessinHauteurPx: number): number {

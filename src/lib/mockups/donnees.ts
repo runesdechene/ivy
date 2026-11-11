@@ -78,9 +78,9 @@ export async function lireProduit(svc: SupabaseClient, shopId: string, productId
 /** Fiche de tailles et fichiers déposés d'un motif (clé = `cleMotif`). */
 export async function lireMotif(svc: SupabaseClient, shopId: string, cle: string): Promise<FicheMotif & { fichiers: Partial<Record<Role, FichierDepose>> }> {
   const [{ data, error }, fichiers] = await Promise.all([
-    svc.from('mockup_motifs').select('hauteurs').eq('shop_id', shopId).eq('nom', cle).maybeSingle(),
+    svc.from('mockup_motifs').select('hauteurs, axe').eq('shop_id', shopId).eq('nom', cle).maybeSingle(),
     fichiersDuMotif(svc, dossierMotif(shopId, cle)),
   ]);
   if (error) throw new Error(error.message);
-  return { nom: cle, hauteurs: data?.hauteurs ?? {}, fichiers };
+  return { nom: cle, hauteurs: data?.hauteurs ?? {}, axe: data?.axe ?? null, fichiers };
 }

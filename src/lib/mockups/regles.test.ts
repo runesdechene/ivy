@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { crc32 } from 'node:zlib';
 import {
   lireImpression, lireTaille, tailleDansNom, rangTaille, teinteReglee, trouverFichier,
-  hauteurMax, placerMotif, placerPoitrine, planifierApercus, profilSuivi, profilsDepuisExistants,
+  axeSymetrique, elargir, hauteurMax, placerMotif, placerPoitrine, planifierApercus, profilSuivi, profilsDepuisExistants,
   fichiersImpression, bornesDessin, avec300dpi, cleMotif, carteOmbres, roleDuFichier, motifDuTitre,
 } from './regles.ts';
 import type { Reglages, FicheMotif, Cadre, Gabarit, VarianteImpression, Profil, Rect } from './regles.ts';
@@ -224,4 +224,22 @@ test('avec300dpi insère un seul bloc pHYs à 300 dpi, CRC correct', () => {
   assert.deepEqual([...vue.subarray(41, 50)], [0x00, 0x00, 0x2e, 0x23, 0x00, 0x00, 0x2e, 0x23, 0x01]);
   assert.equal(vue.readUInt32BE(50), crc32(vue.subarray(37, 50)));
   assert.equal(vue.toString('latin1').split('pHYs').length - 1, 1);
+});
+
+test('elargir : l’axe tombe au milieu, le dessin est décalé du côté court', () => {
+  assert.deepEqual(elargir(1000, 0.5), { largeur: 1000, decalage: 0 });
+  assert.deepEqual(elargir(1000, 0.4), { largeur: 1200, decalage: 200 }); // axe à gauche : marge à gauche
+  assert.deepEqual(elargir(1000, 0.6), { largeur: 1200, decalage: 0 });   // axe à droite : marge à droite
+  const { largeur, decalage } = elargir(1000, 0.45);
+  assert.equal(decalage + 450, largeur / 2);
+});
+
+test('axeSymetrique : retrouve le milieu d’un cadre malgré un élément qui déborde à droite', () => {
+  const l = 100, h = 60, alpha = new Uint8ClampedArray(l * h);
+  const plein = (x0: number, x1: number, y0: number, y1: number) => {
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) alpha[y * l + x] = 255;
+  };
+  plein(0, 4, 0, 60); plein(76, 80, 0, 60); plein(0, 80, 0, 4); plein(0, 80, 56, 60); // cadre de 0 à 80 : milieu à 40
+  plein(80, 100, 30, 34); // la queue qui déborde
+  assert.equal(Math.round(axeSymetrique(alpha, l, h) * l), 40);
 });

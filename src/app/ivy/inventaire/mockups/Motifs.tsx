@@ -1,16 +1,16 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Badge, Button, FileButton, Group, NumberInput, Select, Slider, TextInput } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { authFetch, authJson } from '@/lib/auth-fetch';
 import {
   CADRE_HAUTEUR_CM, CADRE_LARGEUR_CM, ROLES, TAILLES_IMPRESSION,
-  hauteurMax, teinteReglee,
+  axeSymetrique, hauteurMax, teinteReglee,
   type Motif, type Role, type TailleImpression,
 } from '@/lib/mockups/regles';
-import { chargerGabarit, chargerSource, composerMockup, versBlob, type GabaritCharge, type Source } from '@/lib/mockups/composer';
+import { centrer, chargerGabarit, chargerSource, composerMockup, peindre, versBlob, type GabaritCharge, type Source } from '@/lib/mockups/composer';
 import { useReglages } from './Reglages';
 import { libelle, useGabarits } from './Gabarits';
 import styles from './mockups.module.scss';
@@ -41,6 +41,66 @@ function montage(charge: GabaritCharge, source: Source, teinte: string, reglages
   return versBlob(canvas, 'image/webp');
 }
 
+const HAUTEUR_AXE = 640; // px de l'aperçu de l'axe
+
+/** Le dessin centré sur son axe, et son reflet en miroir par transparence : l'axe est juste quand le cadre et son reflet se superposent. */
+function AxeMotif({ source, axe, setAxe, hauteurDMax }: {
+  source: Source; axe: number | null; setAxe: (a: number | null) => void; hauteurDMax: number | undefined;
+}) {
+  const toile = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const centree = centrer(source, axe ?? 0.5);
+    const k = HAUTEUR_AXE / centree.dessin.h;
+    const encre = peindre(centree, '#2b2b2b', centree.dessin.w * k, HAUTEUR_AXE);
+    const reflet = peindre(centree, '#e8590c', centree.dessin.w * k, HAUTEUR_AXE);
+    const canvas = toile.current!;
+    canvas.width = encre.width;
+    canvas.height = encre.height;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(encre, 0, 0);
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(reflet, 0, 0);
+    ctx.restore();
+    ctx.fillStyle = '#228be6';
+    ctx.fillRect(canvas.width / 2 - 0.5, 0, 1, canvas.height);
+  }, [source, axe]);
+
+  function proposer() {
+    const l = 300, h = Math.round(l * source.dessin.h / source.dessin.w); // assez fin pour l'œil, assez petit pour être instantané
+    const pixels = peindre(source, '#000', l, h).getContext('2d')!.getImageData(0, 0, l, h).data;
+    const alpha = new Uint8ClampedArray(l * h);
+    for (let i = 0; i < alpha.length; i++) alpha[i] = pixels[i * 4 + 3];
+    setAxe(axeSymetrique(alpha, l, h));
+  }
+
+  const ecartMm = hauteurDMax && axe !== null
+    ? (axe - 0.5) * hauteurDMax * source.dessin.w / source.dessin.h * 10 : 0;
+  return (
+    <section className={styles.panneau}>
+      <Group justify="space-between" mb="xs">
+        <div>
+          <h2 className={styles.panneauTitre}>Axe du motif</h2>
+          <div className={styles.aide}>Fais glisser jusqu’à ce que le cadre et son reflet orange se superposent. Les flèches du clavier affinent.</div>
+        </div>
+        <Group gap={6}>
+          <Button size="compact-xs" variant="default" onClick={proposer}>Proposer l’axe</Button>
+          <Button size="compact-xs" variant="subtle" disabled={axe === null} onClick={() => setAxe(null)}>Au milieu du dessin</Button>
+        </Group>
+      </Group>
+      <div className={styles.axe}>
+        <canvas ref={toile} />
+        <Slider size="sm" min={0.3} max={0.7} step={0.0005} label={null} value={axe ?? 0.5} onChange={setAxe} />
+        <div className={styles.aide}>
+          {axe === null ? 'Axe au milieu du dessin.' : `Axe décalé de ${Math.abs(ecartMm).toFixed(1).replace('.', ',')} mm vers la ${ecartMm < 0 ? 'gauche' : 'droite'} (en D-Max).`}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /** Les motifs, leurs fichiers déposés et leurs fiches de tailles ; partagés avec l'onglet Générer. */
 export function useMotifs(shopId: string) {
   return useQuery({
@@ -57,6 +117,7 @@ export function Motifs({ shopId, choisi, setChoisi }: { shopId: string; choisi: 
   const [recherche, setRecherche] = useState('');
   const [nouveau, setNouveau] = useState<string | null>(null); // nom en cours de saisie
   const [hauteurs, setHauteurs] = useState<Hauteurs>({});
+  const [axe, setAxe] = useState<number | null>(null);
   const [gabaritId, setGabaritId] = useState<string | null>(null);
   const [teinte, setTeinte] = useState<string | null>(null);
   const [charge, setCharge] = useState<GabaritCharge | null>(null);
@@ -75,11 +136,13 @@ export function Motifs({ shopId, choisi, setChoisi }: { shopId: string; choisi: 
   const teinteVue = teinte ?? teintes[0] ?? null;
   const versionVue = reglages && teinteVue ? teinteReglee(reglages, teinteVue)?.version ?? null : null;
   const urlSource = versionVue ? motif?.fichiers[versionVue]?.url ?? null : null;
-  const plafond = source ? arrondi(hauteurMax(source.dessin.w, source.dessin.h) - 0.05) : CADRE_HAUTEUR_CM;
+  const centree = useMemo(() => source && centrer(source, axe), [source, axe]); // ce qui sera imprimé
+  const plafond = centree ? arrondi(hauteurMax(centree.dessin.w, centree.dessin.h) - 0.05) : CADRE_HAUTEUR_CM;
 
   // Changer de motif recharge sa fiche. Lié au seul choix, pour qu'un rechargement de la liste n'écrase pas un réglage en cours.
   useEffect(() => {
     setHauteurs(motif?.hauteurs ?? {});
+    setAxe(motif?.axe ?? null);
   }, [choisi]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -112,13 +175,13 @@ export function Motifs({ shopId, choisi, setChoisi }: { shopId: string; choisi: 
 
   // Recompose les quatre mockups, 150 ms après le dernier geste sur un curseur.
   useEffect(() => {
-    if (!charge || !source || !teinteVue || !reglages) return;
+    if (!charge || !centree || !teinteVue || !reglages) return;
     let actif = true;
     const minuteur = setTimeout(async () => {
       const urls: Partial<Record<TailleImpression, string>> = {};
       for (const t of TAILLES_IMPRESSION) {
         const cm = hauteurs[t];
-        if (cm) urls[t] = URL.createObjectURL(await montage(charge, source, teinteVue, reglages, cm));
+        if (cm) urls[t] = URL.createObjectURL(await montage(charge, centree, teinteVue, reglages, cm));
       }
       const nouvelles = Object.values(urls);
       if (!actif) return nouvelles.forEach((u) => URL.revokeObjectURL(u));
@@ -127,13 +190,13 @@ export function Motifs({ shopId, choisi, setChoisi }: { shopId: string; choisi: 
       setApercus(urls);
     }, 150);
     return () => { actif = false; clearTimeout(minuteur); };
-  }, [charge, source, teinteVue, reglages, hauteurs]);
+  }, [charge, centree, teinteVue, reglages, hauteurs]);
 
-  async function enregistrerFiche(nom: string, h: Hauteurs) {
+  async function enregistrerFiche(nom: string, h: Hauteurs, a: number | null = null) {
     await authJson('/api/mockups/motifs', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ shopId, fiche: { nom, hauteurs: h } }),
+      body: JSON.stringify({ shopId, fiche: { nom, hauteurs: h, axe: a } }),
     });
   }
 
@@ -141,8 +204,8 @@ export function Motifs({ shopId, choisi, setChoisi }: { shopId: string; choisi: 
     if (!motif) return;
     setEnvoi(true);
     try {
-      await enregistrerFiche(motif.nom, hauteurs);
-      notifications.show({ color: 'green', message: `Tailles de ${motif.libelle} enregistrées` });
+      await enregistrerFiche(motif.nom, hauteurs, axe);
+      notifications.show({ color: 'green', message: `Axe et tailles de ${motif.libelle} enregistrés` });
       await motifs.refetch();
     } catch (e) {
       notifications.show({ color: 'red', message: (e as Error).message });
@@ -255,6 +318,8 @@ export function Motifs({ shopId, choisi, setChoisi }: { shopId: string; choisi: 
             </div>
           </section>
 
+          {source && <AxeMotif source={source} axe={axe} setAxe={setAxe} hauteurDMax={hauteurs['D-MAX']} />}
+
           <section className={`${styles.panneau} ${styles.barreMotif}`}>
             <h2 className={styles.panneauTitre}>Tailles d’impression</h2>
             <span className={styles.espace} />
@@ -287,7 +352,7 @@ export function Motifs({ shopId, choisi, setChoisi }: { shopId: string; choisi: 
                       <NumberInput size="xs" w={90} suffix=" cm" min={1} max={plafond} step={0.1} decimalScale={1} value={cm ?? ''} onChange={(v) => regler(t, Number(v) || null)} />
                     </Group>
                     <div className={styles.aide}>
-                      {cm && source ? `${enCm(cm * source.dessin.w / source.dessin.h)} de large` : <span className={styles.aRegler}>hauteur à régler</span>}
+                      {cm && centree ? `${enCm(cm * centree.dessin.w / centree.dessin.h)} de large` : <span className={styles.aRegler}>hauteur à régler</span>}
                     </div>
                   </section>
                 );
