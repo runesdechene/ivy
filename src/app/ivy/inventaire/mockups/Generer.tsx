@@ -2,13 +2,13 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ActionIcon, Anchor, Badge, Button, Group, SegmentedControl, Select } from '@mantine/core';
+import { ActionIcon, Anchor, Badge, Button, Checkbox, Group, SegmentedControl, Select } from '@mantine/core';
 import { IconRefresh, IconTrash } from '@tabler/icons-react';
 import { modals } from '@mantine/modals';
 import { useTerminalStream } from '@/hooks/useTerminalStream';
 import { notifications } from '@mantine/notifications';
 import { zipSync } from 'fflate';
-import { authJson } from '@/lib/auth-fetch';
+import { authFetch, authJson } from '@/lib/auth-fetch';
 import {
   lireImpression, motifDuTitre, planifierApercus, teinteReglee, trouverFichier,
   type Apercu, type Face, type Gabarit, type Impression, type VarianteImpression,
@@ -113,6 +113,49 @@ export function Generer({ shopId, onReglerTailles }: { shopId: string; onReglerT
     }
   }
 
+  const [remplacer, setRemplacer] = useState(true);
+  const [rattacher, setRattacher] = useState(true);
+  const [envoi, setEnvoi] = useState<string | null>(null); // étape en cours, affichée sur le bouton
+
+  function confirmerEnvoi() {
+    if (!remplacer) return envoyer();
+    modals.openConfirmModal({
+      title: 'Remplacer les photos sur Shopify ?',
+      children: <div>Les photos actuelles de « {produit.data?.produit.title} » seront <strong>supprimées</strong> une fois les nouvelles prêtes. C’est définitif.</div>,
+      labels: { confirm: `Envoyer et remplacer`, cancel: 'Annuler' },
+      onConfirm: envoyer,
+    });
+  }
+
+  /** Crée et rattache les images, puis (si « Remplacer ») supprime les anciennes une fois les nouvelles traitées par Shopify. */
+  async function envoyer() {
+    const corps = { shopId, productId: produitId };
+    try {
+      setEnvoi('Envoi…');
+      const r = await authJson<{ anciens: string[]; nouveaux: string[]; envoyees: number; rattachees: number }>('/api/mockups/shopify', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...corps, rattacher }),
+      });
+      if (remplacer && r.anciens.length) {
+        // Shopify traite les images en différé : on attend qu'elles soient prêtes (409) avant de retirer les anciennes.
+        for (let essai = 1; ; essai++) {
+          setEnvoi(`Traitement chez Shopify… (${essai})`);
+          const p = await authFetch('/api/mockups/shopify', {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...corps, anciens: r.anciens, nouveaux: r.nouveaux }),
+          });
+          if (p.ok) break;
+          const { error } = await p.json() as { error?: string };
+          if (p.status !== 409 || essai >= 15) throw new Error(error ?? 'Remplacement interrompu : les anciennes photos sont gardées');
+          await new Promise((ok) => setTimeout(ok, 2000));
+        }
+      }
+      notifications.show({ color: 'green', message: `${r.envoyees} image(s) envoyée(s)${rattacher ? `, ${r.rattachees} variante(s) rattachée(s)` : ''}${remplacer ? ', anciennes photos retirées' : ''}` });
+    } catch (e) {
+      notifications.show({ color: 'red', message: (e as Error).message });
+    } finally {
+      setEnvoi(null);
+    }
+  }
+
   /** Relit le produit sur Shopify (variantes supprimées là-bas, métachamps changés), avec la synchro existante d'IVY. */
   async function reprendreDeShopify() {
     if (!produit.data) return;
@@ -212,6 +255,17 @@ export function Generer({ shopId, onReglerTailles }: { shopId: string; onReglerT
             </>
           )}
         </section>
+        )}
+
+        {pretes.length > 0 && (
+          <section className={styles.panneau}>
+            <h2 className={styles.panneauTitre}>Shopify</h2>
+            <Checkbox size="xs" label="Remplacer les photos actuelles" checked={remplacer} onChange={(e) => setRemplacer(e.currentTarget.checked)} />
+            <Checkbox size="xs" mt={6} label="Rattacher chaque image à sa couleur" checked={rattacher} onChange={(e) => setRattacher(e.currentTarget.checked)} />
+            <Button size="xs" mt="sm" fullWidth loading={envoi !== null} onClick={confirmerEnvoi}>
+              {envoi ?? `Envoyer ${pretes.length} image(s) sur Shopify`}
+            </Button>
+          </section>
         )}
 
         {faces.length > 1 && (
