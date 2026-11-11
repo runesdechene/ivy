@@ -8,10 +8,10 @@ import { modals } from '@mantine/modals';
 import { useTerminalStream } from '@/hooks/useTerminalStream';
 import { notifications } from '@mantine/notifications';
 import { zipSync } from 'fflate';
-import { authJson } from '@/lib/auth-fetch';
+import { authFetch, authJson } from '@/lib/auth-fetch';
 import { envoyerSurShopify } from './envoiShopify';
 import {
-  lireImpression, motifDuTitre, planifierApercus, teinteReglee, trouverFichier,
+  fichiersImpression, lireImpression, motifDuTitre, planifierApercus, teinteReglee, trouverFichier,
   type Apercu, type Face, type Gabarit, type Impression, type VarianteImpression,
 } from '@/lib/mockups/regles';
 import { useReglages } from './Reglages';
@@ -184,6 +184,35 @@ export function Generer({ shopId, produitId, setProduitId, onReglerTailles }: {
     });
   }
 
+  const aImprimer = useMemo(
+    () => (motif && reglages ? fichiersImpression(motif.nom, variantes, reglages, motif) : []),
+    [motif, variantes, reglages],
+  );
+  const [impressionEnCours, setImpressionEnCours] = useState<string | null>(null);
+
+  /** Les fichiers d'impression, fabriqués un par un côté serveur (PNG 300 dpi), réunis dans un zip. */
+  async function telechargerImpression() {
+    const entrees: Record<string, Uint8Array> = {};
+    try {
+      for (const [i, f] of aImprimer.entries()) {
+        setImpressionEnCours(`${i + 1} / ${aImprimer.length}`);
+        const r = await authFetch(`/api/mockups/impression?${new URLSearchParams({ shopId, productId: produitId!, nom: f.nom })}`);
+        if (!r.ok) throw new Error(`${f.nom} : ${(await r.json().catch(() => ({}))).error ?? r.status}`);
+        entrees[f.nom] = new Uint8Array(await r.arrayBuffer());
+      }
+      const url = URL.createObjectURL(new Blob([zipSync(entrees, { level: 0 }) as BlobPart], { type: 'application/zip' }));
+      const lien = document.createElement('a');
+      lien.href = url;
+      lien.download = `${motif!.libelle} impression.zip`;
+      lien.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      notifications.show({ color: 'red', message: (e as Error).message });
+    } finally {
+      setImpressionEnCours(null);
+    }
+  }
+
   async function telechargerZip() {
     const entrees: Record<string, Uint8Array> = {};
     for (const a of pretes) {
@@ -258,6 +287,20 @@ export function Generer({ shopId, produitId, setProduitId, onReglerTailles }: {
             <div className={styles.aide} style={{ marginTop: 6 }}>
               {aJour === pretes.length ? 'À jour sur Shopify.' : <span className={styles.aRegler}>{pretes.length - aJour} image(s) pas à jour sur Shopify.</span>}
             </div>
+          </section>
+        )}
+
+        {aImprimer.length > 0 && (
+          <section className={styles.panneau}>
+            <h2 className={styles.panneauTitre}>Fichiers d’impression</h2>
+            <div className={styles.aide}>
+              {aImprimer.map((f) => (
+                <div key={f.nom}>{f.nom}{f.hauteurCm ? ` · ${String(f.hauteurCm).replace('.', ',')} cm` : ''}</div>
+              ))}
+            </div>
+            <Button size="xs" mt="sm" variant="default" fullWidth loading={impressionEnCours !== null} onClick={telechargerImpression}>
+              {impressionEnCours ?? `Télécharger ${aImprimer.length} fichier(s) · 300 dpi`}
+            </Button>
           </section>
         )}
 

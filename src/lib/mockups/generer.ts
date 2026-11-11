@@ -1,9 +1,12 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Canvas, createCanvas, loadImage } from '@napi-rs/canvas';
-import { chargerGabarit, chargerSource, composerMockup, utiliserPlateforme, versBlob, type Img } from './composer';
+import { chargerGabarit, chargerSource, composerMockup, peindre, utiliserPlateforme, versBlob, type Img } from './composer';
 import { lireGabarits, lireMotif, lireProduit, lireReglages } from './donnees';
 import { BUCKET, retirer, urlPublique } from './serveur';
-import { motifDuTitre, planifierApercus, roleDuFichier, type Apercu, type Face } from './regles';
+import {
+  avec300dpi, fichiersImpression, motifDuTitre, planifierApercus, roleDuFichier, teinteReglee, PX_PAR_CM_300DPI,
+  type Apercu, type Face,
+} from './regles';
 
 /** Côté serveur : monte un mockup avec le même code que le navigateur, l'enregistre dans IVY. */
 
@@ -62,4 +65,25 @@ export async function genererMockup(svc: SupabaseClient, shopId: string, product
   if (e2) { await retirer(svc, [path]); throw new Error(e2.message); }
   await retirer(svc, [avant?.image_path]);
   return { image_url: urlPublique(svc, path)! };
+}
+
+/**
+ * Un fichier d'impression d'un produit (nom tel que `fichiersImpression` le donne) : PNG 300 dpi, encre à 100 %.
+ * Hauteur de la fiche du motif, largeur en proportion ; marque et DTF à la taille réelle du fichier source.
+ */
+export async function fichierImpression(svc: SupabaseClient, shopId: string, productId: string, nom: string): Promise<Uint8Array | null> {
+  const lu = await lireProduit(svc, shopId, productId);
+  const cle = lu && motifDuTitre(lu.produit.title);
+  if (!cle) return null;
+  const [{ reglages, dtfUrl }, motif] = await Promise.all([lireReglages(svc, shopId), lireMotif(svc, shopId, cle)]);
+  const fichier = fichiersImpression(cle, lu.variantes, reglages, motif).find((f) => f.nom === nom);
+  const teinte = fichier && teinteReglee(reglages, fichier.teinte);
+  const url = fichier && (motif.fichiers[fichier.source]?.url ?? (fichier.source === 'DTF' ? dtfUrl : null));
+  if (!fichier || !teinte || !url) return null;
+
+  const source = await chargerSource(await (await fetch(url)).blob());
+  const { w, h } = source.dessin;
+  const hauteur = fichier.hauteurCm ? fichier.hauteurCm * PX_PAR_CM_300DPI : h;
+  const png = await versBlob(peindre(source, teinte.couleur, w * hauteur / h, hauteur), 'image/png');
+  return avec300dpi(new Uint8Array(await png.arrayBuffer()));
 }
