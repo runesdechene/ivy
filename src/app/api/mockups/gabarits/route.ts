@@ -1,27 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { autoriser, copierImage, deposerImage, erreur, retirer, toutesLesLignes, urlPublique } from '@/lib/mockups/serveur';
-import type { Face, Gabarit } from '@/lib/mockups/regles';
-
-interface LigneGabarit {
-  id: string; modele: string; couleur: string; face: Face;
-  photo_path: string; ombres_clair_path: string | null; ombres_sombre_path: string | null; masque_path: string | null;
-  ombres_clair_intensite: number; ombres_sombre_intensite: number;
-  cadre_x: number; cadre_y: number; cadre_hauteur: number;
-  poitrine_x: number | null; poitrine_y: number | null;
-}
-
-function versGabarit(svc: SupabaseClient, l: LigneGabarit): Gabarit {
-  return {
-    id: l.id, modele: l.modele, couleur: l.couleur, face: l.face,
-    photo_url: urlPublique(svc, l.photo_path)!,
-    ombres: { CLAIR: urlPublique(svc, l.ombres_clair_path), SOMBRE: urlPublique(svc, l.ombres_sombre_path) },
-    masque_url: urlPublique(svc, l.masque_path),
-    intensites: { CLAIR: l.ombres_clair_intensite, SOMBRE: l.ombres_sombre_intensite },
-    cadre: { x: l.cadre_x, y: l.cadre_y, hauteur: l.cadre_hauteur },
-    poitrine: l.poitrine_x !== null && l.poitrine_y !== null ? { x: l.poitrine_x, y: l.poitrine_y } : null,
-  };
-}
+import { versGabarit, type LigneGabarit } from '@/lib/mockups/donnees';
+import type { Face } from '@/lib/mockups/regles';
 
 /** Modèles (SKU) de la boutique et leurs couleurs (option1). */
 async function modelesDuShop(svc: SupabaseClient, shopId: string): Promise<Record<string, string[]>> {

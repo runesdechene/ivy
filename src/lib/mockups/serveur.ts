@@ -1,5 +1,6 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
-import { SupabaseClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { timingSafeEqual } from 'node:crypto';
 import { authorizeRequest, ownsShop, type AuthResult } from '@/lib/hub-ledger/server-auth';
 import { ROLES, type FichierDepose, type Role } from './regles';
 
@@ -9,10 +10,28 @@ export const BUCKET = 'mockups';
 const TAILLE_MAX = 10 * 1024 * 1024;
 const EXTENSIONS = ['png', 'webp', 'jpg', 'jpeg'];
 
-/** Authentifie la requête et vérifie que la boutique demandée appartient à l'utilisateur. */
+/** Clé de la commande `pnpm mockups` (en-tête `x-ivy-automate`), comparée en temps constant. Absente = désactivée. */
+function cleAutomateValide(request: NextRequest): boolean {
+  const attendue = process.env.MOCKUPS_CLE_AUTOMATE;
+  const recue = request.headers.get('x-ivy-automate');
+  if (!attendue || !recue) return false;
+  const [a, b] = [Buffer.from(attendue), Buffer.from(recue)];
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/**
+ * Authentifie la requête et vérifie que la boutique demandée appartient à l'utilisateur.
+ * La commande `pnpm mockups` passe par une clé d'automatisation, valable pour les routes /api/mockups seulement.
+ */
 export async function autoriser(
   request: NextRequest, shopId: string | null | undefined,
 ): Promise<{ ok: true; auth: AuthResult; shopId: string } | { ok: false; reponse: NextResponse }> {
+  if (shopId && cleAutomateValide(request)) {
+    const svc = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    return { ok: true, auth: { userId: 'automate', shopIds: [shopId], svc }, shopId };
+  }
   const res = await authorizeRequest(request);
   if (!res.ok) return { ok: false, reponse: NextResponse.json({ error: res.error }, { status: res.status }) };
   if (!shopId || !ownsShop(res.auth, shopId)) return { ok: false, reponse: NextResponse.json({ error: 'Interdit' }, { status: 403 }) };

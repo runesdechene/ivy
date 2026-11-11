@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SupabaseClient } from '@supabase/supabase-js';
-import { autoriser, erreur, toutesLesLignes, urlPublique } from '@/lib/mockups/serveur';
-import { lireImpression, METACHAMPS, OPACITE_ENCRE, type Reglages } from '@/lib/mockups/regles';
+import { autoriser, erreur, toutesLesLignes } from '@/lib/mockups/serveur';
+import { lireReglages } from '@/lib/mockups/donnees';
+import { lireImpression, METACHAMPS, type Reglages } from '@/lib/mockups/regles';
 
 /** Teintes présentes dans les métachamps recto/verso des variantes de la boutique. */
 async function teintesUtilisees(svc: SupabaseClient, shopId: string): Promise<Set<string>> {
@@ -24,18 +25,16 @@ export async function GET(request: NextRequest) {
   if (!acces.ok) return acces.reponse;
   const { svc } = acces.auth;
 
-  const { data, error } = await svc.from('mockup_reglages').select('teintes, dtf_path, opacite_encre').eq('shop_id', acces.shopId).maybeSingle();
-  if (error) return erreur(error.message, 500);
-
-  const reglages: Reglages = { teintes: { ...(data?.teintes ?? {}) }, opacite: data?.opacite_encre ?? OPACITE_ENCRE };
   try {
+    const { reglages, dtfUrl } = await lireReglages(svc, acces.shopId);
+    // Les teintes vues dans les métachamps apparaissent aussi, même pas encore réglées.
     for (const code of await teintesUtilisees(svc, acces.shopId)) {
       reglages.teintes[code] ??= { couleur: null, version: null };
     }
+    return NextResponse.json({ reglages, dtf_url: dtfUrl });
   } catch (e) {
     return erreur((e as Error).message, 500);
   }
-  return NextResponse.json({ reglages, dtf_url: urlPublique(svc, data?.dtf_path ?? null) });
 }
 
 export async function PUT(request: NextRequest) {

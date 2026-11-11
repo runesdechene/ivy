@@ -1,19 +1,18 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ActionIcon, Anchor, Badge, Button, Group, SegmentedControl, Select } from '@mantine/core';
+import { IconRefresh, IconTrash } from '@tabler/icons-react';
 import { modals } from '@mantine/modals';
-import { IconTrash } from '@tabler/icons-react';
 import { useTerminalStream } from '@/hooks/useTerminalStream';
 import { notifications } from '@mantine/notifications';
 import { zipSync } from 'fflate';
 import { authJson } from '@/lib/auth-fetch';
 import {
-  lireImpression, motifDuTitre, planifierApercus, roleDuFichier, teinteReglee, trouverFichier,
+  lireImpression, motifDuTitre, planifierApercus, teinteReglee, trouverFichier,
   type Apercu, type Face, type Gabarit, type Impression, type VarianteImpression,
 } from '@/lib/mockups/regles';
-import { chargerGabarit, chargerSource, composerMockup, versBlob, type GabaritCharge, type Source } from '@/lib/mockups/composer';
 import { useReglages } from './Reglages';
 import { useGabarits } from './Gabarits';
 import { useMotifs } from './Motifs';
@@ -48,8 +47,6 @@ export function Generer({ shopId, onReglerTailles }: { shopId: string; onReglerT
   const [faceChoisie, setFace] = useState<Face | null>(null);
   const [synchro, setSynchro] = useState(false);
   const { streamFromUrl } = useTerminalStream();
-  const [images, setImages] = useState<Record<string, { url: string; blob: Blob } | { erreur: string }>>({});
-  const urls = useRef<string[]>([]);
 
   const produit = useQuery({
     queryKey: ['mockups-produit', shopId, produitId],
@@ -85,46 +82,36 @@ export function Generer({ shopId, onReglerTailles }: { shopId: string; onReglerT
     [variantes, face, gabarits, noms, reglages, fiche, motif],
   );
 
-  // Monte les aperçus prêts, un par un ; gabarits et sources chargés une seule fois.
-  useEffect(() => {
-    if (!reglages) return;
-    let actif = true;
-    const charges = new Map<string, Promise<GabaritCharge>>();
-    const sources = new Map<string, Promise<Source>>();
-    (async () => {
-      const faits: typeof images = {};
-      for (const a of apercus) {
-        if (a.manque || !a.gabaritId) continue;
-        try {
-          const g = gabarits.find((x) => x.id === a.gabaritId)!;
-          if (!charges.has(g.id)) charges.set(g.id, chargerGabarit(g));
-          const nomSource = (a.fichier && motif?.fichiers[roleDuFichier(a.fichier)!]?.url) || dtfUrl || '';
-          if (!nomSource) throw new Error('Logo DTF commun manquant (Réglages)');
-          if (!sources.has(nomSource)) {
-            sources.set(nomSource, fetch(nomSource).then((r) => r.blob()).then(chargerSource));
-          }
-          const hauteur = a.impression.pose === 'motif' ? fiche?.hauteurs['D-MAX'] ?? null : null;
-          const canvas = composerMockup(await charges.get(g.id)!, await sources.get(nomSource)!, a.impression, reglages, hauteur);
-          const blob = await versBlob(canvas, 'image/webp');
-          faits[cle(a)] = { url: URL.createObjectURL(blob), blob };
-        } catch (e) {
-          faits[cle(a)] = { erreur: (e as Error).message };
-        }
-        if (!actif) break;
-      }
-      const nouvelles = Object.values(faits).flatMap((f) => ('url' in f ? [f.url] : []));
-      if (!actif) return nouvelles.forEach((u) => URL.revokeObjectURL(u));
-      urls.current.forEach((u) => URL.revokeObjectURL(u));
-      urls.current = nouvelles;
-      setImages(faits);
-    })();
-    return () => { actif = false; };
-  }, [apercus, gabarits, reglages, dtfUrl, fiche, motif]);
-
-  const pretes = apercus.flatMap((a) => {
-    const img = images[cle(a)];
-    return img && 'blob' in img ? [{ a, blob: img.blob }] : [];
+  // Mockups enregistrés dans IVY (montés côté serveur, comme ceux de `pnpm mockups`).
+  const enregistres = useQuery({
+    queryKey: ['mockups-enregistres', shopId, produitId],
+    queryFn: () => authJson<{ mockups: { couleur: string; face: Face; image_url: string }[] }>(`/api/mockups/generer?shopId=${shopId}&productId=${produitId}`),
+    enabled: !!produitId,
   });
+  const images = Object.fromEntries((enregistres.data?.mockups ?? []).map((m) => [cle(m), m.image_url]));
+  const [enCours, setEnCours] = useState<Set<string>>(new Set());
+  const [erreurs, setErreurs] = useState<Record<string, string>>({});
+  const aGenerer = apercus.filter((a) => !a.manque);
+  const pretes = apercus.filter((a) => images[cle(a)]);
+
+  /** Monte et enregistre les mockups un par un (une image par appel serveur). */
+  async function generer(liste: Apercu[]) {
+    setEnCours(new Set(liste.map(cle)));
+    for (const a of liste) {
+      try {
+        const r = await authJson<{ image_url?: string; manque?: string }>('/api/mockups/generer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ shopId, productId: produitId, couleur: a.couleur, face: a.face }),
+        });
+        setErreurs((e) => { const { [cle(a)]: _, ...reste } = e; return r.manque ? { ...reste, [cle(a)]: r.manque } : reste; });
+      } catch (e) {
+        setErreurs((x) => ({ ...x, [cle(a)]: (e as Error).message }));
+      }
+      setEnCours((s) => { const t = new Set(s); t.delete(cle(a)); return t; });
+      await enregistres.refetch();
+    }
+  }
 
   /** Relit le produit sur Shopify (variantes supprimées là-bas, métachamps changés), avec la synchro existante d'IVY. */
   async function reprendreDeShopify() {
@@ -166,8 +153,9 @@ export function Generer({ shopId, onReglerTailles }: { shopId: string; onReglerT
 
   async function telechargerZip() {
     const entrees: Record<string, Uint8Array> = {};
-    for (const { a, blob } of pretes) {
-      entrees[`${motif!.libelle}_${a.modele}_${a.couleur}_${a.face}.webp`] = new Uint8Array(await blob.arrayBuffer());
+    for (const a of pretes) {
+      const octets = await (await fetch(images[cle(a)])).arrayBuffer();
+      entrees[`${motif!.libelle}_${a.modele}_${a.couleur}_${a.face}.webp`] = new Uint8Array(octets);
     }
     const zip = zipSync(entrees, { level: 0 }); // le webp est déjà compressé
     const url = URL.createObjectURL(new Blob([zip as BlobPart], { type: 'application/zip' }));
@@ -240,12 +228,17 @@ export function Generer({ shopId, onReglerTailles }: { shopId: string; onReglerT
       <section className={styles.panneau}>
         <Group justify="space-between" mb="sm">
           <div>
-            <h2 className={styles.panneauTitre}>Aperçus · {pretes.length} prêts sur {apercus.length}</h2>
-            <div className={styles.aide}>Un mockup par couleur du produit. Clique une image pour l’ouvrir en grand.</div>
+            <h2 className={styles.panneauTitre}>Mockups · {pretes.length} enregistrés sur {apercus.length}</h2>
+            <div className={styles.aide}>Un mockup par couleur, motif en D-Max. Clique une image pour l’ouvrir en grand.</div>
           </div>
-          <Button size="xs" variant="default" disabled={pretes.length === 0} onClick={telechargerZip}>
-            Télécharger le zip ({pretes.length})
-          </Button>
+          <Group gap="xs">
+            <Button size="xs" variant="default" disabled={pretes.length === 0} onClick={telechargerZip}>
+              Télécharger le zip ({pretes.length})
+            </Button>
+            <Button size="xs" disabled={aGenerer.length === 0} loading={enCours.size > 0} onClick={() => generer(aGenerer)}>
+              {pretes.length ? 'Tout régénérer' : 'Générer'} ({aGenerer.length})
+            </Button>
+          </Group>
         </Group>
 
         {!produitId ? <div className={styles.vide}>Choisis un produit.</div>
@@ -255,18 +248,25 @@ export function Generer({ shopId, onReglerTailles }: { shopId: string; onReglerT
             <div className={styles.cartes}>
               {apercus.map((a) => {
                 const img = images[cle(a)];
-                const souci = a.manque ? MANQUES[a.manque] : img && 'erreur' in img ? img.erreur : null;
+                const souci = a.manque ? MANQUES[a.manque] : erreurs[cle(a)] ?? null;
                 return (
                   <div key={cle(a)} className={styles.carte}>
-                    {img && 'url' in img
-                      // eslint-disable-next-line @next/next/no-img-element -- montage local (blob)
-                      ? <a href={img.url} target="_blank" rel="noreferrer"><img className={styles.apercu} src={img.url} alt={`${a.modele} ${a.couleur}`} /></a>
-                      : <div className={styles.carteVide}>{souci ?? 'Montage…'}</div>}
+                    {img
+                      // eslint-disable-next-line @next/next/no-img-element -- image du bucket
+                      ? <a href={img} target="_blank" rel="noreferrer"><img className={styles.apercu} src={img} alt={`${a.modele} ${a.couleur}`} /></a>
+                      : <div className={styles.carteVide}>{enCours.has(cle(a)) ? 'Montage…' : souci ?? 'Pas encore généré'}</div>}
                     <Group justify="space-between" wrap="nowrap">
                       <strong>{a.modele}</strong>
-                      <ActionIcon size="sm" variant="subtle" color="red" title={`Retirer ${a.couleur} de Shopify`} onClick={() => retirerCouleur(a.couleur)}>
-                        <IconTrash size={14} />
-                      </ActionIcon>
+                      <Group gap={2} wrap="nowrap">
+                        {!a.manque && (
+                          <ActionIcon size="sm" variant="subtle" color="gray" title="Régénérer" loading={enCours.has(cle(a))} onClick={() => generer([a])}>
+                            <IconRefresh size={14} />
+                          </ActionIcon>
+                        )}
+                        <ActionIcon size="sm" variant="subtle" color="red" title={`Retirer ${a.couleur} de Shopify`} onClick={() => retirerCouleur(a.couleur)}>
+                          <IconTrash size={14} />
+                        </ActionIcon>
+                      </Group>
                     </Group>
                     <div className={styles.aide}>{a.couleur} · {a.face === 'recto' ? 'Recto' : 'Verso'} · {a.impression.teinte}</div>
                     {souci && <Badge size="sm" variant="light" color="orange">{souci}</Badge>}

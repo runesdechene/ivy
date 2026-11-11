@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "mockups": "node scripts/mockups.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -20,6 +21,7 @@
     "@mantine/notifications": "^7.15.1",
     "@mantine/nprogress": "^7.15.1",
     "@mantine/tiptap": "7.17.0",
+    "@napi-rs/canvas": "^1.1.0",
     "@shopify/admin-api-client": "^1.0.4",
     "@supabase/supabase-js": "^2.90.1",
     "@tabler/icons-react": "^3.26.0",

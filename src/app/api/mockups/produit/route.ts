@@ -1,38 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { autoriser, erreur } from '@/lib/mockups/serveur';
-import { METACHAMPS, lireTaille, type VarianteImpression } from '@/lib/mockups/regles';
+import { lireProduit } from '@/lib/mockups/donnees';
+import { cleMotif, motifDuTitre } from '@/lib/mockups/regles';
 import { shopifyGraphql } from '@/lib/mockups/shopify';
 
-/** Un produit du shop et ses variantes actives, avec leurs métachamps d'impression. */
+/** Un produit du shop et ses variantes actives, avec leurs métachamps d'impression et le stock par couleur. */
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
   const acces = await autoriser(request, params.get('shopId'));
   if (!acces.ok) return acces.reponse;
-  const svc = acces.auth.svc;
 
-  const { data: produit } = await svc.from('products').select('id, title, shopify_id')
-    .eq('shop_id', acces.shopId).eq('id', params.get('productId') ?? '').maybeSingle();
-  if (!produit) return erreur('Produit introuvable', 404);
-
-  const { data: lignes, error } = await svc.from('product_variants')
-    .select('id, shopify_id, sku, option1, option2, variant_metafields(key, value), inventory_levels(quantity)')
-    .eq('product_id', produit.id).eq('shopify_active', true)
-    .in('variant_metafields.key', Object.values(METACHAMPS));
-  if (error) return erreur(error.message, 500);
-
-  const variantes: VarianteImpression[] = (lignes ?? []).map((v) => {
-    const mf = (cle: string) => v.variant_metafields.find((m) => m.key === cle)?.value ?? null;
-    return {
-      id: v.id, shopifyId: v.shopify_id, couleur: v.option1 ?? '', tailleVetement: v.option2, sku: v.sku,
-      recto: mf(METACHAMPS.recto), verso: mf(METACHAMPS.verso), taille: lireTaille(mf(METACHAMPS.taille)),
-    };
-  });
-  // Stock par couleur : prévient avant de retirer une couleur qui a encore des pièces.
-  const stockParCouleur: Record<string, number> = {};
-  for (const v of lignes ?? []) {
-    stockParCouleur[v.option1 ?? ''] = (stockParCouleur[v.option1 ?? ''] ?? 0) + v.inventory_levels.reduce((s, l) => s + Math.max(0, l.quantity ?? 0), 0);
+  // Sans productId : produits actifs dont le titre exact ou le motif correspond à `recherche` (« Loki » ou « Loki | T-shirt unisexe »).
+  const recherche = params.get('recherche');
+  if (recherche !== null && !params.get('productId')) {
+    const { data, error } = await acces.auth.svc.from('products').select('id, title').eq('shop_id', acces.shopId).eq('status', 'active');
+    if (error) return erreur(error.message, 500);
+    const voulu = cleMotif(recherche);
+    return NextResponse.json({
+      produits: (data ?? []).filter((p) => cleMotif(p.title) === voulu || motifDuTitre(p.title) === voulu),
+    });
   }
-  return NextResponse.json({ produit, variantes, stockParCouleur });
+
+  try {
+    const lu = await lireProduit(acces.auth.svc, acces.shopId, params.get('productId') ?? '');
+    return lu ? NextResponse.json(lu) : erreur('Produit introuvable', 404);
+  } catch (e) {
+    return erreur((e as Error).message, 500);
+  }
 }
 
 /**
