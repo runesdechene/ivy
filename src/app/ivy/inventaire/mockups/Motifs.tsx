@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ActionIcon, Button, Group, NumberInput, Select, Slider } from '@mantine/core';
-import { IconX } from '@tabler/icons-react';
+import { Button, Group, NumberInput, Select, Slider } from '@mantine/core';
+import { ChoixDossier } from './ChoixDossier';
 import { notifications } from '@mantine/notifications';
 import { authJson } from '@/lib/auth-fetch';
 import {
@@ -12,7 +12,7 @@ import {
   type FicheMotif, type TailleImpression,
 } from '@/lib/mockups/regles';
 import { chargerGabarit, chargerSource, composerMockup, versBlob, type GabaritCharge, type Source } from '@/lib/mockups/composer';
-import { dossierPossible, ouvrirDossier, type DossierMotif } from '@/lib/mockups/dossier';
+import type { DossierMotif } from '@/lib/mockups/dossier';
 import { useReglages } from './Reglages';
 import { libelle, useGabarits } from './Gabarits';
 import styles from './mockups.module.scss';
@@ -35,15 +35,21 @@ function montage(charge: GabaritCharge, source: Source, teinte: string, reglages
   return versBlob(canvas, 'image/webp');
 }
 
-export function Motifs({ shopId }: { shopId: string }) {
-  const { data: donneesGabarits } = useGabarits(shopId);
-  const { reglages } = useReglages(shopId);
-  const fiches = useQuery({
+/** Fiches de tailles des motifs, partagées avec l'onglet Générer. */
+export function useFiches(shopId: string) {
+  return useQuery({
     queryKey: ['mockups-motifs', shopId],
     queryFn: () => authJson<{ fiches: FicheMotif[] }>(`/api/mockups/motifs?shopId=${shopId}`),
   });
+}
 
-  const [dossier, setDossier] = useState<DossierMotif | null>(null);
+export function Motifs({ shopId, dossier, setDossier }: {
+  shopId: string; dossier: DossierMotif | null; setDossier: (d: DossierMotif | null) => void;
+}) {
+  const { data: donneesGabarits } = useGabarits(shopId);
+  const { reglages } = useReglages(shopId);
+  const fiches = useFiches(shopId);
+
   const [hauteurs, setHauteurs] = useState<Hauteurs>({});
   const [gabaritId, setGabaritId] = useState<string | null>(null);
   const [teinte, setTeinte] = useState<string | null>(null);
@@ -112,23 +118,11 @@ export function Motifs({ shopId }: { shopId: string }) {
     return () => { actif = false; clearTimeout(minuteur); };
   }, [charge, source, teinteVue, reglages, hauteurs]);
 
-  async function choisirDossier() {
-    if (!dossierPossible()) {
-      notifications.show({ color: 'red', message: 'Ce navigateur bloque l\'accès aux dossiers. Sur Brave : brave://flags/#file-system-access-api → Enabled, puis relancer. Sinon : Chrome ou Edge.' });
-      return;
-    }
-    let d: DossierMotif | null;
-    try {
-      d = await ouvrirDossier();
-    } catch (e) {
-      console.error('[mockups] dossier', e);
-      notifications.show({ color: 'red', message: `Dossier illisible : ${e instanceof Error ? `${e.name} — ${e.message}` : String(e)}` });
-      return;
-    }
-    if (!d) return;
-    setDossier(d);
-    setHauteurs(fiches.data?.fiches.find((f) => f.nom === d.nom)?.hauteurs ?? {});
-  }
+  // Le dossier peut aussi changer depuis l'onglet Générer : on recharge alors la fiche du motif.
+  // Volontairement lié au seul dossier, pour qu'un rechargement des fiches n'écrase pas un réglage en cours.
+  useEffect(() => {
+    setHauteurs((dossier && fiches.data?.fiches.find((f) => f.nom === dossier.nom)?.hauteurs) || {});
+  }, [dossier]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function reprendre() {
     if (!dossier) return;
@@ -169,20 +163,9 @@ export function Motifs({ shopId }: { shopId: string }) {
       <section className={`${styles.panneau} ${styles.barreMotif}`}>
         <div>
           <div className={styles.etiquette}>Dossier du motif</div>
-          <Group gap="sm">
-            <Button size="xs" variant="default" onClick={choisirDossier}>Choisir le dossier</Button>
-            {dossier && (
-              <div>
-                <strong>{dossier.nom}</strong>
-                <div className={styles.aide}>{noms.filter((n) => !anciens.includes(n) && !n.startsWith('.')).join(' · ') || 'dossier vide'}</div>
-              </div>
-            )}
-            {dossier && (
-              <ActionIcon variant="subtle" color="gray" title="Délier le dossier" onClick={() => { setDossier(null); setHauteurs({}); }}>
-                <IconX size={16} />
-              </ActionIcon>
-            )}
-          </Group>
+          <ChoixDossier dossier={dossier} onChange={setDossier}>
+            <div className={styles.aide}>{noms.filter((n) => !anciens.includes(n) && !n.startsWith('.')).join(' · ') || 'dossier vide'}</div>
+          </ChoixDossier>
         </div>
         <Select
           size="xs" w={220} label="Vu sur" value={gabarit?.id ?? null} onChange={setGabaritId}

@@ -6,10 +6,12 @@ import { useShop } from '@/context/ShopContext';
 import { Reglages } from './Reglages';
 import { Gabarits } from './Gabarits';
 import { Motifs } from './Motifs';
+import { Generer } from './Generer';
+import type { DossierMotif } from '@/lib/mockups/dossier';
 import styles from './mockups.module.scss';
 
 const ONGLETS = [
-  { value: 'generer', label: 'Générer', sousTitre: 'Pose un motif sur tous les gabarits, vérifie, envoie sur Shopify.' },
+  { value: 'generer', label: 'Générer', sousTitre: 'Choisis un produit et le dossier de son motif : IVY monte un mockup par couleur et par face.' },
   { value: 'motifs', label: 'Motifs', sousTitre: 'Règle la hauteur de chaque taille d’impression en la voyant sur le vêtement. Le vêtement reste le même pour les quatre tailles : seul le dessin change.' },
   { value: 'gabarits', label: 'Gabarits', sousTitre: 'Un gabarit = une photo (modèle × couleur × face) et son cadre maximal. Réglé une fois.' },
   { value: 'impression', label: 'Impression', sousTitre: 'Teintes et tailles d’impression de chaque produit, modifiables par lot.' },
@@ -20,6 +22,7 @@ type Onglet = (typeof ONGLETS)[number]['value'];
 export default function MockupsPage() {
   const { currentShop } = useShop();
   const [onglet, setOnglet] = useState<Onglet>('generer');
+  const [dossier, setDossier] = useState<DossierMotif | null>(null); // partagé par Générer et Motifs
   const courant = ONGLETS.find((o) => o.value === onglet)!;
 
   return (
@@ -40,14 +43,17 @@ export default function MockupsPage() {
 
       {!currentShop ? (
         <div className={styles.vide}>Chargement de la boutique…</div>
-      ) : onglet === 'reglages' ? (
-        <Reglages shopId={currentShop.id} />
-      ) : onglet === 'gabarits' ? (
-        <Gabarits shopId={currentShop.id} />
-      ) : onglet === 'motifs' ? (
-        <Motifs shopId={currentShop.id} />
       ) : (
-        <div className={styles.vide}>Bientôt.</div>
+        // Tous les onglets restent montés : on retrouve son travail en revenant sur un onglet.
+        <>
+          <div hidden={onglet !== 'generer'}>
+            <Generer shopId={currentShop.id} dossier={dossier} setDossier={setDossier} onReglerTailles={() => setOnglet('motifs')} />
+          </div>
+          <div hidden={onglet !== 'motifs'}><Motifs shopId={currentShop.id} dossier={dossier} setDossier={setDossier} /></div>
+          <div hidden={onglet !== 'gabarits'}><Gabarits shopId={currentShop.id} /></div>
+          <div hidden={onglet !== 'impression'} className={styles.vide}>Bientôt.</div>
+          <div hidden={onglet !== 'reglages'}><Reglages shopId={currentShop.id} /></div>
+        </>
       )}
     </div>
   );
