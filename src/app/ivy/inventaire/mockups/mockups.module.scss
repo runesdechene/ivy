@@ -300,3 +300,14 @@
 }
 
 .depotEnCours { opacity: 0.6; }
+
+/* Galerie : un bloc par motif, une ligne par produit, une carte par couleur */
+.produitGalerie + .produitGalerie { margin-top: 16px; }
+
+.cartesGalerie {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.carteRetard { border-color: #e8590c; }

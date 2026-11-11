@@ -8,7 +8,8 @@ import { modals } from '@mantine/modals';
 import { useTerminalStream } from '@/hooks/useTerminalStream';
 import { notifications } from '@mantine/notifications';
 import { zipSync } from 'fflate';
-import { authFetch, authJson } from '@/lib/auth-fetch';
+import { authJson } from '@/lib/auth-fetch';
+import { envoyerSurShopify } from './envoiShopify';
 import {
   lireImpression, motifDuTitre, planifierApercus, teinteReglee, trouverFichier,
   type Apercu, type Face, type Gabarit, type Impression, type VarianteImpression,
@@ -34,7 +35,9 @@ function motFichier(impression: Impression, version: string | undefined): string
   return impression.pose === 'motif' ? version ?? impression.teinte : impression.pose === 'marque' ? 'MARQUE' : 'DTF';
 }
 
-export function Generer({ shopId, onReglerTailles }: { shopId: string; onReglerTailles: (motif: string) => void }) {
+export function Generer({ shopId, produitId, setProduitId, onReglerTailles }: {
+  shopId: string; produitId: string | null; setProduitId: (id: string | null) => void; onReglerTailles: (motif: string) => void;
+}) {
   const { reglages, dtfUrl } = useReglages(shopId);
   const { data: donneesGabarits } = useGabarits(shopId);
   const motifs = useMotifs(shopId);
@@ -43,7 +46,6 @@ export function Generer({ shopId, onReglerTailles }: { shopId: string; onReglerT
     queryFn: () => authJson<{ products: { id: string; title: string }[] }>(`/api/inventory/products-list?shopId=${shopId}`),
   });
 
-  const [produitId, setProduitId] = useState<string | null>(null);
   const [faceChoisie, setFace] = useState<Face | null>(null);
   const [synchro, setSynchro] = useState(false);
   const { streamFromUrl } = useTerminalStream();
@@ -133,34 +135,17 @@ export function Generer({ shopId, onReglerTailles }: { shopId: string; onReglerT
 
   /** Crée et rattache les images, puis (si « Remplacer ») supprime les anciennes une fois les nouvelles traitées par Shopify. */
   async function envoyer() {
-    const corps = { shopId, productId: produitId };
+    if (!produitId) return;
     try {
-      setEnvoi('Envoi…');
-      const r = await authJson<{ anciens: string[]; nouveaux: string[]; envoyees: number; rattachees: number }>('/api/mockups/shopify', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...corps, rattacher }),
-      });
-      if (remplacer && r.anciens.length) {
-        // Shopify traite les images en différé : on attend qu'elles soient prêtes (409) avant de retirer les anciennes.
-        for (let essai = 1; ; essai++) {
-          setEnvoi(`Traitement chez Shopify… (${essai})`);
-          const p = await authFetch('/api/mockups/shopify', {
-            method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...corps, anciens: r.anciens, nouveaux: r.nouveaux }),
-          });
-          if (p.ok) break;
-          const { error } = await p.json() as { error?: string };
-          if (p.status !== 409 || essai >= 15) throw new Error(error ?? 'Remplacement interrompu : les anciennes photos sont gardées');
-          await new Promise((ok) => setTimeout(ok, 2000));
-        }
-      }
+      const b = await envoyerSurShopify(shopId, produitId, { remplacer, rattacher }, setEnvoi);
       await enregistres.refetch(); // repère « à jour sur Shopify »
-      notifications.show({ color: 'green', message: `${r.envoyees} image(s) envoyée(s)${rattacher ? `, ${r.rattachees} variante(s) rattachée(s)` : ''}${remplacer ? ', anciennes photos retirées' : ''}` });
+      notifications.show({ color: 'green', message: `${b.envoyees} image(s) envoyée(s)${rattacher ? `, ${b.rattachees} variante(s) rattachée(s)` : ''}${b.retirees ? `, ${b.retirees} ancienne(s) retirée(s)` : ''}` });
     } catch (e) {
       notifications.show({ color: 'red', message: (e as Error).message });
     } finally {
       setEnvoi(null);
     }
   }
-
   /** Relit le produit sur Shopify (variantes supprimées là-bas, métachamps changés), avec la synchro existante d'IVY. */
   async function reprendreDeShopify() {
     if (!produit.data) return;
