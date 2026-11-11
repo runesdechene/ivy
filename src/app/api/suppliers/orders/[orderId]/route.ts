@@ -53,16 +53,17 @@ export async function GET(
         .filter((v): v is string => !!v);
 
       if (variantIds.length > 0) {
-        // Step 1: resolve variant UUIDs → product_id
+        // Step 1: resolve variant UUIDs → product_id (+ option1 = couleur, pour le mockup)
         const { data: variants, error: varErr } = await supabase
           .from('product_variants')
-          .select('id, product_id')
+          .select('id, product_id, option1')
           .in('id', variantIds);
 
         if (varErr) console.error('[illustration enrich] variants query error:', varErr);
 
         const variantToProduct: Record<string, string> = {};
-        variants?.forEach(v => { variantToProduct[v.id] = v.product_id; });
+        const variantToCouleur: Record<string, string | null> = {};
+        variants?.forEach(v => { variantToProduct[v.id] = v.product_id; variantToCouleur[v.id] = v.option1; });
 
         // Step 2: products by id → illustration_url (scoped to shop)
         const productIds = [...new Set(Object.values(variantToProduct))];
@@ -79,12 +80,29 @@ export async function GET(
           productsData?.forEach(p => { productToIllustration[p.id] = p.illustration_url; });
         }
 
+        // Step 3: mockups (produit × couleur), recto de préférence : tri décroissant, le recto passe en dernier et l'emporte
+        const mockupParCouleur: Record<string, string> = {};
+        if (productIds.length > 0) {
+          const { data: mockups, error: mockErr } = await supabase
+            .from('mockups')
+            .select('product_id, couleur, image_path')
+            .eq('shop_id', shopId)
+            .in('product_id', productIds)
+            .order('face', { ascending: false });
+
+          if (mockErr) console.error('[mockup enrich] mockups query error:', mockErr);
+          mockups?.forEach(m => {
+            mockupParCouleur[`${m.product_id}|${m.couleur}`] = supabase.storage.from('mockups').getPublicUrl(m.image_path).data.publicUrl;
+          });
+        }
+
         enrichedItems = enrichedItems.map(item => {
-          if (!item.variant_id) return { ...item, illustration_url: null };
+          if (!item.variant_id) return { ...item, illustration_url: null, mockup_url: null };
           const productId = variantToProduct[item.variant_id] || null;
           return {
             ...item,
             illustration_url: productId ? (productToIllustration[productId] || null) : null,
+            mockup_url: productId ? (mockupParCouleur[`${productId}|${variantToCouleur[item.variant_id]}`] ?? null) : null,
           };
         });
       }

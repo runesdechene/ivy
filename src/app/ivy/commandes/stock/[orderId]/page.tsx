@@ -41,6 +41,7 @@ interface OrderItem {
   is_validated: boolean;
   validated_at: string | null;
   metafields?: Record<string, string>;
+  mockup_url?: string | null;
   line_adjustment: number;
   stock_status: 'added' | 'failed' | null;
   stock_error: string | null;
@@ -1354,7 +1355,12 @@ export default function OrderDetailPage() {
                             )}
                           </div>
                         </td>
-                        <td className={clsx(styles.td, styles.tdProductName)}>{firstItem.product_title}</td>
+                        <td className={clsx(styles.td, styles.tdProductName)}>
+                          <span className={styles.productCell}>
+                            {firstItem.mockup_url && <img src={firstItem.mockup_url} alt={firstItem.product_title} loading="lazy" className={styles.mockupThumb} />}
+                            {firstItem.product_title}
+                          </span>
+                        </td>
                         <td className={styles.td}>
                           {firstItem.sku ? <SkuChip>{firstItem.sku}</SkuChip> : <span className={styles.metaCellEmpty}>—</span>}
                         </td>
