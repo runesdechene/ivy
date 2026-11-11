@@ -17,8 +17,9 @@ export async function ouvrirDossier(): Promise<DossierMotif | null> {
   let handle: FileSystemDirectoryHandle;
   try {
     handle = await window.showDirectoryPicker({ mode: 'readwrite' });
-  } catch {
-    return null; // fenêtre fermée
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') return null; // fenêtre fermée
+    throw e;
   }
   const fichiers = new Map<string, File>();
   for await (const entree of handle.values()) {

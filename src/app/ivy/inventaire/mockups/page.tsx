@@ -10,7 +10,7 @@ import styles from './mockups.module.scss';
 
 const ONGLETS = [
   { value: 'generer', label: 'Générer', sousTitre: 'Pose un motif sur tous les gabarits, vérifie, envoie sur Shopify.' },
-  { value: 'motifs', label: 'Motifs', sousTitre: 'Règle la hauteur de chaque taille d’impression en la voyant sur le vêtement.' },
+  { value: 'motifs', label: 'Motifs', sousTitre: 'Règle la hauteur de chaque taille d’impression en la voyant sur le vêtement. Le vêtement reste le même pour les quatre tailles : seul le dessin change.' },
   { value: 'gabarits', label: 'Gabarits', sousTitre: 'Un gabarit = une photo (modèle × couleur × face) et son cadre maximal. Réglé une fois.' },
   { value: 'impression', label: 'Impression', sousTitre: 'Teintes et tailles d’impression de chaque produit, modifiables par lot.' },
   { value: 'reglages', label: 'Réglages', sousTitre: 'Couleur et dessin de chaque teinte, logo DTF commun.' },

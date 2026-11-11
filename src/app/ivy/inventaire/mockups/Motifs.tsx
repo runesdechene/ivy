@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Group, NumberInput, Select, Slider } from '@mantine/core';
+import { ActionIcon, Button, Group, NumberInput, Select, Slider } from '@mantine/core';
+import { IconX } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { authJson } from '@/lib/auth-fetch';
 import {
@@ -79,7 +80,15 @@ export function Motifs({ shopId }: { shopId: string }) {
     if (!fichier) return;
     let actif = true;
     chargerSource(fichier)
-      .then((s) => { if (actif) setSource(s); })
+      .then((s) => {
+        if (!actif) return;
+        setSource(s);
+        // Motif neuf : on part des proportions de Valkyrie (A 42, B 44,2, C 45,7, D 50 cm), D au maximum du cadre.
+        const max = arrondi(hauteurMax(s.dessin.w, s.dessin.h) - 0.05);
+        setHauteurs((h) => Object.keys(h).length ? h : {
+          'A-SMALL': arrondi(max * 42 / 50), 'B-MEDIUM': arrondi(max * 44.2 / 50), 'C-LARGE': arrondi(max * 45.7 / 50), 'D-MAX': max,
+        });
+      })
       .catch((e: Error) => notifications.show({ color: 'red', message: e.message }));
     return () => { actif = false; };
   }, [dossier, nomSource]);
@@ -105,10 +114,17 @@ export function Motifs({ shopId }: { shopId: string }) {
 
   async function choisirDossier() {
     if (!dossierPossible()) {
-      notifications.show({ color: 'red', message: 'Ouvre IVY dans Chrome ou Edge pour accéder au dossier du motif.' });
+      notifications.show({ color: 'red', message: 'Ce navigateur bloque l\'accès aux dossiers. Sur Brave : brave://flags/#file-system-access-api → Enabled, puis relancer. Sinon : Chrome ou Edge.' });
       return;
     }
-    const d = await ouvrirDossier();
+    let d: DossierMotif | null;
+    try {
+      d = await ouvrirDossier();
+    } catch (e) {
+      console.error('[mockups] dossier', e);
+      notifications.show({ color: 'red', message: `Dossier illisible : ${e instanceof Error ? `${e.name} — ${e.message}` : String(e)}` });
+      return;
+    }
     if (!d) return;
     setDossier(d);
     setHauteurs(fiches.data?.fiches.find((f) => f.nom === d.nom)?.hauteurs ?? {});
@@ -160,6 +176,11 @@ export function Motifs({ shopId }: { shopId: string }) {
                 <strong>{dossier.nom}</strong>
                 <div className={styles.aide}>{noms.filter((n) => !anciens.includes(n) && !n.startsWith('.')).join(' · ') || 'dossier vide'}</div>
               </div>
+            )}
+            {dossier && (
+              <ActionIcon variant="subtle" color="gray" title="Délier le dossier" onClick={() => { setDossier(null); setHauteurs({}); }}>
+                <IconX size={16} />
+              </ActionIcon>
             )}
           </Group>
         </div>
