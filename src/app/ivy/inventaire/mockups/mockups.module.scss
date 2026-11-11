@@ -264,3 +264,39 @@
   background: #f4f1ec;
   border-radius: $radius-md;
 }
+
+/* Onglet Motifs : liste à gauche, fichiers et tailles du motif choisi à droite */
+.motifs {
+  display: grid;
+  grid-template-columns: 250px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.tuiles {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.tuile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid $divider;
+  border-radius: $radius-md;
+}
+
+.tuileVide { border-style: dashed; }
+
+.vignette {
+  width: 100%;
+  aspect-ratio: 6 / 5;
+  object-fit: contain;
+  padding: 8px;
+  border-radius: $radius-md;
+  background: repeating-conic-gradient(#ececec 0 25%, #f8f8f8 0 50%) 0 0 / 16px 16px; // damier : on voit la transparence
+}
+
+.depotEnCours { opacity: 0.6; }

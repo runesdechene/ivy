@@ -2,24 +2,30 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Group, NumberInput, Select, Slider } from '@mantine/core';
-import { ChoixDossier } from './ChoixDossier';
+import { Badge, Button, FileButton, Group, NumberInput, Select, Slider, TextInput } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { authJson } from '@/lib/auth-fetch';
+import { authFetch, authJson } from '@/lib/auth-fetch';
 import {
-  CADRE_HAUTEUR_CM, CADRE_LARGEUR_CM, PX_PAR_CM_300DPI, TAILLES_IMPRESSION,
-  hauteurMax, tailleDansNom, teinteReglee, trouverFichier,
-  type FicheMotif, type TailleImpression,
+  CADRE_HAUTEUR_CM, CADRE_LARGEUR_CM, ROLES, TAILLES_IMPRESSION,
+  hauteurMax, teinteReglee,
+  type Motif, type Role, type TailleImpression,
 } from '@/lib/mockups/regles';
 import { chargerGabarit, chargerSource, composerMockup, versBlob, type GabaritCharge, type Source } from '@/lib/mockups/composer';
-import type { DossierMotif } from '@/lib/mockups/dossier';
 import { useReglages } from './Reglages';
 import { libelle, useGabarits } from './Gabarits';
 import styles from './mockups.module.scss';
 
-type Hauteurs = FicheMotif['hauteurs'];
+type Hauteurs = Motif['hauteurs'];
 const arrondi = (cm: number) => Math.round(cm * 10) / 10;
 const enCm = (cm: number) => `${arrondi(cm).toFixed(1).replace('.', ',')} cm`;
+const date = (iso: string) => new Date(iso).toLocaleDateString('fr-FR');
+
+/** État d'un motif dans la liste : fichiers déposés, puis tailles réglées. */
+function etat(m: Motif): { label: string; color: string } {
+  if (!m.fichiers.CLAIR && !m.fichiers.SOMBRE) return { label: 'pas de fichier', color: 'gray' };
+  if (TAILLES_IMPRESSION.some((t) => !m.hauteurs[t])) return { label: 'tailles à régler', color: 'orange' };
+  return { label: 'prêt', color: 'green' };
+}
 
 /** Mockup d'une taille, avec le cadre maximal en pointillé pour juger la place prise. */
 function montage(charge: GabaritCharge, source: Source, teinte: string, reglages: NonNullable<ReturnType<typeof useReglages>['reglages']>, cm: number) {
@@ -35,21 +41,21 @@ function montage(charge: GabaritCharge, source: Source, teinte: string, reglages
   return versBlob(canvas, 'image/webp');
 }
 
-/** Fiches de tailles des motifs, partagées avec l'onglet Générer. */
-export function useFiches(shopId: string) {
+/** Les motifs, leurs fichiers déposés et leurs fiches de tailles ; partagés avec l'onglet Générer. */
+export function useMotifs(shopId: string) {
   return useQuery({
     queryKey: ['mockups-motifs', shopId],
-    queryFn: () => authJson<{ fiches: FicheMotif[] }>(`/api/mockups/motifs?shopId=${shopId}`),
+    queryFn: () => authJson<{ motifs: Motif[] }>(`/api/mockups/motifs?shopId=${shopId}`),
   });
 }
 
-export function Motifs({ shopId, dossier, setDossier }: {
-  shopId: string; dossier: DossierMotif | null; setDossier: (d: DossierMotif | null) => void;
-}) {
+export function Motifs({ shopId, choisi, setChoisi }: { shopId: string; choisi: string | null; setChoisi: (nom: string | null) => void }) {
   const { data: donneesGabarits } = useGabarits(shopId);
   const { reglages } = useReglages(shopId);
-  const fiches = useFiches(shopId);
+  const motifs = useMotifs(shopId);
 
+  const [recherche, setRecherche] = useState('');
+  const [nouveau, setNouveau] = useState<string | null>(null); // nom en cours de saisie
   const [hauteurs, setHauteurs] = useState<Hauteurs>({});
   const [gabaritId, setGabaritId] = useState<string | null>(null);
   const [teinte, setTeinte] = useState<string | null>(null);
@@ -57,18 +63,24 @@ export function Motifs({ shopId, dossier, setDossier }: {
   const [source, setSource] = useState<Source | null>(null);
   const [apercus, setApercus] = useState<Partial<Record<TailleImpression, string>>>({});
   const [envoi, setEnvoi] = useState(false);
+  const [depot, setDepot] = useState(false);
   const urlsAffichees = useRef<string[]>([]);
 
+  const liste = motifs.data?.motifs ?? [];
+  const motif = liste.find((m) => m.nom === choisi) ?? null;
+  const visibles = liste.filter((m) => m.libelle.toLowerCase().includes(recherche.toLowerCase()));
   const gabarits = donneesGabarits?.gabarits ?? [];
   const gabarit = gabarits.find((g) => g.id === gabaritId) ?? gabarits[0] ?? null;
   const teintes = reglages ? Object.keys(reglages.teintes).filter((t) => teinteReglee(reglages, t)).sort() : [];
   const teinteVue = teinte ?? teintes[0] ?? null;
-  const noms = dossier ? [...dossier.fichiers.keys()] : [];
-  const nomSource = reglages && teinteVue ? trouverFichier(noms, { pose: 'motif', teinte: teinteVue }, reglages) : null;
-  const versionVue = reglages && teinteVue ? teinteReglee(reglages, teinteVue)?.version : null;
-  // Anciens fichiers d'impression du dossier (« LOKI DTG-CUI C-LARGE.png ») : ils donnent les tailles déjà utilisées.
-  const anciens = noms.filter((n) => /\.png$/i.test(n) && /(?:^|\s)(DTG|DTF)-/i.test(n) && tailleDansNom(n));
+  const versionVue = reglages && teinteVue ? teinteReglee(reglages, teinteVue)?.version ?? null : null;
+  const urlSource = versionVue ? motif?.fichiers[versionVue]?.url ?? null : null;
   const plafond = source ? arrondi(hauteurMax(source.dessin.w, source.dessin.h) - 0.05) : CADRE_HAUTEUR_CM;
+
+  // Changer de motif recharge sa fiche. Lié au seul choix, pour qu'un rechargement de la liste n'écrase pas un réglage en cours.
+  useEffect(() => {
+    setHauteurs(motif?.hauteurs ?? {});
+  }, [choisi]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setCharge(null);
@@ -82,10 +94,9 @@ export function Motifs({ shopId, dossier, setDossier }: {
 
   useEffect(() => {
     setSource(null);
-    const fichier = nomSource ? dossier?.fichiers.get(nomSource) : undefined;
-    if (!fichier) return;
+    if (!urlSource) return;
     let actif = true;
-    chargerSource(fichier)
+    fetch(urlSource).then((r) => r.blob()).then(chargerSource)
       .then((s) => {
         if (!actif) return;
         setSource(s);
@@ -97,7 +108,7 @@ export function Motifs({ shopId, dossier, setDossier }: {
       })
       .catch((e: Error) => notifications.show({ color: 'red', message: e.message }));
     return () => { actif = false; };
-  }, [dossier, nomSource]);
+  }, [urlSource]);
 
   // Recompose les quatre mockups, 150 ms après le dernier geste sur un curseur.
   useEffect(() => {
@@ -118,36 +129,21 @@ export function Motifs({ shopId, dossier, setDossier }: {
     return () => { actif = false; clearTimeout(minuteur); };
   }, [charge, source, teinteVue, reglages, hauteurs]);
 
-  // Le dossier peut aussi changer depuis l'onglet Générer : on recharge alors la fiche du motif.
-  // Volontairement lié au seul dossier, pour qu'un rechargement des fiches n'écrase pas un réglage en cours.
-  useEffect(() => {
-    setHauteurs((dossier && fiches.data?.fiches.find((f) => f.nom === dossier.nom)?.hauteurs) || {});
-  }, [dossier]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function reprendre() {
-    if (!dossier) return;
-    const lues: Hauteurs = {};
-    for (const t of TAILLES_IMPRESSION) {
-      const nom = anciens.find((n) => tailleDansNom(n) === t);
-      if (!nom) continue;
-      const s = await chargerSource(dossier.fichiers.get(nom)!);
-      lues[t] = arrondi(s.dessin.h / PX_PAR_CM_300DPI); // fichiers d'impression à 300 dpi
-    }
-    setHauteurs((h) => ({ ...h, ...lues }));
-    notifications.show({ message: `${Object.keys(lues).length} taille(s) reprise(s) des anciens fichiers` });
+  async function enregistrerFiche(nom: string, h: Hauteurs) {
+    await authJson('/api/mockups/motifs', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shopId, fiche: { nom, hauteurs: h } }),
+    });
   }
 
   async function enregistrer() {
-    if (!dossier) return;
+    if (!motif) return;
     setEnvoi(true);
     try {
-      await authJson('/api/mockups/motifs', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shopId, fiche: { nom: dossier.nom, hauteurs } }),
-      });
-      notifications.show({ color: 'green', message: `Fiche de ${dossier.nom} enregistrée` });
-      await fiches.refetch();
+      await enregistrerFiche(motif.nom, hauteurs);
+      notifications.show({ color: 'green', message: `Tailles de ${motif.libelle} enregistrées` });
+      await motifs.refetch();
     } catch (e) {
       notifications.show({ color: 'red', message: (e as Error).message });
     } finally {
@@ -155,58 +151,151 @@ export function Motifs({ shopId, dossier, setDossier }: {
     }
   }
 
+  async function creer() {
+    const nom = nouveau?.trim();
+    if (!nom) return setNouveau(null);
+    try {
+      await enregistrerFiche(nom, {});
+      const { data } = await motifs.refetch();
+      setChoisi(data?.motifs.find((m) => m.libelle.toLowerCase() === nom.toLowerCase() || m.nom === nom.toUpperCase())?.nom ?? null);
+      setNouveau(null);
+    } catch (e) {
+      notifications.show({ color: 'red', message: (e as Error).message });
+    }
+  }
+
+  /** Dépose des fichiers ; `role` force leur rôle (bouton « Remplacer » d'une vignette), sinon il vient de leur nom. */
+  async function deposer(fichiers: File[], role?: Role) {
+    if (!motif || fichiers.length === 0) return;
+    const form = new FormData();
+    form.append('shopId', shopId);
+    form.append('motif', motif.nom);
+    for (const f of fichiers) form.append('files', role ? new File([f], `${role}.${f.name.split('.').pop()}`, { type: f.type }) : f);
+    setDepot(true);
+    try {
+      const r = await authFetch('/api/mockups/motifs/fichiers', { method: 'POST', body: form });
+      const corps = await r.json() as { error?: string };
+      if (!r.ok) throw new Error(corps.error ?? 'Dépôt refusé');
+      notifications.show({ color: 'green', message: `${fichiers.length} fichier(s) déposé(s) pour ${motif.libelle}` });
+      await motifs.refetch();
+    } catch (e) {
+      notifications.show({ color: 'red', message: (e as Error).message });
+    } finally {
+      setDepot(false);
+    }
+  }
+
   const regler = (t: TailleImpression, cm: number | null) =>
     setHauteurs((h) => ({ ...h, [t]: cm ? Math.min(arrondi(cm), plafond) : undefined }));
 
   return (
-    <>
-      <section className={`${styles.panneau} ${styles.barreMotif}`}>
-        <div>
-          <div className={styles.etiquette}>Dossier du motif</div>
-          <ChoixDossier dossier={dossier} onChange={setDossier}>
-            <div className={styles.aide}>{noms.filter((n) => !anciens.includes(n) && !n.startsWith('.')).join(' · ') || 'dossier vide'}</div>
-          </ChoixDossier>
-        </div>
-        <Select
-          size="xs" w={220} label="Vu sur" value={gabarit?.id ?? null} onChange={setGabaritId}
-          data={gabarits.map((g) => ({ value: g.id, label: libelle(g) }))}
-        />
-        <Select size="xs" w={100} label="Teinte" value={teinteVue} onChange={setTeinte} data={teintes} />
-        <span className={styles.espace} />
-        {anciens.length > 0 && <Button size="xs" variant="default" onClick={reprendre}>Reprendre des anciens fichiers</Button>}
-        <Button size="xs" loading={envoi} disabled={!dossier} onClick={enregistrer}>Enregistrer</Button>
+    <div className={styles.motifs}>
+      <section className={styles.panneau}>
+        <Group justify="space-between" mb="xs">
+          <h2 className={styles.panneauTitre}>Motifs · {liste.length}</h2>
+          <Button size="compact-xs" variant="subtle" onClick={() => setNouveau('')}>+ Nouveau</Button>
+        </Group>
+        {nouveau !== null && (
+          <TextInput
+            size="xs" mb="xs" autoFocus placeholder="Nom du motif, puis Entrée" value={nouveau}
+            onChange={(e) => setNouveau(e.currentTarget.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') creer(); if (e.key === 'Escape') setNouveau(null); }}
+          />
+        )}
+        <TextInput size="xs" mb="xs" placeholder="Rechercher" value={recherche} onChange={(e) => setRecherche(e.currentTarget.value)} />
+        {visibles.map((m) => {
+          const e = etat(m);
+          return (
+            <div key={m.nom} className={`${styles.ligne} ${m.nom === choisi ? styles.ligneActive : ''}`}>
+              <button className={styles.ligneNom} onClick={() => setChoisi(m.nom)}>{m.libelle}</button>
+              <Badge size="xs" variant="light" color={e.color}>{e.label}</Badge>
+            </div>
+          );
+        })}
       </section>
 
-      {!dossier ? (
-        <div className={styles.vide}>Choisis le dossier d’un motif pour régler ses tailles.</div>
-      ) : !gabarit ? (
-        <div className={styles.vide}>Aucun gabarit : crée-en un dans l’onglet Gabarits.</div>
-      ) : !nomSource ? (
-        <div className={styles.vide}><span className={styles.aRegler}>Fichier {dossier.nom} {versionVue ?? ''} manquant</span> dans le dossier.</div>
+      {!motif ? (
+        <div className={styles.vide}>Choisis un motif dans la liste.</div>
       ) : (
-        <div className={styles.tailles}>
-          {TAILLES_IMPRESSION.map((t) => {
-            const cm = hauteurs[t] ?? null;
-            return (
-              <section key={t} className={styles.panneau}>
-                <Group justify="space-between" mb="xs">
-                  <h2 className={styles.panneauTitre}>{t}</h2>
-                  {t === 'D-MAX' && <span className={styles.aide}>max {enCm(plafond)}</span>}
-                </Group>
-                {/* eslint-disable-next-line @next/next/no-img-element -- montage local (blob) */}
-                <img className={styles.apercu} src={(cm && apercus[t]) || gabarit.photo_url} alt={`${t} sur ${libelle(gabarit)}`} />
-                <Group gap="sm" mt="sm" wrap="nowrap">
-                  <Slider style={{ flex: 1 }} size="sm" min={1} max={plafond} step={0.1} label={null} value={cm ?? 0} onChange={(v) => regler(t, v)} />
-                  <NumberInput size="xs" w={90} suffix=" cm" min={1} max={plafond} step={0.1} decimalScale={1} value={cm ?? ''} onChange={(v) => regler(t, Number(v) || null)} />
-                </Group>
-                <div className={styles.aide}>
-                  {cm && source ? `${enCm(cm * source.dessin.w / source.dessin.h)} de large` : <span className={styles.aRegler}>hauteur à régler</span>}
-                </div>
-              </section>
-            );
-          })}
+        <div>
+          <section
+            className={`${styles.panneau} ${depot ? styles.depotEnCours : ''}`}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => { e.preventDefault(); deposer([...e.dataTransfer.files]); }}
+          >
+            <Group justify="space-between" mb="sm">
+              <div>
+                <h2 className={styles.panneauTitre}>{motif.libelle} · fichiers</h2>
+                <div className={styles.aide}>Glisse un ou plusieurs fichiers ici : IVY les range d’après la fin de leur nom (CLAIR, SOMBRE, MARQUE, DTF).</div>
+              </div>
+              <FileButton multiple accept="image/png,image/svg+xml" onChange={(f) => deposer(f)}>
+                {(props) => <Button {...props} size="xs" variant="default" loading={depot}>Déposer des fichiers</Button>}
+              </FileButton>
+            </Group>
+            <div className={styles.tuiles}>
+              {ROLES.map((role) => {
+                const f = motif.fichiers[role];
+                return (
+                  <div key={role} className={`${styles.tuile} ${f ? '' : styles.tuileVide}`}>
+                    {f
+                      // eslint-disable-next-line @next/next/no-img-element -- fichier du bucket, SVG compris
+                      ? <img className={styles.vignette} src={f.url} alt={`${motif.libelle} ${role}`} />
+                      : <div className={`${styles.vignette} ${styles.carteVide}`}>Pas de fichier</div>}
+                    <strong>{role}</strong>
+                    <div className={styles.aide}>{f ? `${f.ext.toUpperCase()} · ${date(f.depose_le)}` : role === 'DTF' ? 'Facultatif (si aucun fichier, le logo de base des Réglages sera utilisé)' : 'Manquant'}</div>
+                    <Group gap={6}>
+                      <FileButton accept="image/png,image/svg+xml" onChange={(x) => x && deposer([x], role)}>
+                        {(props) => <Button {...props} size="compact-xs" variant="default">{f ? 'Remplacer' : 'Déposer'}</Button>}
+                      </FileButton>
+                      {f && <Button component="a" href={f.url} target="_blank" size="compact-xs" variant="default">Télécharger</Button>}
+                    </Group>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className={`${styles.panneau} ${styles.barreMotif}`}>
+            <h2 className={styles.panneauTitre}>Tailles d’impression</h2>
+            <span className={styles.espace} />
+            <Select
+              size="xs" w={220} label="Vu sur" value={gabarit?.id ?? null} onChange={setGabaritId}
+              data={gabarits.map((g) => ({ value: g.id, label: libelle(g) }))}
+            />
+            <Select size="xs" w={100} label="Teinte" value={teinteVue} onChange={setTeinte} data={teintes} />
+            <Button size="xs" loading={envoi} onClick={enregistrer}>Enregistrer</Button>
+          </section>
+
+          {!gabarit ? (
+            <div className={styles.vide}>Aucun gabarit : crée-en un dans l’onglet Gabarits.</div>
+          ) : !urlSource ? (
+            <div className={styles.vide}><span className={styles.aRegler}>Fichier {versionVue ?? ''} manquant</span> : dépose-le ci-dessus.</div>
+          ) : (
+            <div className={styles.tailles}>
+              {TAILLES_IMPRESSION.map((t) => {
+                const cm = hauteurs[t] ?? null;
+                return (
+                  <section key={t} className={styles.panneau}>
+                    <Group justify="space-between" mb="xs">
+                      <h2 className={styles.panneauTitre}>{t}</h2>
+                      {t === 'D-MAX' && <span className={styles.aide}>max {enCm(plafond)}</span>}
+                    </Group>
+                    {/* eslint-disable-next-line @next/next/no-img-element -- montage local (blob) */}
+                    <img className={styles.apercu} src={(cm && apercus[t]) || gabarit.photo_url} alt={`${t} sur ${libelle(gabarit)}`} />
+                    <Group gap="sm" mt="sm" wrap="nowrap">
+                      <Slider style={{ flex: 1 }} size="sm" min={1} max={plafond} step={0.1} label={null} value={cm ?? 0} onChange={(v) => regler(t, v)} />
+                      <NumberInput size="xs" w={90} suffix=" cm" min={1} max={plafond} step={0.1} decimalScale={1} value={cm ?? ''} onChange={(v) => regler(t, Number(v) || null)} />
+                    </Group>
+                    <div className={styles.aide}>
+                      {cm && source ? `${enCm(cm * source.dessin.w / source.dessin.h)} de large` : <span className={styles.aRegler}>hauteur à régler</span>}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
-    </>
+    </div>
   );
 }

@@ -7,6 +7,7 @@ import { notifications } from '@mantine/notifications';
 import { IconCopy } from '@tabler/icons-react';
 import { authJson } from '@/lib/auth-fetch';
 import { CADRE_HAUTEUR_CM, CADRE_LARGEUR_CM, hauteurMax, teinteReglee, type Cadre, type Face, type Gabarit, type Point, type Version } from '@/lib/mockups/regles';
+import { useMotifs } from './Motifs';
 import { chargerGabarit, chargerSource, composerMockup, versBlob, type GabaritCharge, type Source } from '@/lib/mockups/composer';
 import { useReglages } from './Reglages';
 import { CadreEditeur } from './CadreEditeur';
@@ -70,7 +71,8 @@ export function Gabarits({ shopId }: { shopId: string }) {
 
   // « Tester sur un motif » : montage avec le cadre en cours, enregistré ou non.
   const { reglages } = useReglages(shopId);
-  const [motif, setMotif] = useState<File | null>(null);
+  const motifs = useMotifs(shopId);
+  const [motifNom, setMotifNom] = useState<string | null>(null);
   const [teinte, setTeinte] = useState<string | null>(null);
   const [charge, setCharge] = useState<GabaritCharge | null>(null);
   const [source, setSource] = useState<Source | null>(null);
@@ -79,6 +81,9 @@ export function Gabarits({ shopId }: { shopId: string }) {
   const hauteurCm = Math.min(hauteurChoisie ?? hauteurPlafond, hauteurPlafond);
   const [apercuUrl, setApercuUrl] = useState<string | null>(null);
   const teintesReglees = reglages ? Object.keys(reglages.teintes).filter((t) => teinteReglee(reglages, t)).sort() : [];
+  // Le fichier du motif déposé dans IVY qui correspond à la version de la teinte (CLAIR ou SOMBRE).
+  const version = reglages && teinte ? teinteReglee(reglages, teinte)?.version : null;
+  const urlMotif = version ? motifs.data?.motifs.find((m) => m.nom === motifNom)?.fichiers[version]?.url ?? null : null;
 
   useEffect(() => {
     setCharge(null);
@@ -93,9 +98,9 @@ export function Gabarits({ shopId }: { shopId: string }) {
   useEffect(() => {
     setSource(null);
     setHauteurChoisie(null); // chaque nouveau motif repart de sa taille maximale
-    if (!motif) return;
-    chargerSource(motif).then(setSource).catch((e: Error) => notifications.show({ color: 'red', message: e.message }));
-  }, [motif]);
+    if (!urlMotif) return;
+    fetch(urlMotif).then((r) => r.blob()).then(chargerSource).then(setSource).catch((e: Error) => notifications.show({ color: 'red', message: e.message }));
+  }, [urlMotif]);
 
   useEffect(() => {
     // L'ancien montage n'est libéré qu'une fois le nouveau affiché : pas d'image cassée pendant qu'on glisse le cadre.
@@ -285,7 +290,10 @@ export function Gabarits({ shopId }: { shopId: string }) {
             )}
             <div className={styles.test}>
               <div className={styles.groupe}>Tester sur un motif</div>
-              <FileInput size="xs" accept="image/png,image/svg+xml" placeholder="Motif (PNG ou SVG)" value={motif} onChange={setMotif} clearable />
+              <Select
+                size="xs" searchable clearable placeholder="Motif déposé dans IVY" value={motifNom} onChange={setMotifNom}
+                data={(motifs.data?.motifs ?? []).filter((m) => m.fichiers.CLAIR || m.fichiers.SOMBRE).map((m) => ({ value: m.nom, label: m.libelle }))}
+              />
               <Group grow gap="xs">
                 <Select size="xs" placeholder="Teinte" data={teintesReglees} value={teinte} onChange={setTeinte} />
                 <NumberInput

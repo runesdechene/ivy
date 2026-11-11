@@ -20,6 +20,9 @@ export interface Reglages {
   opacite: number; // encre sur les mockups, 0–1 ; les fichiers d'impression restent pleins
 }
 export interface FicheMotif { nom: string; hauteurs: Partial<Record<TailleImpression, number>> }
+export interface FichierDepose { url: string; taille: number; depose_le: string; ext: 'png' | 'svg' }
+/** Un motif tel qu'IVY le connaît : nom affiché, fiche de tailles (`nom` = clé), fichiers déposés, nombre de produits. */
+export interface Motif extends FicheMotif { libelle: string; fichiers: Partial<Record<Role, FichierDepose>>; produits: number }
 export interface Cadre { x: number; y: number; hauteur: number }
 export interface Point { x: number; y: number }
 export interface Rect { x: number; y: number; w: number; h: number }
@@ -48,6 +51,8 @@ export const PX_PAR_CM_300DPI = 300 / 2.54;
 export const OPACITE_ENCRE = 0.75; // valeur par défaut du réglage
 export const PX_PAR_METRE_300DPI = 11811;
 export const TAILLES_IMPRESSION: TailleImpression[] = ['A-SMALL', 'B-MEDIUM', 'C-LARGE', 'D-MAX'];
+export const ROLES = ['CLAIR', 'SOMBRE', 'MARQUE', 'DTF'] as const; // les fichiers sources d'un motif
+export type Role = (typeof ROLES)[number];
 export const METACHAMPS = { recto: 'fichier_d_impression', verso: 'verso_impression', taille: 'taille_d_impression' } as const;
 
 const FACES: Face[] = ['recto', 'verso'];
@@ -90,22 +95,31 @@ export function teinteReglee(reglages: Reglages, teinte: string): { couleur: str
 
 // --- Fichiers du dossier d'un motif ------------------------------------------
 
-/** Le fichier source d'une impression (PNG ou SVG) : dernier mot du nom = CLAIR, SOMBRE, MARQUE ou DTF. */
+/** Rôle d'un fichier source d'après le dernier mot de son nom ; `null` pour tout autre fichier. */
+export function roleDuFichier(nom: string): Role | null {
+  if (nom.startsWith('.') || !/\.(png|svg)$/i.test(nom)) return null;
+  const base = nom.slice(0, -4).toUpperCase(); // « .png » et « .svg » font quatre caractères
+  // Un fichier d'impression (« LOKI DTG-CUI MARQUE.png ») n'est pas une source.
+  if (/(?:^|\s)(DTG|DTF)-/.test(base)) return null;
+  const mot = base.split(/\s+/).pop() as Role;
+  return ROLES.includes(mot) ? mot : null;
+}
+
+/** Le fichier source d'une impression : CLAIR / SOMBRE selon la teinte pour un motif, sinon MARQUE ou DTF. */
 export function trouverFichier(noms: string[], impression: Impression, reglages: Reglages): string | null {
-  const mot = impression.pose === 'motif' ? teinteReglee(reglages, impression.teinte)?.version
+  const role = impression.pose === 'motif' ? teinteReglee(reglages, impression.teinte)?.version
     : impression.pose === 'marque' ? 'MARQUE' : 'DTF';
-  if (!mot) return null;
-  return noms.find((nom) => {
-    if (nom.startsWith('.') || !/\.(png|svg)$/i.test(nom)) return false;
-    const base = nom.slice(0, -4).toUpperCase(); // « .png » et « .svg » font quatre caractères
-    // Les fichiers d'impression déjà écrits dans le dossier (« LOKI DTG-CUI MARQUE.png ») ne sont pas des sources.
-    if (/(?:^|\s)(DTG|DTF)-/.test(base)) return false;
-    return base.split(/\s+/).pop() === mot;
-  }) ?? null;
+  return role ? noms.find((nom) => roleDuFichier(nom) === role) ?? null : null;
 }
 
 export function cleMotif(nom: string): string {
   return nom.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim().replace(/\s+/g, ' ');
+}
+
+/** Motif d'un produit : ce qui précède « | » dans son titre (« Loki | T-shirt unisexe » → « LOKI »). */
+export function motifDuTitre(titre: string): string | null {
+  const i = titre.indexOf(' | ');
+  return i > 0 ? cleMotif(titre.slice(0, i)) : null;
 }
 
 // --- Géométrie ----------------------------------------------------------------

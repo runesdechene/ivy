@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { authorizeRequest, ownsShop, type AuthResult } from '@/lib/hub-ledger/server-auth';
+import { ROLES, type FichierDepose, type Role } from './regles';
 
 /** Côté serveur uniquement : accès, stockage et petites aides communes aux routes /api/mockups. */
 
@@ -63,4 +64,40 @@ export async function toutesLesLignes<T>(page: (de: number, a: number) => Promis
     lignes.push(...(data ?? []));
     if (!data || data.length < 1000) return lignes;
   }
+}
+
+// --- Fichiers sources des motifs : `${shopId}/motifs/${dossier}/${ROLE}.${png|svg}` -----------------
+
+const TAILLE_MAX_SOURCE = 20 * 1024 * 1024;
+
+/** Dossier d'un motif dans le bucket ; les clés Storage n'acceptent pas tous les caractères (’ …). */
+export function dossierMotif(shopId: string, cle: string): string {
+  return `${shopId}/motifs/${cle.replace(/[^A-Z0-9]+/g, '-')}`;
+}
+
+/** Fichiers déposés d'un motif, par rôle. `?v=` suit la date : un fichier remplacé n'est pas resservi par le cache. */
+export async function fichiersDuMotif(svc: SupabaseClient, dossier: string): Promise<Partial<Record<Role, FichierDepose>>> {
+  const { data, error } = await svc.storage.from(BUCKET).list(dossier);
+  if (error) throw new Error(error.message);
+  const fichiers: Partial<Record<Role, FichierDepose>> = {};
+  for (const f of data ?? []) {
+    const [role, ext] = f.name.split('.') as [Role, 'png' | 'svg'];
+    if (!ROLES.includes(role)) continue;
+    const url = svc.storage.from(BUCKET).getPublicUrl(`${dossier}/${f.name}`).data.publicUrl;
+    fichiers[role] = { url: `${url}?v=${Date.parse(f.updated_at)}`, taille: f.metadata?.size ?? 0, depose_le: f.updated_at, ext };
+  }
+  return fichiers;
+}
+
+/** Dépose un fichier source à la place de celui du même rôle (l'autre extension est retirée). */
+export async function deposerSource(svc: SupabaseClient, dossier: string, role: Role, fichier: File): Promise<void> {
+  const ext = fichier.name.split('.').pop()?.toLowerCase();
+  if (ext !== 'png' && ext !== 'svg') throw new Error(`${fichier.name} : PNG ou SVG seulement`);
+  if (fichier.size > TAILLE_MAX_SOURCE) throw new Error(`${fichier.name} : 20 Mo maximum`);
+  await retirer(svc, [`${dossier}/${role}.png`, `${dossier}/${role}.svg`]);
+  const { error } = await svc.storage.from(BUCKET).upload(`${dossier}/${role}.${ext}`, new Uint8Array(await fichier.arrayBuffer()), {
+    contentType: ext === 'svg' ? 'image/svg+xml' : 'image/png',
+    upsert: true,
+  });
+  if (error) throw new Error(`${fichier.name} : ${error.message}`);
 }

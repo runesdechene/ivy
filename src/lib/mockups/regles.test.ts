@@ -4,7 +4,7 @@ import { crc32 } from 'node:zlib';
 import {
   lireImpression, lireTaille, tailleDansNom, rangTaille, teinteReglee, trouverFichier,
   hauteurMax, placerMotif, placerPoitrine, planifierApercus, profilSuivi, profilsDepuisExistants,
-  fichiersImpression, bornesDessin, avec300dpi, cleMotif, carteOmbres,
+  fichiersImpression, bornesDessin, avec300dpi, cleMotif, carteOmbres, roleDuFichier, motifDuTitre,
 } from './regles.ts';
 import type { Reglages, FicheMotif, Cadre, Gabarit, VarianteImpression, Profil, Rect } from './regles.ts';
 
@@ -185,6 +185,16 @@ test('carteOmbres : tissu moyen = 128, écarts multipliés, fond transparent ign
   assert.equal(carte[8], 255); // borné
   assert.equal(carte[3], 255);
   assert.equal(carteOmbres(rgba, 3, { x: 0, y: 0, hauteur: 100 }, 0)[4], 128); // intensité 0 = neutre
+});
+
+test('roleDuFichier et motifDuTitre', () => {
+  assert.equal(roleDuFichier('LOKI CLAIR.svg'), 'CLAIR');
+  assert.equal(roleDuFichier('SOMBRE.png'), 'SOMBRE'); // nom rangé dans IVY
+  assert.equal(roleDuFichier('LOKI DTG-CUI MARQUE.png'), null);
+  assert.equal(roleDuFichier('LOKI COEUR.png'), null);
+  assert.equal(motifDuTitre('Loki | T-shirt unisexe'), 'LOKI');
+  assert.equal(motifDuTitre("L'esprit de l’Ours | Sweatshirt à capuche"), "L'ESPRIT DE L’OURS");
+  assert.equal(motifDuTitre('T-shirt officiel festival Yggdrasil 2025'), null);
 });
 
 test('cleMotif : majuscules, sans accents, espaces simples', () => {

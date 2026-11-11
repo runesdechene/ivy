@@ -2,23 +2,26 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Anchor, Badge, Button, Group, SegmentedControl, Select } from '@mantine/core';
+import { ActionIcon, Anchor, Badge, Button, Group, SegmentedControl, Select } from '@mantine/core';
+import { modals } from '@mantine/modals';
+import { IconTrash } from '@tabler/icons-react';
+import { useTerminalStream } from '@/hooks/useTerminalStream';
 import { notifications } from '@mantine/notifications';
 import { zipSync } from 'fflate';
 import { authJson } from '@/lib/auth-fetch';
 import {
-  lireImpression, planifierApercus, teinteReglee, trouverFichier,
+  lireImpression, motifDuTitre, planifierApercus, roleDuFichier, teinteReglee, trouverFichier,
   type Apercu, type Face, type Gabarit, type Impression, type VarianteImpression,
 } from '@/lib/mockups/regles';
 import { chargerGabarit, chargerSource, composerMockup, versBlob, type GabaritCharge, type Source } from '@/lib/mockups/composer';
-import type { DossierMotif } from '@/lib/mockups/dossier';
 import { useReglages } from './Reglages';
 import { useGabarits } from './Gabarits';
-import { useFiches } from './Motifs';
-import { ChoixDossier } from './ChoixDossier';
+import { useMotifs } from './Motifs';
 import styles from './mockups.module.scss';
 
-interface ReponseProduit { produit: { id: string; title: string; shopify_id: string }; variantes: VarianteImpression[] }
+interface ReponseProduit {
+  produit: { id: string; title: string; shopify_id: string }; variantes: VarianteImpression[]; stockParCouleur: Record<string, number>;
+}
 const AUCUNE_VARIANTE: VarianteImpression[] = [];
 const AUCUN_GABARIT: Gabarit[] = [];
 const MANQUES: Record<NonNullable<Apercu['manque']>, string> = {
@@ -32,12 +35,10 @@ function motFichier(impression: Impression, version: string | undefined): string
   return impression.pose === 'motif' ? version ?? impression.teinte : impression.pose === 'marque' ? 'MARQUE' : 'DTF';
 }
 
-export function Generer({ shopId, dossier, setDossier, onReglerTailles }: {
-  shopId: string; dossier: DossierMotif | null; setDossier: (d: DossierMotif | null) => void; onReglerTailles: () => void;
-}) {
+export function Generer({ shopId, onReglerTailles }: { shopId: string; onReglerTailles: (motif: string) => void }) {
   const { reglages, dtfUrl } = useReglages(shopId);
   const { data: donneesGabarits } = useGabarits(shopId);
-  const fiches = useFiches(shopId);
+  const motifs = useMotifs(shopId);
   const produits = useQuery({
     queryKey: ['mockups-produits', shopId],
     queryFn: () => authJson<{ products: { id: string; title: string }[] }>(`/api/inventory/products-list?shopId=${shopId}`),
@@ -45,6 +46,8 @@ export function Generer({ shopId, dossier, setDossier, onReglerTailles }: {
 
   const [produitId, setProduitId] = useState<string | null>(null);
   const [faceChoisie, setFace] = useState<Face | null>(null);
+  const [synchro, setSynchro] = useState(false);
+  const { streamFromUrl } = useTerminalStream();
   const [images, setImages] = useState<Record<string, { url: string; blob: Blob } | { erreur: string }>>({});
   const urls = useRef<string[]>([]);
 
@@ -56,13 +59,16 @@ export function Generer({ shopId, dossier, setDossier, onReglerTailles }: {
   // Références stables : le montage se relance seulement quand une entrée change vraiment.
   const variantes = produit.data?.variantes ?? AUCUNE_VARIANTE;
   const gabarits = donneesGabarits?.gabarits ?? AUCUN_GABARIT;
-  const noms = useMemo(() => (dossier ? [...dossier.fichiers.keys()] : []), [dossier]);
-  const fiche = (dossier && fiches.data?.fiches.find((f) => f.nom === dossier.nom)) || null;
+  // Le motif vient du titre (« Loki | T-shirt unisexe » → LOKI) ; ses fichiers sont ceux déposés dans l'onglet Motifs.
+  const cleDuMotif = produit.data ? motifDuTitre(produit.data.produit.title) : null;
+  const motif = motifs.data?.motifs.find((m) => m.nom === cleDuMotif) ?? null;
+  const noms = useMemo(() => (motif ? Object.entries(motif.fichiers).map(([role, f]) => `${role}.${f.ext}`) : []), [motif]);
+  const fiche = motif;
 
   const faces = useMemo(() => (['recto', 'verso'] as Face[]).filter((f) => variantes.some((v) => lireImpression(v[f], f))), [variantes]);
   const face = faceChoisie && faces.includes(faceChoisie) ? faceChoisie : faces[0] ?? null;
 
-  // Fichiers attendus dans le dossier, d'après les impressions du produit.
+  // Fichiers attendus du motif, d'après les impressions du produit.
   const attendus = useMemo(() => {
     if (!reglages) return [];
     const parMot = new Map<string, Impression>();
@@ -75,8 +81,8 @@ export function Generer({ shopId, dossier, setDossier, onReglerTailles }: {
 
   // Un aperçu par couleur pour la face choisie, motif à sa taille maximale (celle des images Shopify).
   const apercus = useMemo(
-    () => (reglages && face && dossier ? planifierApercus(variantes, [face], gabarits, noms, reglages, fiche, 'D-MAX') : []),
-    [variantes, face, gabarits, noms, reglages, fiche, dossier],
+    () => (reglages && face && motif ? planifierApercus(variantes, [face], gabarits, noms, reglages, fiche, 'D-MAX') : []),
+    [variantes, face, gabarits, noms, reglages, fiche, motif],
   );
 
   // Monte les aperçus prêts, un par un ; gabarits et sources chargés une seule fois.
@@ -92,12 +98,10 @@ export function Generer({ shopId, dossier, setDossier, onReglerTailles }: {
         try {
           const g = gabarits.find((x) => x.id === a.gabaritId)!;
           if (!charges.has(g.id)) charges.set(g.id, chargerGabarit(g));
-          const nomSource = a.fichier ?? dtfUrl ?? '';
+          const nomSource = (a.fichier && motif?.fichiers[roleDuFichier(a.fichier)!]?.url) || dtfUrl || '';
           if (!nomSource) throw new Error('Logo DTF commun manquant (Réglages)');
           if (!sources.has(nomSource)) {
-            sources.set(nomSource, a.fichier
-              ? chargerSource(dossier!.fichiers.get(a.fichier)!)
-              : fetch(nomSource).then((r) => r.blob()).then(chargerSource));
+            sources.set(nomSource, fetch(nomSource).then((r) => r.blob()).then(chargerSource));
           }
           const hauteur = a.impression.pose === 'motif' ? fiche?.hauteurs['D-MAX'] ?? null : null;
           const canvas = composerMockup(await charges.get(g.id)!, await sources.get(nomSource)!, a.impression, reglages, hauteur);
@@ -115,23 +119,61 @@ export function Generer({ shopId, dossier, setDossier, onReglerTailles }: {
       setImages(faits);
     })();
     return () => { actif = false; };
-  }, [apercus, gabarits, reglages, dtfUrl, fiche, dossier]);
+  }, [apercus, gabarits, reglages, dtfUrl, fiche, motif]);
 
   const pretes = apercus.flatMap((a) => {
     const img = images[cle(a)];
     return img && 'blob' in img ? [{ a, blob: img.blob }] : [];
   });
 
+  /** Relit le produit sur Shopify (variantes supprimées là-bas, métachamps changés), avec la synchro existante d'IVY. */
+  async function reprendreDeShopify() {
+    if (!produit.data) return;
+    setSynchro(true);
+    const params = new URLSearchParams({ shopId, productId: produit.data.produit.shopify_id.replace('gid://shopify/Product/', '') });
+    await streamFromUrl(`/api/inventory/sync-product?${params}`, { title: `Sync : ${produit.data.produit.title}` });
+    await produit.refetch();
+    setSynchro(false);
+  }
+
+  /** Supprime sur Shopify toutes les variantes d'une couleur, après confirmation (stock restant affiché). */
+  function retirerCouleur(couleur: string) {
+    if (!produit.data) return;
+    const n = variantes.filter((v) => v.couleur === couleur).length;
+    const stock = produit.data.stockParCouleur[couleur] ?? 0;
+    modals.openConfirmModal({
+      title: `Retirer ${couleur} de Shopify ?`,
+      children: (
+        <div>
+          Les {n} variantes {couleur} de « {produit.data.produit.title} » seront <strong>supprimées sur Shopify</strong>. C’est définitif.
+          {stock > 0 && <div className={styles.aRegler} style={{ marginTop: 8 }}>Il reste {stock} pièce(s) en stock dans cette couleur.</div>}
+        </div>
+      ),
+      labels: { confirm: `Supprimer ${couleur}`, cancel: 'Annuler' },
+      confirmProps: { color: 'red' },
+      onConfirm: async () => {
+        try {
+          const r = await authJson<{ retirees: number }>(
+            `/api/mockups/produit?${new URLSearchParams({ shopId, productId: produit.data!.produit.id, couleur })}`, { method: 'DELETE' });
+          notifications.show({ color: 'green', message: `${couleur} retirée : ${r.retirees} variante(s) supprimée(s) sur Shopify` });
+          await produit.refetch();
+        } catch (e) {
+          notifications.show({ color: 'red', message: (e as Error).message });
+        }
+      },
+    });
+  }
+
   async function telechargerZip() {
     const entrees: Record<string, Uint8Array> = {};
     for (const { a, blob } of pretes) {
-      entrees[`${dossier!.nom}_${a.modele}_${a.couleur}_${a.face}.webp`] = new Uint8Array(await blob.arrayBuffer());
+      entrees[`${motif!.libelle}_${a.modele}_${a.couleur}_${a.face}.webp`] = new Uint8Array(await blob.arrayBuffer());
     }
     const zip = zipSync(entrees, { level: 0 }); // le webp est déjà compressé
     const url = URL.createObjectURL(new Blob([zip as BlobPart], { type: 'application/zip' }));
     const lien = document.createElement('a');
     lien.href = url;
-    lien.download = `${dossier!.nom} mockups.zip`;
+    lien.download = `${motif!.libelle} mockups.zip`;
     lien.click();
     URL.revokeObjectURL(url);
     notifications.show({ color: 'green', message: `${pretes.length} mockup(s) dans le zip` });
@@ -147,19 +189,26 @@ export function Generer({ shopId, dossier, setDossier, onReglerTailles }: {
             data={(produits.data?.products ?? []).map((p) => ({ value: p.id, label: p.title }))}
           />
           {produit.data && (
-            <div className={styles.aide}>
-              {[...new Set(variantes.map((v) => v.sku).filter(Boolean))].join(', ') || 'Sans SKU'}
-              {' · '}{new Set(variantes.map((v) => v.couleur)).size} couleurs
-            </div>
+            <Group justify="space-between" mt={4}>
+              <div className={styles.aide}>
+                {[...new Set(variantes.map((v) => v.sku).filter(Boolean))].join(', ') || 'Sans SKU'}
+                {' · '}{new Set(variantes.map((v) => v.couleur)).size} couleurs
+              </div>
+              <Button size="compact-xs" variant="subtle" loading={synchro} onClick={reprendreDeShopify}>Reprendre de Shopify</Button>
+            </Group>
           )}
         </section>
 
+        {produit.data && (
         <section className={styles.panneau}>
-          <h2 className={styles.panneauTitre}>2. Motif</h2>
-          <ChoixDossier dossier={dossier} onChange={setDossier} />
-          {dossier && (
+          <h2 className={styles.panneauTitre}>2. Motif · {motif?.libelle ?? cleDuMotif ?? '—'}</h2>
+          {!motif ? (
+            <div className={styles.aRegler}>
+              {cleDuMotif ? `Motif ${cleDuMotif} inconnu.` : 'Le titre ne suit pas la règle « Motif | Produit ».'}
+            </div>
+          ) : (
             <>
-              <Group gap={6} mt="sm">
+              <Group gap={6}>
                 {attendus.map(({ mot, trouve, dtf }) => (
                   <Badge key={mot} size="sm" variant="light" color={trouve ? 'green' : dtf && dtfUrl ? 'gray' : 'red'}>
                     {trouve ? `${mot} ✓` : dtf && dtfUrl ? 'DTF · logo commun' : `${mot} manquant`}
@@ -171,10 +220,11 @@ export function Generer({ shopId, dossier, setDossier, onReglerTailles }: {
                   ? `Fiche de tailles : ${Object.entries(fiche.hauteurs).map(([t, cm]) => `${t[0]} ${String(cm).replace('.', ',')}`).join(' · ')} cm`
                   : <span className={styles.aRegler}>Pas encore de fiche de tailles.</span>}
               </div>
-              <Anchor size="xs" component="button" onClick={onReglerTailles}>Régler les tailles →</Anchor>
+              <Anchor size="xs" component="button" onClick={() => onReglerTailles(motif.nom)}>Fichiers et tailles du motif →</Anchor>
             </>
           )}
         </section>
+        )}
 
         {faces.length > 1 && (
           <section className={styles.panneau}>
@@ -199,7 +249,7 @@ export function Generer({ shopId, dossier, setDossier, onReglerTailles }: {
         </Group>
 
         {!produitId ? <div className={styles.vide}>Choisis un produit.</div>
-          : !dossier ? <div className={styles.vide}>Choisis le dossier de son motif.</div>
+          : !motif ? <div className={styles.vide}>Ce produit n’a pas de motif connu.</div>
           : apercus.length === 0 ? <div className={styles.vide}>Aucune impression trouvée dans les métachamps de ce produit.</div>
           : (
             <div className={styles.cartes}>
@@ -212,7 +262,12 @@ export function Generer({ shopId, dossier, setDossier, onReglerTailles }: {
                       // eslint-disable-next-line @next/next/no-img-element -- montage local (blob)
                       ? <a href={img.url} target="_blank" rel="noreferrer"><img className={styles.apercu} src={img.url} alt={`${a.modele} ${a.couleur}`} /></a>
                       : <div className={styles.carteVide}>{souci ?? 'Montage…'}</div>}
-                    <strong>{a.modele}</strong>
+                    <Group justify="space-between" wrap="nowrap">
+                      <strong>{a.modele}</strong>
+                      <ActionIcon size="sm" variant="subtle" color="red" title={`Retirer ${a.couleur} de Shopify`} onClick={() => retirerCouleur(a.couleur)}>
+                        <IconTrash size={14} />
+                      </ActionIcon>
+                    </Group>
                     <div className={styles.aide}>{a.couleur} · {a.face === 'recto' ? 'Recto' : 'Verso'} · {a.impression.teinte}</div>
                     {souci && <Badge size="sm" variant="light" color="orange">{souci}</Badge>}
                   </div>
