@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SupabaseClient } from '@supabase/supabase-js';
 import { autoriser, erreur, urlPublique } from '@/lib/mockups/serveur';
 import { lireProduit } from '@/lib/mockups/donnees';
-import { shopifyGraphql } from '@/lib/mockups/shopify';
+import { boutique, shopifyGraphql, type Boutique } from '@/lib/mockups/shopify';
 
 /**
  * Envoi des mockups enregistrés sur Shopify, en deux temps pour ne jamais laisser un produit sans photo :
@@ -10,16 +9,9 @@ import { shopifyGraphql } from '@/lib/mockups/shopify';
  *   PATCH : une fois les nouvelles traitées par Shopify (READY), supprime les anciennes.
  */
 
-type Shop = { shopify_url: string; shopify_token: string };
 interface Media { id: string; alt: string | null; status: 'UPLOADED' | 'PROCESSING' | 'READY' | 'FAILED' }
 
-async function boutique(svc: SupabaseClient, shopId: string): Promise<Shop> {
-  const { data } = await svc.from('shops').select('shopify_url, shopify_token').eq('id', shopId).single();
-  if (!data?.shopify_token) throw new Error('Boutique sans jeton Shopify');
-  return data;
-}
-
-async function mediasDuProduit(shop: Shop, gid: string): Promise<Media[]> {
+async function mediasDuProduit(shop: Boutique, gid: string): Promise<Media[]> {
   const d = await shopifyGraphql<{ product: { media: { nodes: Media[] } } | null }>(shop,
     `query($id: ID!) { product(id: $id) { media(first: 250) { nodes { id alt status } } } }`, { id: gid });
   if (!d.product) throw new Error('Produit absent de Shopify');

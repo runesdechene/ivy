@@ -142,6 +142,18 @@ test('profilsDepuisExistants garde les grilles partagées par au moins deux prod
   ]);
 });
 
+test('profilsDepuisExistants fond une grille partielle dans la complète, écarte les grilles décroissantes', () => {
+  const complete = { XS: 'B-MEDIUM', S: 'C-LARGE', M: 'D-MAX', L: 'D-MAX', XL: 'D-MAX' } as const;
+  const profils = profilsDepuisExistants([
+    { modele: 'CRAFTER', tailles: { S: 'C-LARGE', M: 'D-MAX', L: 'D-MAX' } },
+    { modele: 'CRAFTER', tailles: { ...complete } },
+    { modele: 'DRUMMER', tailles: { S: 'C-LARGE', M: 'D-MAX', L: 'D-MAX' } }, // autre modèle : ne se fond pas
+    { modele: 'CRAFTER', tailles: { S: 'C-LARGE', M: 'D-MAX', L: 'C-LARGE' } }, // décroissante : une erreur, pas un profil
+    { modele: 'CRAFTER', tailles: { S: 'C-LARGE', M: 'D-MAX', L: 'C-LARGE' } },
+  ]);
+  assert.deepEqual(profils, [{ modele: 'CRAFTER', nom: 'D-Max dès M', grille: complete }]);
+});
+
 test('profilSuivi trouve le profil du même modèle qui couvre chaque taille', () => {
   const p: Profil = { id: 'p', modele: 'CRAFTER', nom: 'D-Max dès M', grille: { S: 'C-LARGE', M: 'D-MAX', L: 'D-MAX' } };
   assert.equal(profilSuivi('CRAFTER', { S: 'C-LARGE', M: 'D-MAX' }, [p]), p);

@@ -1,6 +1,17 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+export type Boutique = { shopify_url: string; shopify_token: string };
+
+/** Adresse et jeton Shopify d'une boutique ; lève si elle n'a pas de jeton. */
+export async function boutique(svc: SupabaseClient, shopId: string): Promise<Boutique> {
+  const { data } = await svc.from('shops').select('shopify_url, shopify_token').eq('id', shopId).single();
+  if (!data?.shopify_token) throw new Error('Boutique sans jeton Shopify');
+  return data;
+}
+
 /** Côté serveur : appel GraphQL à l'Admin API Shopify d'une boutique. Lève sur `errors` et sur `userErrors`. */
 export async function shopifyGraphql<T>(
-  shop: { shopify_url: string; shopify_token: string }, query: string, variables: object,
+  shop: Boutique, query: string, variables: object,
 ): Promise<T> {
   const r = await fetch(`https://${shop.shopify_url}/admin/api/2026-10/graphql.json`, {
     method: 'POST',

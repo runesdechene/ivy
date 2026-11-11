@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { autoriser, erreur } from '@/lib/mockups/serveur';
 import { lireProduit } from '@/lib/mockups/donnees';
 import { cleMotif, motifDuTitre } from '@/lib/mockups/regles';
-import { shopifyGraphql } from '@/lib/mockups/shopify';
+import { boutique, shopifyGraphql } from '@/lib/mockups/shopify';
 
 /** Un produit du shop et ses variantes actives, avec leurs métachamps d'impression et le stock par couleur. */
 export async function GET(request: NextRequest) {
@@ -41,12 +41,9 @@ export async function DELETE(request: NextRequest) {
   const couleur = params.get('couleur');
   if (!couleur) return erreur('Couleur manquante');
 
-  const [{ data: produit }, { data: shop }] = await Promise.all([
-    svc.from('products').select('id, shopify_id').eq('shop_id', acces.shopId).eq('id', params.get('productId') ?? '').maybeSingle(),
-    svc.from('shops').select('shopify_url, shopify_token').eq('id', acces.shopId).single(),
-  ]);
+  const { data: produit } = await svc.from('products').select('id, shopify_id')
+    .eq('shop_id', acces.shopId).eq('id', params.get('productId') ?? '').maybeSingle();
   if (!produit) return erreur('Produit introuvable', 404);
-  if (!shop?.shopify_token) return erreur('Boutique sans jeton Shopify', 500);
 
   const { data: variantes, error } = await svc.from('product_variants').select('id, shopify_id, option1')
     .eq('product_id', produit.id).eq('shopify_active', true);
@@ -56,7 +53,7 @@ export async function DELETE(request: NextRequest) {
   if (aRetirer.length === variantes!.length) return erreur('C’est la dernière couleur du produit : supprime plutôt le produit sur Shopify');
 
   try {
-    await shopifyGraphql(shop, `mutation($productId: ID!, $variantsIds: [ID!]!) {
+    await shopifyGraphql(await boutique(svc, acces.shopId), `mutation($productId: ID!, $variantsIds: [ID!]!) {
       productVariantsBulkDelete(productId: $productId, variantsIds: $variantsIds) { userErrors { message } }
     }`, {
       productId: `gid://shopify/Product/${produit.shopify_id}`,

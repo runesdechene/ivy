@@ -8,6 +8,7 @@ import { Gabarits } from './Gabarits';
 import { Motifs } from './Motifs';
 import { Generer } from './Generer';
 import { Galerie } from './Galerie';
+import { Impression } from './Impression';
 import styles from './mockups.module.scss';
 
 const ONGLETS = [
@@ -15,7 +16,7 @@ const ONGLETS = [
   { value: 'galerie', label: 'Galerie', sousTitre: 'Tous les mockups, par motif puis par produit : repère celui qui cloche, régénère-le, envoie ce qui n’est pas à jour.' },
   { value: 'motifs', label: 'Motifs', sousTitre: 'Les fichiers de chaque motif, déposés une fois dans IVY, et la hauteur de ses quatre tailles d’impression. Le vêtement reste le même pour les quatre tailles : seul le dessin change.' },
   { value: 'gabarits', label: 'Gabarits', sousTitre: 'Un gabarit = une photo (modèle × couleur × face) et son cadre maximal. Réglé une fois.' },
-  { value: 'impression', label: 'Impression', sousTitre: 'Teintes et tailles d’impression de chaque produit, modifiables par lot.' },
+  { value: 'impression', label: 'Impression', sousTitre: 'Les métachamps d’impression de chaque produit × couleur : corrige-les par lot, et range les tailles d’impression par profil de modèle.' },
   { value: 'reglages', label: 'Réglages', sousTitre: 'Couleur et dessin de chaque teinte, logo DTF commun.' },
 ] as const;
 type Onglet = (typeof ONGLETS)[number]['value'];
@@ -61,7 +62,7 @@ export default function MockupsPage() {
           </div>
           <div hidden={onglet !== 'motifs'}><Motifs shopId={currentShop.id} choisi={motif} setChoisi={setMotif} /></div>
           <div hidden={onglet !== 'gabarits'}><Gabarits shopId={currentShop.id} /></div>
-          <div hidden={onglet !== 'impression'} className={styles.vide}>Bientôt.</div>
+          <div hidden={onglet !== 'impression'}><Impression shopId={currentShop.id} visible={onglet === 'impression'} /></div>
           <div hidden={onglet !== 'reglages'}><Reglages shopId={currentShop.id} /></div>
         </>
       )}

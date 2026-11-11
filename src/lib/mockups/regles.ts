@@ -54,6 +54,7 @@ export const TAILLES_IMPRESSION: TailleImpression[] = ['A-SMALL', 'B-MEDIUM', 'C
 export const ROLES = ['CLAIR', 'SOMBRE', 'MARQUE', 'DTF'] as const; // les fichiers sources d'un motif
 export type Role = (typeof ROLES)[number];
 export const METACHAMPS = { recto: 'fichier_d_impression', verso: 'verso_impression', taille: 'taille_d_impression' } as const;
+export const MIXTE = '(mixte)'; // les variantes d'une même couleur n'ont pas toutes la même valeur
 
 const FACES: Face[] = ['recto', 'verso'];
 const TAILLES_VETEMENT = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL'];
@@ -83,9 +84,14 @@ export function tailleDansNom(nom: string): TailleImpression | null {
   return m ? (m[1] as TailleImpression) : null;
 }
 
-export function rangTaille(tailleVetement: string): number {
-  const t = tailleVetement.trim().toUpperCase();
-  return TAILLES_VETEMENT.indexOf(ALIAS_VETEMENT[t] ?? t);
+/** Taille de vêtement sous une seule écriture : `2XL` → `XXL`, `XXXL` → `3XL` (Shopify a les deux). */
+export function tailleVetement(taille: string): string {
+  const t = taille.trim().toUpperCase();
+  return ALIAS_VETEMENT[t] ?? t;
+}
+
+export function rangTaille(taille: string): number {
+  return TAILLES_VETEMENT.indexOf(tailleVetement(taille));
 }
 
 export function teinteReglee(reglages: Reglages, teinte: string): { couleur: string; version: Version } | null {
@@ -221,17 +227,29 @@ function grilleTriee(tailles: Record<string, TailleImpression>): [string, Taille
   return Object.entries(tailles).sort((a, b) => rangTaille(a[0]) - rangTaille(b[0]));
 }
 
-/** Profils amorcés depuis Shopify : grilles portées par au moins deux produits (une seule = probable erreur). */
+/** L'impression ne rapetisse jamais quand le vêtement grandit. */
+function croissante(grille: Record<string, TailleImpression>): boolean {
+  const rangs = grilleTriee(grille).map(([, t]) => TAILLES_IMPRESSION.indexOf(t));
+  return rangs.every((r, i) => i === 0 || r >= rangs[i - 1]);
+}
+
+/**
+ * Profils amorcés depuis Shopify : grilles croissantes portées par au moins deux produits (une seule = probable erreur).
+ * Une grille contenue dans une plus complète, aux mêmes valeurs (S→XL dans XS→5XL), s'y fond : ses produits la suivent déjà.
+ */
 export function profilsDepuisExistants(produits: { modele: string; tailles: Record<string, TailleImpression> }[]): Omit<Profil, 'id'>[] {
-  const compte = new Map<string, { modele: string; grille: Record<string, TailleImpression>; n: number }>();
-  for (const p of produits) {
-    const cle = `${p.modele}|${JSON.stringify(grilleTriee(p.tailles))}`;
-    const deja = compte.get(cle);
-    if (deja) deja.n++;
-    else compte.set(cle, { modele: p.modele, grille: Object.fromEntries(grilleTriee(p.tailles)), n: 1 });
+  const grilles = produits
+    .filter((p) => croissante(p.tailles))
+    .map((p) => ({ modele: p.modele, grille: Object.fromEntries(grilleTriee(p.tailles)), n: 1 }))
+    .sort((a, b) => Object.keys(b.grille).length - Object.keys(a.grille).length);
+  const retenues: typeof grilles = [];
+  for (const g of grilles) {
+    const parent = retenues.find((r) => r.modele === g.modele && Object.entries(g.grille).every(([k, t]) => r.grille[k] === t));
+    if (parent) parent.n++;
+    else retenues.push(g);
   }
   const profils: Omit<Profil, 'id'>[] = [];
-  for (const { modele, grille, n } of compte.values()) {
+  for (const { modele, grille, n } of retenues) {
     if (n < 2) continue;
     const seuil = Object.entries(grille).find(([, t]) => t === 'D-MAX')?.[0];
     const base = seuil ? `D-Max dès ${seuil}` : 'Sans D-Max';
