@@ -9,7 +9,7 @@ export const maxDuration = 26; // un fichier fabriqué par appel
  * Fichiers d'impression (PNG 300 dpi) :
  * - GET `motif` + `nom` (+ `recto`, `verso`, `taille`) → `{ url }`, adresse signée du fichier, fabriqué s'il n'est pas gardé ;
  * - GET `motif` seul → `{ fichiers }`, toutes les demandes du motif, pour les refaire d'un coup ;
- * - POST `{ shopId, lignes }` → `{ lignes }`, les fichiers de chaque ligne d'une commande, d'après son impression figée.
+ * - POST `{ shopId, lignes }` → `{ lignes, adresses }`, les fichiers de chaque ligne, et d'un coup les adresses de ceux déjà gardés.
  */
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
   if (!acces.ok) return acces.reponse;
   if (!Array.isArray(corps?.lignes)) return erreur('lignes requises');
   try {
-    return NextResponse.json({ lignes: await fichiersDesLignes(acces.auth.svc, acces.shopId, corps.lignes) });
+    return NextResponse.json(await fichiersDesLignes(acces.auth.svc, acces.shopId, corps.lignes));
   } catch (e) {
     return erreur((e as Error).message, 500);
   }

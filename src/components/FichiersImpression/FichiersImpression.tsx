@@ -33,13 +33,14 @@ export function useFichiersImpression(shopId: string | undefined, lignesCommande
     if (!shopId || demandes.length === 0) return;
     let actif = true;
     (async () => {
-      const r = await authJson<{ lignes: Ligne[] }>('/api/mockups/impression', {
+      const r = await authJson<{ lignes: Ligne[]; adresses: Record<string, string> }>('/api/mockups/impression', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shopId, lignes: demandes }),
       });
       if (!actif) return;
       setLignes(Object.fromEntries(r.lignes.map((l) => [l.id, l])));
-      const uniques = new Map(r.lignes.flatMap((l) => l.fichiers).map((d) => [d.nom, d]));
-      for (const d of uniques.values()) {
+      setAdresses(r.adresses); // les fichiers déjà gardés sont prêts tout de suite
+      const aFabriquer = new Map(r.lignes.flatMap((l) => l.fichiers).filter((d) => !r.adresses[d.nom]).map((d) => [d.nom, d]));
+      for (const d of aFabriquer.values()) {
         // Un fichier qui échoue ne bloque pas les suivants : le sien reste « préparation… ».
         const url = await obtenirAdresse(shopId, d).catch(() => null);
         if (!actif) return;

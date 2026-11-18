@@ -6,7 +6,7 @@ import { lireGabarits, lireMotif, lireProduit, lireReglages } from './donnees';
 import { BUCKET, retirer, urlPublique } from './serveur';
 import {
   avec300dpi, demandesImpression, fichierDemande, lireImpression, lireTaille, motifDuTitre, planifierApercus, roleDuFichier, teinteReglee, PX_PAR_CM_300DPI,
-  type Apercu, type DemandeImpression, type Face, type LigneAImprimer, type VarianteImpression,
+  type Apercu, type DemandeImpression, type Face, type LigneAImprimer, type Reglages, type VarianteImpression,
 } from './regles';
 
 /** Côté serveur : monte un mockup avec le même code que le navigateur, l'enregistre dans IVY. */
@@ -77,19 +77,27 @@ const DUREE_ADRESSE = 3600; // secondes de validité d'une adresse signée
  * Fabriqué une fois puis gardé : son chemin porte l'empreinte de ce qui le fabrique (source, axe, hauteur, teinte),
  * donc un motif changé donne un autre chemin, le fichier est refait et l'ancien effacé.
  */
-export async function adresseImpression(svc: SupabaseClient, shopId: string, demande: DemandeImpression): Promise<string | null> {
-  const { motif: cle, nom } = demande;
-  const [{ reglages, dtfUrl }, motif] = await Promise.all([lireReglages(svc, shopId), lireMotif(svc, shopId, cle)]);
-  const fichier = fichierDemande(demande, reglages, motif);
+type Motif = Awaited<ReturnType<typeof lireMotif>>;
+
+/** Où un fichier d'impression est gardé, et de quoi le fabriquer ; null s'il ne peut pas l'être. */
+function planImpression(shopId: string, d: DemandeImpression, reglages: Reglages, dtfUrl: string | null, motif: Motif) {
+  const fichier = fichierDemande(d, reglages, motif);
   const teinte = fichier && teinteReglee(reglages, fichier.teinte);
   const url = fichier && (motif.fichiers[fichier.source]?.url ?? (fichier.source === 'DTF' ? dtfUrl : null));
   if (!fichier || !teinte || !url) return null;
-
   const axe = fichier.hauteurCm ? motif.axe ?? null : null; // marque et DTF : pas d'axe
   const empreinte = createHash('sha256').update(JSON.stringify([url, fichier.hauteurCm, axe, teinte.couleur])).digest('hex').slice(0, 16);
-  const dossier = `${shopId}/${cle.replace(/[^A-Z0-9]+/g, '-')}`;
-  const base = nom.replace(/[^A-Za-z0-9-]+/g, '-');
-  const chemin = `${dossier}/${base}.${empreinte}.png`;
+  const dossier = `${shopId}/${d.motif.replace(/[^A-Z0-9]+/g, '-')}`;
+  const base = d.nom.replace(/[^A-Za-z0-9-]+/g, '-');
+  return { fichier, teinte, url, axe, dossier, base, chemin: `${dossier}/${base}.${empreinte}.png` };
+}
+
+export async function adresseImpression(svc: SupabaseClient, shopId: string, demande: DemandeImpression): Promise<string | null> {
+  const { nom } = demande;
+  const [{ reglages, dtfUrl }, motif] = await Promise.all([lireReglages(svc, shopId), lireMotif(svc, shopId, demande.motif)]);
+  const plan = planImpression(shopId, demande, reglages, dtfUrl, motif);
+  if (!plan) return null;
+  const { fichier, teinte, url, axe, dossier, base, chemin } = plan;
   const stock = svc.storage.from(BUCKET_IMPRESSION);
 
   const { data: existants } = await stock.list(dossier, { search: `${base}.` });
@@ -120,12 +128,15 @@ export async function fichiersDuMotifAImprimer(svc: SupabaseClient, shopId: stri
   return demandesImpression(cle, variantes, reglages, motif);
 }
 
-/** Pour chaque ligne d'une commande : les fichiers qu'IVY sait fabriquer, et ce qui manque pour les autres. */
-export async function fichiersDesLignes(
-  svc: SupabaseClient, shopId: string, lignes: LigneAImprimer[],
-): Promise<{ id: string; fichiers: DemandeImpression[]; manque: string | null }[]> {
+/**
+ * Pour chaque ligne d'une commande : les fichiers qu'IVY sait fabriquer, et ce qui manque pour les autres.
+ * `adresses` donne d'un coup celles des fichiers déjà gardés ; seuls les autres restent à fabriquer un par un.
+ */
+export async function fichiersDesLignes(svc: SupabaseClient, shopId: string, lignes: LigneAImprimer[]): Promise<{
+  lignes: { id: string; fichiers: DemandeImpression[]; manque: string | null }[]; adresses: Record<string, string>;
+}> {
   const { reglages, dtfUrl } = await lireReglages(svc, shopId);
-  const motifs = new Map<string, Awaited<ReturnType<typeof lireMotif>>>();
+  const motifs = new Map<string, Motif>();
 
   const resultat = [];
   for (const l of lignes) {
@@ -152,5 +163,24 @@ export async function fichiersDesLignes(
         : demandes.length ? null : 'métachamps d’impression à régler',
     });
   }
-  return resultat;
+
+  // Les fichiers déjà gardés : un listage par motif, puis toutes leurs adresses en un appel.
+  const plans = new Map<string, string>(); // chemin → nom
+  for (const d of resultat.flatMap((l) => l.fichiers)) {
+    const plan = planImpression(shopId, d, reglages, dtfUrl, motifs.get(d.motif)!);
+    if (plan) plans.set(plan.chemin, d.nom);
+  }
+  const stock = svc.storage.from(BUCKET_IMPRESSION);
+  const gardes: string[] = [];
+  for (const dossier of new Set([...plans.keys()].map((c) => c.slice(0, c.lastIndexOf('/'))))) {
+    const { data } = await stock.list(dossier, { limit: 1000 });
+    for (const f of data ?? []) if (plans.has(`${dossier}/${f.name}`)) gardes.push(`${dossier}/${f.name}`);
+  }
+  const adresses: Record<string, string> = {};
+  if (gardes.length) {
+    const { data, error } = await stock.createSignedUrls(gardes, DUREE_ADRESSE);
+    if (error) throw new Error(error.message);
+    for (const s of data ?? []) if (s.path && s.signedUrl) adresses[plans.get(s.path)!] = s.signedUrl;
+  }
+  return { lignes: resultat, adresses };
 }
