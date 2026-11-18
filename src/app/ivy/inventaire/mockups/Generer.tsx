@@ -8,10 +8,11 @@ import { modals } from '@mantine/modals';
 import { useTerminalStream } from '@/hooks/useTerminalStream';
 import { notifications } from '@mantine/notifications';
 import { zipSync } from 'fflate';
-import { authFetch, authJson } from '@/lib/auth-fetch';
+import { authJson } from '@/lib/auth-fetch';
+import { obtenirAdresse } from '@/components/FichiersImpression';
 import { envoyerSurShopify } from './envoiShopify';
 import {
-  fichiersImpression, lireImpression, motifDuTitre, planifierApercus, teinteReglee, trouverFichier,
+  demandesImpression, fichiersImpression, lireImpression, motifDuTitre, planifierApercus, teinteReglee, trouverFichier,
   type Apercu, type Face, type Gabarit, type Impression, type VarianteImpression,
 } from '@/lib/mockups/regles';
 import { useReglages } from './Reglages';
@@ -190,15 +191,16 @@ export function Generer({ shopId, produitId, setProduitId, onReglerTailles }: {
   );
   const [impressionEnCours, setImpressionEnCours] = useState<string | null>(null);
 
-  /** Les fichiers d'impression, fabriqués un par un côté serveur (PNG 300 dpi), réunis dans un zip. */
+  /** Les fichiers d'impression, gardés (ou fabriqués) côté serveur en PNG 300 dpi, réunis dans un zip. */
   async function telechargerImpression() {
+    if (!motif || !reglages) return;
+    const demandes = demandesImpression(motif.nom, variantes, reglages, motif);
     const entrees: Record<string, Uint8Array> = {};
     try {
-      for (const [i, f] of aImprimer.entries()) {
-        setImpressionEnCours(`${i + 1} / ${aImprimer.length}`);
-        const r = await authFetch(`/api/mockups/impression?${new URLSearchParams({ shopId, productId: produitId!, nom: f.nom })}`);
-        if (!r.ok) throw new Error(`${f.nom} : ${(await r.json().catch(() => ({}))).error ?? r.status}`);
-        entrees[f.nom] = new Uint8Array(await r.arrayBuffer());
+      for (const [i, f] of demandes.entries()) {
+        setImpressionEnCours(`${i + 1} / ${demandes.length}`);
+        // La route rend une adresse signée : le fichier (11 Mo) vient du stockage, pas de la fonction.
+        entrees[f.nom] = new Uint8Array(await (await fetch(await obtenirAdresse(shopId, f))).arrayBuffer());
       }
       const url = URL.createObjectURL(new Blob([zipSync(entrees, { level: 0 }) as BlobPart], { type: 'application/zip' }));
       const lien = document.createElement('a');

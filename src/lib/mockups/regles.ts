@@ -297,6 +297,31 @@ export function profilSuivi(modele: string, tailles: Record<string, TailleImpres
 
 // --- Fichiers d'impression ------------------------------------------------------------
 
+/** Ce qui décrit un fichier d'impression sans dépendre d'un produit : le motif, et l'impression qui l'appelle. */
+export interface DemandeImpression { motif: string; nom: string; recto: string | null; verso: string | null; taille: string | null }
+export type ImpressionLue = Pick<VarianteImpression, 'recto' | 'verso'> & { taille: string | null };
+
+/** Une impression (recto, verso, taille) vue comme une variante, pour `fichiersImpression`. */
+function commeVariante(i: ImpressionLue): VarianteImpression {
+  return { id: '', shopifyId: '', couleur: '', tailleVetement: null, sku: null, recto: i.recto, verso: i.verso, taille: lireTaille(i.taille) };
+}
+
+/** Les fichiers que demandent des impressions, chacun une fois, avec l'impression qui sait le refaire. */
+export function demandesImpression(motif: string, impressions: ImpressionLue[], reglages: Reglages, fiche: FicheMotif | null): DemandeImpression[] {
+  const demandes = new Map<string, DemandeImpression>();
+  for (const i of impressions) {
+    for (const f of fichiersImpression(motif, [commeVariante(i)], reglages, fiche)) {
+      if (!demandes.has(f.nom)) demandes.set(f.nom, { motif, nom: f.nom, recto: i.recto, verso: i.verso, taille: i.taille });
+    }
+  }
+  return [...demandes.values()].sort((a, b) => (a.nom < b.nom ? -1 : 1));
+}
+
+/** Le fichier qu'une demande désigne, ou null s'il n'existe plus (motif ou réglages changés depuis). */
+export function fichierDemande(d: DemandeImpression, reglages: Reglages, fiche: FicheMotif | null): FichierImpression | null {
+  return fichiersImpression(d.motif, [commeVariante(d)], reglages, fiche).find((f) => f.nom === d.nom) ?? null;
+}
+
 /** Les fichiers à imprimer pour un produit, nommés comme l'atelier les lit sur la commande. */
 export function fichiersImpression(motif: string, variantes: VarianteImpression[], reglages: Reglages, fiche: FicheMotif | null): FichierImpression[] {
   const fichiers = new Map<string, FichierImpression>();

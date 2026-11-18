@@ -1,0 +1,36 @@
+@use '@/style/_tokens.scss' as *;
+
+.rangee {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.fichier {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: $radius-sm;
+  border: 1px solid currentColor;
+  color: $plum;
+  font-family: $font-inter;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: grab;
+  user-select: none;
+
+  &[draggable='false'] {
+    cursor: progress;
+    opacity: 0.6;
+  }
+}
+
+.manque {
+  display: block;
+  margin-top: 4px;
+  font-family: $font-inter;
+  font-size: 10.5px;
+  color: $clay;
+}

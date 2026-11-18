@@ -14,6 +14,7 @@ import { SortOptionsBar } from '@/components/Inventory/SortOptionsBar';
 import { StatusBadge, type StatusBadgeVariant } from '@/components/StatusBadge';
 import { SkuChip } from '@/components/SkuChip';
 import { MetaChip } from '@/components/MetaChip';
+import { FichiersDeLaLigne, useFichiersImpression } from '@/components/FichiersImpression';
 import { FilterChip } from '@/components/FilterChip';
 import { getColorHex, isColorOption, loadColorMappingsFromSupabase, areColorMappingsLoaded, transformColor } from '@/utils/color-transformer';
 import { useTerminalStream } from '@/hooks/useTerminalStream';
@@ -92,6 +93,7 @@ export default function OrderDetailPage() {
   const [saving, setSaving] = useState(false);
   const [order, setOrder] = useState<SupplierOrder | null>(null);
   const [items, setItems] = useState<OrderItem[]>([]);
+  const impression = useFichiersImpression(currentShop?.id, items.flatMap((i) => (i.variant_id ? [{ variantId: i.variant_id, metafields: i.metafields ?? {} }] : [])));
   const [note, setNote] = useState('');
   const [balanceAdjustment, setBalanceAdjustment] = useState(0);
 
@@ -1375,6 +1377,7 @@ export default function OrderDetailPage() {
                           ) : (
                             <span className={styles.metaCellEmpty}>—</span>
                           )}
+                          {firstItem.variant_id && <FichiersDeLaLigne ligne={impression.lignes[firstItem.variant_id]} adresses={impression.adresses} />}
                         </td>
                         <td className={clsx(styles.td, styles.tdRight)}>
                           {isCompleted ? (

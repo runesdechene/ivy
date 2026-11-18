@@ -5,10 +5,11 @@ import { useQuery } from '@tanstack/react-query';
 import { Badge, Button, FileButton, Group, NumberInput, Select, Slider, TextInput } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { authFetch, authJson } from '@/lib/auth-fetch';
+import { obtenirAdresse } from '@/components/FichiersImpression';
 import {
   CADRE_HAUTEUR_CM, CADRE_LARGEUR_CM, ROLES, TAILLES_IMPRESSION,
   axeSymetrique, hauteurMax, teinteReglee,
-  type Motif, type Role, type TailleImpression,
+  type DemandeImpression, type Motif, type Role, type TailleImpression,
 } from '@/lib/mockups/regles';
 import { centrer, chargerGabarit, chargerSource, composerMockup, peindre, versBlob, type GabaritCharge, type Source } from '@/lib/mockups/composer';
 import { useReglages } from './Reglages';
@@ -129,6 +130,7 @@ export function Motifs({ shopId, choisi, setChoisi }: { shopId: string; choisi: 
   const [apercus, setApercus] = useState<Partial<Record<TailleImpression, string>>>({});
   const [envoi, setEnvoi] = useState(false);
   const [depot, setDepot] = useState(false);
+  const [regeneration, setRegeneration] = useState<string | null>(null); // « 3 / 12 » pendant qu'IVY refait les fichiers
   const urlsAffichees = useRef<string[]>([]);
 
   const liste = motifs.data?.motifs ?? [];
@@ -204,6 +206,23 @@ export function Motifs({ shopId, choisi, setChoisi }: { shopId: string; choisi: 
     });
   }
 
+  /** Refait d'un coup les fichiers d'impression du motif ; le serveur reprend tels quels ceux qui n'ont pas changé. */
+  async function regenererImpression(nom: string) {
+    try {
+      const { fichiers } = await authJson<{ fichiers: DemandeImpression[] }>(
+        `/api/mockups/impression?${new URLSearchParams({ shopId, motif: nom })}`);
+      for (const [i, d] of fichiers.entries()) {
+        setRegeneration(`${i + 1} / ${fichiers.length}`);
+        await obtenirAdresse(shopId, d); // la route fabrique ce qui a changé
+      }
+      if (fichiers.length) notifications.show({ color: 'green', message: `${fichiers.length} fichier(s) d’impression à jour` });
+    } catch (e) {
+      notifications.show({ color: 'red', message: `Fichiers d’impression : ${(e as Error).message}` });
+    } finally {
+      setRegeneration(null);
+    }
+  }
+
   async function enregistrer() {
     if (!motif) return;
     setEnvoi(true);
@@ -211,6 +230,7 @@ export function Motifs({ shopId, choisi, setChoisi }: { shopId: string; choisi: 
       await enregistrerFiche(motif.nom, hauteurs, axe);
       notifications.show({ color: 'green', message: `Axe et tailles de ${motif.libelle} enregistrés` });
       await motifs.refetch();
+      void regenererImpression(motif.nom); // en fond : on peut continuer à travailler
     } catch (e) {
       notifications.show({ color: 'red', message: (e as Error).message });
     } finally {
@@ -245,6 +265,7 @@ export function Motifs({ shopId, choisi, setChoisi }: { shopId: string; choisi: 
       if (!r.ok) throw new Error(corps.error ?? 'Dépôt refusé');
       notifications.show({ color: 'green', message: `${fichiers.length} fichier(s) déposé(s) pour ${motif.libelle}` });
       await motifs.refetch();
+      void regenererImpression(motif.nom);
     } catch (e) {
       notifications.show({ color: 'red', message: (e as Error).message });
     } finally {
@@ -333,6 +354,7 @@ export function Motifs({ shopId, choisi, setChoisi }: { shopId: string; choisi: 
             />
             <Select size="xs" w={100} label="Teinte" value={teinteVue} onChange={setTeinte} data={teintes} />
             <Button size="xs" loading={envoi} onClick={enregistrer}>Enregistrer</Button>
+            {regeneration && <span className={styles.aide}>Fichiers d’impression : {regeneration}</span>}
           </section>
 
           {!gabarit ? (

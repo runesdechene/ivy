@@ -4,7 +4,7 @@ import { crc32 } from 'node:zlib';
 import {
   lireImpression, lireTaille, tailleDansNom, rangTaille, teinteReglee, trouverFichier,
   axeSymetrique, elargir, hauteurMax, placerMotif, placerPoitrine, planifierApercus, profilSuivi, profilsDepuisExistants,
-  fichiersImpression, bornesDessin, avec300dpi, cleMotif, carteOmbres, roleDuFichier, motifDuTitre,
+  fichiersImpression, demandesImpression, fichierDemande, bornesDessin, avec300dpi, cleMotif, carteOmbres, roleDuFichier, motifDuTitre,
 } from './regles.ts';
 import type { Reglages, FicheMotif, Cadre, Gabarit, VarianteImpression, Profil, Rect } from './regles.ts';
 
@@ -242,4 +242,18 @@ test('axeSymetrique : retrouve le milieu d’un cadre malgré un élément qui d
   plein(0, 4, 0, 60); plein(76, 80, 0, 60); plein(0, 80, 0, 4); plein(0, 80, 56, 60); // cadre de 0 à 80 : milieu à 40
   plein(80, 100, 30, 34); // la queue qui déborde
   assert.equal(Math.round(axeSymetrique(alpha, l, h) * l), 40);
+});
+
+test('demandesImpression : l impression de la commande fait foi, un fichier par nom, retrouvable par fichierDemande', () => {
+  // Taille écrite comme sur la commande (« C-Large ») : la demande la garde telle quelle.
+  const lignes = [
+    { recto: 'DTG-CUI', verso: null, taille: 'C-Large' },
+    { recto: 'DTG-CUI', verso: null, taille: 'C-LARGE' },
+    { recto: 'MARQUE-TSHIRT-VR1', verso: 'DTG-VR1', taille: 'D-Max' },
+  ];
+  const demandes = demandesImpression('LOKI', lignes, R, F);
+  assert.deepEqual(demandes.map((d) => d.nom), ['LOKI DTG-CUI C-LARGE.png', 'LOKI DTG-VR1 D-MAX.png', 'LOKI DTG-VR1 MARQUE.png']);
+  assert.deepEqual(demandes[0], { motif: 'LOKI', nom: 'LOKI DTG-CUI C-LARGE.png', recto: 'DTG-CUI', verso: null, taille: 'C-Large' });
+  assert.equal(fichierDemande(demandes[1], R, F)?.hauteurCm, 45.7);
+  assert.equal(fichierDemande({ ...demandes[0], nom: 'LOKI DTG-CUI D-MAX.png' }, R, F), null); // nom qui ne vient pas de cette impression
 });
