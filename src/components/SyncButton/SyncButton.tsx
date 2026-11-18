@@ -4,6 +4,7 @@ import { notifications } from '@mantine/notifications';
 import { useState } from 'react';
 import { useShop } from '@/context/ShopContext';
 import styles from './SyncButton.module.scss';
+import { authFetch } from '@/lib/auth-fetch';
 
 export function SyncButton() {
   const [isSyncing, setIsSyncing] = useState(false);
@@ -22,7 +23,7 @@ export function SyncButton() {
     try {
       setIsSyncing(true);
       
-      const response = await fetch('/api/sync', {
+      const response = await authFetch('/api/sync', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

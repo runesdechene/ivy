@@ -2,6 +2,7 @@
 
 import { useCallback } from 'react';
 import { useTerminal, TerminalAction } from '@/contexts/TerminalContext';
+import { authFetch } from '@/lib/auth-fetch';
 
 export function useTerminalStream() {
   const terminal = useTerminal();
@@ -21,7 +22,7 @@ export function useTerminalStream() {
     }
 
     try {
-      const response = await fetch(url);
+      const response = await authFetch(url); // les routes en flux vérifient la session
 
       if (!response.body) {
         terminal.log('❌ Erreur: Pas de réponse du serveur', 'error');

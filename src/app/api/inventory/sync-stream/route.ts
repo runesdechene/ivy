@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { autoriser } from '@/lib/mockups/serveur';
 import { createClient } from '@supabase/supabase-js';
 import { syncVariantMetafields, deduplicateLocalVariants } from '@/lib/shopify-metafields';
 import { toIvyStatus } from '@/lib/shopify-status';
@@ -87,6 +88,8 @@ async function loadActiveVariants(shopId: string, productType: string | null) {
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const shopId = searchParams.get('shopId');
+  const acces = await autoriser(request, shopId); // la session doit appartenir à cette boutique
+  if (!acces.ok) return acces.reponse;
   const productType = searchParams.get('productType');
   const phase = searchParams.get('phase') || 'products';
   const offset = parseInt(searchParams.get('offset') || '0', 10);

@@ -11,6 +11,7 @@ import { LocationProvider } from '@/context/LocationContext';
 import { LocationSelector } from '@/components/LocationSelector';
 import { useShop } from '@/context/ShopContext';
 import { LastSyncTime } from '@/components/LastSyncTime';
+import { authFetch } from '@/lib/auth-fetch';
 
 interface IvyLayoutProps {
   children: React.ReactNode;
@@ -32,7 +33,7 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
 
     setSyncing(true);
     try {
-      const response = await fetch('/api/sync', {
+      const response = await authFetch('/api/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ shopId: currentShop.id }),

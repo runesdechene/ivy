@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { autoriser } from '@/lib/mockups/serveur';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -138,6 +139,8 @@ async function shopifyGraphQL(
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const shopId = searchParams.get('shopId');
+  const acces = await autoriser(request, shopId); // la session doit appartenir à cette boutique
+  if (!acces.ok) return acces.reponse;
   const target = searchParams.get('target'); // 'shopify' or 'local'
 
   if (!shopId || !target) {

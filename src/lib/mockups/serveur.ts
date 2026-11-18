@@ -21,7 +21,7 @@ function cleAutomateValide(request: NextRequest): boolean {
 
 /**
  * Authentifie la requête et vérifie que la boutique demandée appartient à l'utilisateur.
- * La commande `pnpm mockups` passe par une clé d'automatisation, valable pour les routes /api/mockups seulement.
+ * La commande `pnpm mockups` et les scripts de Claude passent par une clé d'automatisation (`x-ivy-automate`).
  */
 export async function autoriser(
   request: NextRequest, shopId: string | null | undefined,

@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { autoriser } from '@/lib/mockups/serveur';
 import { createServerClient } from '@/supabase/client';
 import { fetchOrdersApiAction } from '@/actions/fetch-orders-api-action';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const { shopId } = await request.json();
 
@@ -12,6 +13,8 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+    const acces = await autoriser(request, shopId); // la session doit appartenir à cette boutique
+    if (!acces.ok) return acces.reponse;
 
     const supabase = createServerClient();
 
