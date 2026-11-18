@@ -93,7 +93,11 @@ export default function OrderDetailPage() {
   const [saving, setSaving] = useState(false);
   const [order, setOrder] = useState<SupplierOrder | null>(null);
   const [items, setItems] = useState<OrderItem[]>([]);
-  const impression = useFichiersImpression(currentShop?.id, items.flatMap((i) => (i.variant_id ? [{ variantId: i.variant_id, metafields: i.metafields ?? {} }] : [])));
+  // L'impression figée sur la commande fait foi, pas les réglages actuels du produit.
+  const impression = useFichiersImpression(currentShop?.id, items.flatMap((i) => (i.variant_id ? [{
+    id: i.variant_id, titre: i.product_title,
+    recto: i.metafields?.['Recto'] ?? null, verso: i.metafields?.['Verso'] ?? null, taille: i.metafields?.['Taille de print'] ?? null,
+  }] : [])));
   const [note, setNote] = useState('');
   const [balanceAdjustment, setBalanceAdjustment] = useState(0);
 

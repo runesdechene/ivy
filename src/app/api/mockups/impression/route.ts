@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { autoriser, erreur } from '@/lib/mockups/serveur';
-import { adresseImpression, fichiersDesLignes, fichiersDuMotifAImprimer, type LigneAImprimer } from '@/lib/mockups/generer';
+import { adresseImpression, fichiersDesLignes, fichiersDuMotifAImprimer } from '@/lib/mockups/generer';
+import type { LigneAImprimer } from '@/lib/mockups/regles';
 
 export const maxDuration = 26; // un fichier fabriqué par appel
 

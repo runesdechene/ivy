@@ -5,8 +5,8 @@ import { centrer, chargerGabarit, chargerSource, composerMockup, peindre, utilis
 import { lireGabarits, lireMotif, lireProduit, lireReglages } from './donnees';
 import { BUCKET, retirer, urlPublique } from './serveur';
 import {
-  avec300dpi, demandesImpression, fichierDemande, motifDuTitre, planifierApercus, roleDuFichier, teinteReglee, PX_PAR_CM_300DPI,
-  type Apercu, type DemandeImpression, type Face, type ImpressionLue, type VarianteImpression,
+  avec300dpi, demandesImpression, fichierDemande, lireImpression, lireTaille, motifDuTitre, planifierApercus, roleDuFichier, teinteReglee, PX_PAR_CM_300DPI,
+  type Apercu, type DemandeImpression, type Face, type LigneAImprimer, type VarianteImpression,
 } from './regles';
 
 /** Côté serveur : monte un mockup avec le même code que le navigateur, l'enregistre dans IVY. */
@@ -120,35 +120,36 @@ export async function fichiersDuMotifAImprimer(svc: SupabaseClient, shopId: stri
   return demandesImpression(cle, variantes, reglages, motif);
 }
 
-/** Une ligne de commande : sa variante (pour trouver le motif) et l'impression figée à la commande. */
-export type LigneAImprimer = ImpressionLue & { variantId: string };
-
-/** Pour chaque ligne d'une commande : ses fichiers, d'après l'impression de la commande (elle fait foi), ou ce qui manque. */
+/** Pour chaque ligne d'une commande : les fichiers qu'IVY sait fabriquer, et ce qui manque pour les autres. */
 export async function fichiersDesLignes(
   svc: SupabaseClient, shopId: string, lignes: LigneAImprimer[],
-): Promise<{ variantId: string; fichiers: DemandeImpression[]; manque: string | null }[]> {
-  const { data, error } = await svc.from('product_variants').select('id, products!inner(title, shop_id)')
-    .in('id', lignes.map((l) => l.variantId)).eq('products.shop_id', shopId)
-    .returns<{ id: string; products: { title: string } }[]>();
-  if (error) throw new Error(error.message);
-  const titreDe = new Map((data ?? []).map((v) => [v.id, v.products.title]));
-  const { reglages } = await lireReglages(svc, shopId);
+): Promise<{ id: string; fichiers: DemandeImpression[]; manque: string | null }[]> {
+  const { reglages, dtfUrl } = await lireReglages(svc, shopId);
   const motifs = new Map<string, Awaited<ReturnType<typeof lireMotif>>>();
 
   const resultat = [];
   for (const l of lignes) {
-    const cle = motifDuTitre(titreDe.get(l.variantId) ?? '');
-    if (!cle) { resultat.push({ variantId: l.variantId, fichiers: [], manque: 'motif introuvable dans le titre' }); continue; }
+    const cle = motifDuTitre(l.titre);
+    if (!cle) { resultat.push({ id: l.id, fichiers: [], manque: 'motif introuvable dans le titre' }); continue; }
     if (!motifs.has(cle)) motifs.set(cle, await lireMotif(svc, shopId, cle));
     const motif = motifs.get(cle)!;
-    const fichiers = demandesImpression(cle, [l], reglages, motif);
-    const sansSource = fichiers.map((d) => fichierDemande(d, reglages, motif)).find((f) => f && f.source !== 'DTF' && !motif.fichiers[f.source]);
+    const demandes = demandesImpression(cle, [l], reglages, motif);
+    // Une source absente (le logo commun pour le DTF) : ce fichier ne peut pas être fabriqué, on le dit au lieu de l'offrir.
+    const source = (d: DemandeImpression) => {
+      const f = fichierDemande(d, reglages, motif);
+      return f && (motif.fichiers[f.source] || (f.source === 'DTF' && dtfUrl) ? null : f.source);
+    };
+    const absente = demandes.map(source).find(Boolean);
+    // Une face en DTG a besoin de la hauteur de sa taille dans la fiche du motif.
+    const taille = lireTaille(l.taille);
+    const sansHauteur = !(taille && motif.hauteurs[taille])
+      && (['recto', 'verso'] as const).some((face) => lireImpression(l[face], face)?.pose === 'motif');
     resultat.push({
-      variantId: l.variantId,
-      fichiers,
-      manque: sansSource ? `fichier ${sansSource.source} à déposer dans Motifs`
-        : fichiers.length ? null
-        : Object.keys(motif.hauteurs).length ? 'métachamps d’impression à régler' : 'tailles du motif à régler dans Motifs',
+      id: l.id,
+      fichiers: demandes.filter((d) => !source(d)),
+      manque: absente ? `fichier ${absente} à déposer dans Motifs`
+        : sansHauteur ? 'tailles du motif à régler dans Motifs'
+        : demandes.length ? null : 'métachamps d’impression à régler',
     });
   }
   return resultat;

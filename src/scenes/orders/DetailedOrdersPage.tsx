@@ -10,6 +10,8 @@ import { VariantCheckbox } from '@/components/VariantCheckbox';
 import { StatusBadge } from '@/components/StatusBadge';
 import { TagPill } from '@/components/TagPill';
 import { MetaChip } from '@/components/MetaChip';
+import { FichiersDeLaLigne, useFichiersImpression } from '@/components/FichiersImpression';
+import { METACHAMPS, type LigneAImprimer } from '@/lib/mockups/regles';
 import { SkuChip } from '@/components/SkuChip';
 import { FilterChip } from '@/components/FilterChip';
 import { ProductThumbnail } from '@/components/ProductThumbnail';
@@ -64,14 +66,24 @@ function getDaysSince(createdAt: string): number {
 // ItemRow
 // ---------------------------------------------------------------------------
 
-interface ItemRowProps {
-  order: ShopifyOrder;
-  item: NonNullable<ShopifyOrder['lineItems']>[number];
-  index: number;
-  metafieldConfigs: MetafieldConfig[];
+type Impression = ReturnType<typeof useFichiersImpression>;
+type LigneCommande = NonNullable<ShopifyOrder['lineItems']>[number];
+
+/** Une ligne de commande vue par l'impression : le titre donne le motif, les métachamps de la variante l'impression. */
+function ligneAImprimer(item: LigneCommande): LigneAImprimer {
+  const mf = (cle: string) => item.variant?.metafields?.find((m) => m.key === cle)?.value ?? null;
+  return { id: item.id, titre: item.title, recto: mf(METACHAMPS.recto), verso: mf(METACHAMPS.verso), taille: mf(METACHAMPS.taille) };
 }
 
-function ItemRow({ order, item, index, metafieldConfigs }: ItemRowProps) {
+interface ItemRowProps {
+  order: ShopifyOrder;
+  item: LigneCommande;
+  index: number;
+  metafieldConfigs: MetafieldConfig[];
+  impression: Impression;
+}
+
+function ItemRow({ order, item, index, metafieldConfigs, impression }: ItemRowProps) {
   const color = getColorFromVariant(item);
   const size = getSizeFromVariant(item);
   const selectedOptions = getSelectedOptions(item);
@@ -169,6 +181,7 @@ function ItemRow({ order, item, index, metafieldConfigs }: ItemRowProps) {
             ))}
           </div>
         )}
+        {!item.isCancelled && <FichiersDeLaLigne ligne={impression.lignes[item.id]} adresses={impression.adresses} />}
       </div>
 
       <CostDisplay qty={item.quantity} unitCost={item.unitCost ?? null} />
@@ -184,10 +197,11 @@ interface OrderCardProps {
   order: ShopifyOrder;
   progress: OrderProgress;
   metafieldConfigs: MetafieldConfig[];
+  impression: Impression;
   onOpen: () => void;
 }
 
-function OrderCard({ order, progress, metafieldConfigs, onOpen }: OrderCardProps) {
+function OrderCard({ order, progress, metafieldConfigs, impression, onOpen }: OrderCardProps) {
   const [isMarkingAsFulfilled, setIsMarkingAsFulfilled] = useState(false);
   const [kebabOpen, setKebabOpen] = useState(false);
   const kebabRef = useRef<HTMLDivElement | null>(null);
@@ -330,6 +344,7 @@ function OrderCard({ order, progress, metafieldConfigs, onOpen }: OrderCardProps
               item={item}
               index={index}
               metafieldConfigs={metafieldConfigs}
+              impression={impression}
             />
           ))
         )}
@@ -406,6 +421,9 @@ export function DetailedOrdersPage() {
   const [metafieldConfigs, setMetafieldConfigs] = useState<MetafieldConfig[]>([]);
   const [filter, setFilter] = useState<FilterMode>('all');
   const [search, setSearch] = useState('');
+  // Les fichiers d'impression de toutes les commandes en cours, chacun demandé une fois.
+  const impression = useFichiersImpression(currentShop?.id,
+    pendingOrders.flatMap((o) => (o.lineItems ?? []).filter((i) => !i.isCancelled).map(ligneAImprimer)));
 
   const fetchSettings = useCallback(async () => {
     if (!currentShop) return;
@@ -599,6 +617,7 @@ export function DetailedOrdersPage() {
               order={order}
               progress={getProgress(order.id)}
               metafieldConfigs={metafieldConfigs}
+              impression={impression}
               onOpen={() => onSelectOrder(order.id)}
             />
           ))}

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Loader } from '@mantine/core';
 import { IconPrinter } from '@tabler/icons-react';
 import { authJson } from '@/lib/auth-fetch';
-import type { DemandeImpression } from '@/lib/mockups/regles';
+import type { DemandeImpression, LigneAImprimer } from '@/lib/mockups/regles';
 import styles from './FichiersImpression.module.scss';
 
 /**
@@ -20,17 +20,13 @@ export async function obtenirAdresse(shopId: string, d: DemandeImpression): Prom
   return (await authJson<{ url: string }>(`/api/mockups/impression?${p}`)).url;
 }
 
-/** Une ligne de commande vue par l'impression : sa variante et ses métachamps figés à la commande. */
-export interface LigneCommande { variantId: string; metafields: Record<string, string> }
-interface Ligne { variantId: string; fichiers: DemandeImpression[]; manque: string | null }
+interface Ligne { id: string; fichiers: DemandeImpression[]; manque: string | null }
 
-export function useFichiersImpression(shopId: string | undefined, lignesCommande: LigneCommande[]) {
+/** `lignes` : chaque ligne de la commande, avec l'impression qu'elle porte (figée sur une commande de stock). */
+export function useFichiersImpression(shopId: string | undefined, lignesCommande: LigneAImprimer[]) {
   const [lignes, setLignes] = useState<Record<string, Ligne>>({});
   const [adresses, setAdresses] = useState<Record<string, string>>({});
-  // L'impression vient de la commande (« Recto », « Verso », « Taille de print ») : elle fait foi, pas la fiche actuelle.
-  const demandes = [...new Map(lignesCommande.map((l) => [l.variantId, {
-    variantId: l.variantId, recto: l.metafields['Recto'] ?? null, verso: l.metafields['Verso'] ?? null, taille: l.metafields['Taille de print'] ?? null,
-  }])).values()];
+  const demandes = [...new Map(lignesCommande.map((l) => [l.id, l])).values()];
   const cle = JSON.stringify(demandes);
 
   useEffect(() => {
@@ -41,14 +37,15 @@ export function useFichiersImpression(shopId: string | undefined, lignesCommande
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shopId, lignes: demandes }),
       });
       if (!actif) return;
-      setLignes(Object.fromEntries(r.lignes.map((l) => [l.variantId, l])));
+      setLignes(Object.fromEntries(r.lignes.map((l) => [l.id, l])));
       const uniques = new Map(r.lignes.flatMap((l) => l.fichiers).map((d) => [d.nom, d]));
       for (const d of uniques.values()) {
-        const url = await obtenirAdresse(shopId, d);
+        // Un fichier qui échoue ne bloque pas les suivants : le sien reste « préparation… ».
+        const url = await obtenirAdresse(shopId, d).catch(() => null);
         if (!actif) return;
-        setAdresses((a) => ({ ...a, [d.nom]: url }));
+        if (url) setAdresses((a) => ({ ...a, [d.nom]: url }));
       }
-    })().catch(() => { /* la vignette reste « préparation… » ; l'erreur est dans les journaux de la route */ });
+    })().catch(() => { /* liste illisible : aucune étiquette, l'erreur est dans les journaux de la route */ });
     return () => { actif = false; };
   }, [shopId, cle]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -58,9 +55,9 @@ export function useFichiersImpression(shopId: string | undefined, lignesCommande
 /** Les fichiers d'une ligne de commande. shortcut: adresse signée valable 1 h, recharger la page au-delà. */
 export function FichiersDeLaLigne({ ligne, adresses }: { ligne: Ligne | undefined; adresses: Record<string, string> }) {
   if (!ligne) return null;
-  if (ligne.manque) return <span className={styles.manque}>{ligne.manque}</span>;
   return (
     <div className={styles.rangee}>
+      {ligne.manque && <span className={styles.manque}>{ligne.manque}</span>}
       {ligne.fichiers.map(({ nom }) => {
         const url = adresses[nom];
         return (

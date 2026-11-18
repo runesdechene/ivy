@@ -300,6 +300,8 @@ export function profilSuivi(modele: string, tailles: Record<string, TailleImpres
 /** Ce qui décrit un fichier d'impression sans dépendre d'un produit : le motif, et l'impression qui l'appelle. */
 export interface DemandeImpression { motif: string; nom: string; recto: string | null; verso: string | null; taille: string | null }
 export type ImpressionLue = Pick<VarianteImpression, 'recto' | 'verso'> & { taille: string | null };
+/** Une ligne de commande (stock ou client) : son identifiant, le titre du produit (qui donne le motif) et son impression. */
+export type LigneAImprimer = ImpressionLue & { id: string; titre: string };
 
 /** Une impression (recto, verso, taille) vue comme une variante, pour `fichiersImpression`. */
 function commeVariante(i: ImpressionLue): VarianteImpression {
