@@ -74,3 +74,12 @@ sans le moindre signal.
   bouge pas quand le fichier est réécrit en place, et c'est le piège qui a fait conclure à
   tort, le 25/09, que les index étaient morts.
 - Uriel travaille depuis plusieurs postes : ce cas est la règle, pas l'exception.
+
+## Une route API vérifie toujours la session de la boutique
+
+**Le piège** (18/11/2026) : neuf routes (synchro, push-product, règles de prix, descriptions, stock-stream,
+`/api/sync`) répondaient à tout appel anonyme avec la clé de service. Cause : `streamFromUrl` faisait un
+`fetch` nu, sans jeton, donc les routes n'avaient rien à vérifier.
+
+**How to apply :** côté client, `authFetch` / `authJson` (jamais `fetch` nu vers `/api`) ; côté route,
+`autoriser(request, shopId)` en tête. Une vingtaine d'autres `fetch('/api…')` restent à auditer.
