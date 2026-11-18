@@ -66,6 +66,10 @@ function AxeMotif({ source, axe, setAxe, hauteurDMax }: {
     ctx.restore();
     ctx.fillStyle = '#228be6';
     ctx.fillRect(canvas.width / 2 - 0.5, 0, 1, canvas.height);
+    // Le cadre d'impression, centré sur l'axe : on voit à l'œil où le motif tombe dedans.
+    ctx.strokeStyle = '#228be6';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(1.5, 1.5, canvas.width - 3, canvas.height - 3);
   }, [source, axe]);
 
   function proposer() {

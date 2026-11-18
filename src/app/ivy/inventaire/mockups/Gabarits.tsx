@@ -60,6 +60,7 @@ export function Gabarits({ shopId }: { shopId: string }) {
   const gabarits = data?.gabarits ?? [];
   const modeles = data?.modeles ?? {};
   const actuel = gabarits.find((g) => g.id === brouillon?.id) ?? null;
+  const [zoneDe, setZoneDe] = useState<string | null>(null); // modèle dont on copie la zone d'impression
   // Fichiers déjà en place : ceux du gabarit ouvert, ou du gabarit qu'on duplique.
   const enPlace = actuel ?? gabarits.find((g) => g.id === brouillon?.copieDe) ?? null;
 
@@ -246,6 +247,23 @@ export function Gabarits({ shopId }: { shopId: string }) {
               onChange={(v) => changer({ face: v as Face, poitrine: v === 'verso' ? null : brouillon.poitrine })}
               data={[{ label: 'Recto', value: 'recto' }, { label: 'Verso', value: 'verso' }]}
             />
+            <Group gap="xs" align="flex-end" wrap="nowrap">
+              <Select
+                size="xs" style={{ flex: 1 }} label="Copier la zone d’impression de…" placeholder="Modèle" searchable
+                data={[...new Set(gabarits.filter((g) => g.face === brouillon.face && g.modele !== brouillon.modele).map((g) => g.modele))].sort()}
+                value={zoneDe} onChange={setZoneDe}
+              />
+              <Button
+                size="xs" variant="default" disabled={!zoneDe}
+                onClick={() => {
+                  // Toutes les couleurs d'un modèle partagent la même zone : la première suffit.
+                  const source = gabarits.find((g) => g.modele === zoneDe && g.face === brouillon.face);
+                  if (source) changer({ cadre: source.cadre });
+                }}
+              >
+                Copier
+              </Button>
+            </Group>
             <FileInput size="xs" label="Photo" accept="image/png,image/webp,image/jpeg" placeholder={enPlace ? 'Remplacer la photo' : 'Déposer la photo'} value={brouillon.photo} onChange={(photo) => changer({ photo })} clearable />
             {(['CLAIR', 'SOMBRE'] as const).map((v) => {
               const cle = v === 'CLAIR' ? 'ombresClair' : 'ombresSombre';

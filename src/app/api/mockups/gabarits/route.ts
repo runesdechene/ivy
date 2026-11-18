@@ -42,7 +42,6 @@ export async function GET(request: NextRequest) {
 const nombre = (v: FormDataEntryValue | null) => (typeof v === 'string' && v !== '' && Number.isFinite(Number(v)) ? Number(v) : null);
 const texte = (v: FormDataEntryValue | null) => (typeof v === 'string' ? v.trim() : '');
 const fichier = (v: FormDataEntryValue | null) => (v instanceof File && v.size > 0 ? v : null);
-
 /** Crée ou met à jour le gabarit (modèle × couleur × face). Les fichiers fournis remplacent les anciens. */
 export async function POST(request: NextRequest) {
   const form = await request.formData().catch(() => null);
@@ -120,6 +119,13 @@ export async function POST(request: NextRequest) {
     return erreur(error.message, 500);
   }
   if (avant) await retirer(svc, (Object.keys({ ...nouveaux, ...retraits }) as (keyof typeof envois)[]).map((c) => avant[c]));
+
+  // La zone d'impression est celle du modèle, pas de la couleur : elle suit sur toutes ses couleurs, même face.
+  const { error: suite } = await svc.from('mockup_gabarits')
+    .update({ cadre_x, cadre_y, cadre_hauteur, updated_at: new Date().toISOString() })
+    .eq('shop_id', acces.shopId).eq('face', face).eq('modele', modele).neq('couleur', couleur);
+  if (suite) return erreur(suite.message, 500);
+
   return NextResponse.json({ gabarit: versGabarit(svc, data as LigneGabarit) });
 }
 
