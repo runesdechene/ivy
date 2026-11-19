@@ -30,6 +30,16 @@
   }
 }
 
+.chargement {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: $font-inter;
+  font-size: 10.5px;
+  color: $plum;
+  opacity: 0.6;
+}
+
 .manque {
   align-self: center;
   font-family: $font-inter;

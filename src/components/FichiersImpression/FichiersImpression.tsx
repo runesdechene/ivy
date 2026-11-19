@@ -26,17 +26,21 @@ interface Ligne { id: string; fichiers: DemandeImpression[]; manque: string | nu
 export function useFichiersImpression(shopId: string | undefined, lignesCommande: LigneAImprimer[]) {
   const [lignes, setLignes] = useState<Record<string, Ligne>>({});
   const [adresses, setAdresses] = useState<Record<string, string>>({});
+  const [enCours, setEnCours] = useState(true); // la liste des fichiers n'est pas encore arrivée
   const demandes = [...new Map(lignesCommande.map((l) => [l.id, l])).values()];
   const cle = JSON.stringify(demandes);
 
   useEffect(() => {
-    if (!shopId || demandes.length === 0) return;
+    if (!shopId) return;
+    if (demandes.length === 0) return setEnCours(false); // rien à imprimer : pas de chargement à montrer
     let actif = true;
+    setEnCours(true);
     (async () => {
       const r = await authJson<{ lignes: Ligne[]; adresses: Record<string, string> }>('/api/mockups/impression', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shopId, lignes: demandes }),
       });
       if (!actif) return;
+      setEnCours(false);
       setLignes(Object.fromEntries(r.lignes.map((l) => [l.id, l])));
       setAdresses(r.adresses); // les fichiers déjà gardés sont prêts tout de suite
       const aFabriquer = new Map(r.lignes.flatMap((l) => l.fichiers).filter((d) => !r.adresses[d.nom]).map((d) => [d.nom, d]));
@@ -46,11 +50,14 @@ export function useFichiersImpression(shopId: string | undefined, lignesCommande
         if (!actif) return;
         if (url) setAdresses((a) => ({ ...a, [d.nom]: url }));
       }
-    })().catch(() => { /* liste illisible : aucune étiquette, l'erreur est dans les journaux de la route */ });
+    })().catch(() => {
+      // liste illisible : aucune étiquette, l'erreur est dans les journaux de la route
+      if (actif) setEnCours(false);
+    });
     return () => { actif = false; };
   }, [shopId, cle]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { lignes, adresses };
+  return { lignes, adresses, enCours };
 }
 
 /**
@@ -87,7 +94,7 @@ const poser = (url: string, nom: string) => {
  * l'étiquette ne devient glissable qu'une fois le fichier posé, jamais un glisser vide.
  * shortcut: adresse signée valable 1 h, recharger la page au-delà.
  */
-export function FichiersDeLaLigne({ ligne, adresses }: { ligne: Ligne | undefined; adresses: Record<string, string> }) {
+export function FichiersDeLaLigne({ ligne, adresses, enCours }: { ligne: Ligne | undefined; adresses: Record<string, string>; enCours: boolean }) {
   const [poses, setPoses] = useState<Record<string, boolean>>({}); // nom → posé (true) ou échec (false)
   useEffect(() => {
     if (!window.ivyAtelier || !ligne) return;
@@ -99,7 +106,13 @@ export function FichiersDeLaLigne({ ligne, adresses }: { ligne: Ligne | undefine
     return () => { actif = false; };
   }, [ligne, adresses]);
 
-  if (!ligne) return null;
+  if (!ligne) {
+    return enCours ? (
+      <div className={styles.rangee}>
+        <span className={styles.chargement}><Loader size={10} color="currentColor" /> Fichiers d'impression…</span>
+      </div>
+    ) : null;
+  }
   const atelier = typeof window !== 'undefined' && !!window.ivyAtelier;
   return (
     <div className={styles.rangee}>

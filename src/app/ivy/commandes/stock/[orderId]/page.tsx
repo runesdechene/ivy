@@ -1381,7 +1381,7 @@ export default function OrderDetailPage() {
                           ) : (
                             <span className={styles.metaCellEmpty}>—</span>
                           )}
-                          {firstItem.variant_id && <FichiersDeLaLigne ligne={impression.lignes[firstItem.variant_id]} adresses={impression.adresses} />}
+                          {firstItem.variant_id && <FichiersDeLaLigne ligne={impression.lignes[firstItem.variant_id]} adresses={impression.adresses} enCours={impression.enCours} />}
                         </td>
                         <td className={clsx(styles.td, styles.tdRight)}>
                           {isCompleted ? (

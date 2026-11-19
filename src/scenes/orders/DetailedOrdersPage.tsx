@@ -181,7 +181,7 @@ function ItemRow({ order, item, index, metafieldConfigs, impression }: ItemRowPr
             ))}
           </div>
         )}
-        {!item.isCancelled && <FichiersDeLaLigne ligne={impression.lignes[item.id]} adresses={impression.adresses} />}
+        {!item.isCancelled && <FichiersDeLaLigne ligne={impression.lignes[item.id]} adresses={impression.adresses} enCours={impression.enCours} />}
       </div>
 
       <CostDisplay qty={item.quantity} unitCost={item.unitCost ?? null} />
