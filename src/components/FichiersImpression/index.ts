@@ -1,1 +1,1 @@
-export { useFichiersImpression, FichiersDeLaLigne, ChargementImpression, obtenirAdresse } from './FichiersImpression';
+export { useFichiersImpression, FichiersDeLaLigne, ChargementImpression, dejaDit, obtenirAdresse } from './FichiersImpression';

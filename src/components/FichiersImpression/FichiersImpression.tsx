@@ -90,6 +90,17 @@ export function useFichiersImpression(shopId: string | undefined, lignesCommande
 
 type Impression = ReturnType<typeof useFichiersImpression>;
 
+/**
+ * Ce que les fichiers d'une ligne disent déjà, pour ne pas le répéter en métachamps : chaque zone qui a son
+ * fichier, et la taille quand plus aucune zone imprimée n'attend le sien. `recto`/`verso` : l'impression de la ligne.
+ */
+export function dejaDit(ligne: Ligne | undefined, recto: string | null, verso: string | null) {
+  const faces = new Set(ligne?.fichiers.flatMap((f) => f.faces));
+  const r = faces.has('recto');
+  const v = faces.has('verso');
+  return { recto: r, verso: v, taille: (r || v) && (r || !recto) && (v || !verso) };
+}
+
 /** En bas à droite, tant que les fichiers d'impression de la page ne sont pas tous prêts. */
 export function ChargementImpression({ impression }: { impression: Impression }) {
   const { enCours, total, regles } = impression;

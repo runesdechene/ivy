@@ -10,7 +10,7 @@ import { VariantCheckbox } from '@/components/VariantCheckbox';
 import { StatusBadge } from '@/components/StatusBadge';
 import { TagPill } from '@/components/TagPill';
 import { MetaChip } from '@/components/MetaChip';
-import { ChargementImpression, FichiersDeLaLigne, useFichiersImpression } from '@/components/FichiersImpression';
+import { ChargementImpression, dejaDit, FichiersDeLaLigne, useFichiersImpression } from '@/components/FichiersImpression';
 import { METACHAMPS, type LigneAImprimer } from '@/lib/mockups/regles';
 import { SkuChip } from '@/components/SkuChip';
 import { FilterChip } from '@/components/FilterChip';
@@ -96,8 +96,12 @@ function ItemRow({ order, item, index, metafieldConfigs, impression }: ItemRowPr
   const colorHex = color ? getColorHex(color) : '#cccccc';
 
   // Filter metafields by configured ones; exclude empty values
+  const imprime = ligneAImprimer(item);
+  const dit = dejaDit(impression.lignes[item.id], imprime.recto, imprime.verso);
   const visibleMetafields = useMemo(() => {
-    const metafields = item.variant?.metafields ?? [];
+    const metafields = (item.variant?.metafields ?? []).filter((mf) => !(
+      (mf.key === METACHAMPS.recto && dit.recto) || (mf.key === METACHAMPS.verso && dit.verso) || (mf.key === METACHAMPS.taille && dit.taille)
+    ));
     if (metafields.length === 0 || metafieldConfigs.length === 0) return [];
     return metafields
       .filter((mf) =>
@@ -113,7 +117,7 @@ function ItemRow({ order, item, index, metafieldConfigs, impression }: ItemRowPr
         };
       })
       .filter((mf) => mf.value && mf.value.trim() !== '');
-  }, [item.variant?.metafields, metafieldConfigs]);
+  }, [item.variant?.metafields, metafieldConfigs, dit.recto, dit.verso, dit.taille]);
 
   return (
     <div
@@ -170,7 +174,7 @@ function ItemRow({ order, item, index, metafieldConfigs, impression }: ItemRowPr
           )}
           <span className={styles.qtyPill}>×{item.quantity}</span>
         </div>
-        {visibleMetafields.length > 0 && !impression.lignes[item.id]?.fichiers.length && (
+        {visibleMetafields.length > 0 && (
           <div className={styles.itemMeta}>
             {visibleMetafields.map((mf, i) => (
               <MetaChip

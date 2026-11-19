@@ -14,7 +14,7 @@ import { SortOptionsBar } from '@/components/Inventory/SortOptionsBar';
 import { StatusBadge, type StatusBadgeVariant } from '@/components/StatusBadge';
 import { SkuChip } from '@/components/SkuChip';
 import { MetaChip } from '@/components/MetaChip';
-import { ChargementImpression, FichiersDeLaLigne, useFichiersImpression } from '@/components/FichiersImpression';
+import { ChargementImpression, dejaDit, FichiersDeLaLigne, useFichiersImpression } from '@/components/FichiersImpression';
 import { FilterChip } from '@/components/FilterChip';
 import { getColorHex, isColorOption, loadColorMappingsFromSupabase, areColorMappingsLoaded, transformColor } from '@/utils/color-transformer';
 import { useTerminalStream } from '@/hooks/useTerminalStream';
@@ -1325,7 +1325,12 @@ export default function OrderDetailPage() {
                     const validatedCount = variantGroup.items.filter(i => i.is_validated).length;
                     const allValidated = validatedCount === variantGroup.items.length;
                     const someValidated = validatedCount > 0 && !allValidated;
-                    const metafields = firstItem.metafields || {};
+                    // Les métachamps que les fichiers d'impression disent déjà s'effacent.
+                    const tous = firstItem.metafields || {};
+                    const dit = dejaDit(impression.lignes[firstItem.variant_id ?? ''], tous['Recto'] ?? null, tous['Verso'] ?? null);
+                    const metafields = Object.fromEntries(Object.entries(tous).filter(([cle]) => !(
+                      (cle === 'Recto' && dit.recto) || (cle === 'Verso' && dit.verso) || (cle === 'Taille de print' && dit.taille)
+                    )));
 
                     return (
                       <tr key={variantGroup.key} className={allValidated ? styles.validatedRow : undefined}>
@@ -1373,7 +1378,7 @@ export default function OrderDetailPage() {
                         </td>
                         <td className={clsx(styles.td, styles.tdVariant)}>{firstItem.variant_title ? firstItem.variant_title.split(' / ').map(transformColor).join(' / ') : '—'}</td>
                         <td className={styles.td}>
-                          {impression.lignes[firstItem.variant_id ?? '']?.fichiers.length ? null : Object.keys(metafields).length > 0 ? (
+                          {Object.keys(metafields).length > 0 ? (
                             <div className={styles.metaChipRow}>
                               {Object.entries(metafields).map(([key, value]) => (
                                 <MetaChip key={key} keyName={key} value={String(value)} />
