@@ -14,7 +14,7 @@ import { SortOptionsBar } from '@/components/Inventory/SortOptionsBar';
 import { StatusBadge, type StatusBadgeVariant } from '@/components/StatusBadge';
 import { SkuChip } from '@/components/SkuChip';
 import { MetaChip } from '@/components/MetaChip';
-import { FichiersDeLaLigne, useFichiersImpression } from '@/components/FichiersImpression';
+import { ChargementImpression, FichiersDeLaLigne, useFichiersImpression } from '@/components/FichiersImpression';
 import { FilterChip } from '@/components/FilterChip';
 import { getColorHex, isColorOption, loadColorMappingsFromSupabase, areColorMappingsLoaded, transformColor } from '@/utils/color-transformer';
 import { useTerminalStream } from '@/hooks/useTerminalStream';
@@ -1067,6 +1067,7 @@ export default function OrderDetailPage() {
 
   return (
     <div className={styles.page}>
+      <ChargementImpression impression={impression} />
       {/* Back button */}
       <button
         type="button"
@@ -1381,7 +1382,7 @@ export default function OrderDetailPage() {
                           ) : (
                             <span className={styles.metaCellEmpty}>—</span>
                           )}
-                          {firstItem.variant_id && <FichiersDeLaLigne ligne={impression.lignes[firstItem.variant_id]} adresses={impression.adresses} enCours={impression.enCours} />}
+                          {firstItem.variant_id && <FichiersDeLaLigne ligne={impression.lignes[firstItem.variant_id]} impression={impression} />}
                         </td>
                         <td className={clsx(styles.td, styles.tdRight)}>
                           {isCompleted ? (

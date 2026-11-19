@@ -20,6 +20,13 @@ export async function obtenirAdresse(shopId: string, d: DemandeImpression): Prom
   return (await authJson<{ url: string }>(`/api/mockups/impression?${p}`)).url;
 }
 
+/** IVY Atelier : un fichier posé une fois sur le disque par l'application, partagé entre toutes les lignes. */
+const surDisque = new Map<string, Promise<boolean>>();
+const poser = (url: string, nom: string) => {
+  if (!surDisque.has(url)) surDisque.set(url, window.ivyAtelier!.preparer(url, nom));
+  return surDisque.get(url)!;
+};
+
 interface Ligne { id: string; fichiers: DemandeImpression[]; manque: string | null }
 
 /** `lignes` : chaque ligne de la commande, avec l'impression qu'elle porte (figée sur une commande de stock). */
@@ -27,6 +34,8 @@ export function useFichiersImpression(shopId: string | undefined, lignesCommande
   const [lignes, setLignes] = useState<Record<string, Ligne>>({});
   const [adresses, setAdresses] = useState<Record<string, string>>({});
   const [enCours, setEnCours] = useState(true); // la liste des fichiers n'est pas encore arrivée
+  const [rates, setRates] = useState<Record<string, true>>({}); // fichiers que le serveur n'a pas pu fabriquer
+  const [poses, setPoses] = useState<Record<string, boolean>>({}); // IVY Atelier : nom → posé sur le disque, ou échec
   const demandes = [...new Map(lignesCommande.map((l) => [l.id, l])).values()];
   const cle = JSON.stringify(demandes);
 
@@ -49,6 +58,7 @@ export function useFichiersImpression(shopId: string | undefined, lignesCommande
         const url = await obtenirAdresse(shopId, d).catch(() => null);
         if (!actif) return;
         if (url) setAdresses((a) => ({ ...a, [d.nom]: url }));
+        else setRates((r) => ({ ...r, [d.nom]: true }));
       }
     })().catch(() => {
       // liste illisible : aucune étiquette, l'erreur est dans les journaux de la route
@@ -57,7 +67,36 @@ export function useFichiersImpression(shopId: string | undefined, lignesCommande
     return () => { actif = false; };
   }, [shopId, cle]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { lignes, adresses, enCours };
+  // IVY Atelier : chaque fichier est posé sur le disque dès que son adresse arrive.
+  useEffect(() => {
+    if (!window.ivyAtelier) return;
+    let actif = true;
+    for (const [nom, url] of Object.entries(adresses)) {
+      void poser(url, nom).then((ok) => { if (actif) setPoses((p) => ({ ...p, [nom]: ok })); });
+    }
+    return () => { actif = false; };
+  }, [adresses]);
+
+  // Un fichier est réglé quand il est prêt, ou qu'il a échoué : seuls les autres font tourner l'indicateur.
+  const noms = [...new Set(Object.values(lignes).flatMap((l) => l.fichiers.map((f) => f.nom)))];
+  const atelier = typeof window !== 'undefined' && !!window.ivyAtelier;
+  const regles = noms.filter((n) => rates[n] || (atelier ? poses[n] !== undefined : !!adresses[n])).length;
+
+  return { lignes, adresses, poses, enCours, total: noms.length, regles };
+}
+
+type Impression = ReturnType<typeof useFichiersImpression>;
+
+/** En bas à droite, tant que les fichiers d'impression de la page ne sont pas tous prêts. */
+export function ChargementImpression({ impression }: { impression: Impression }) {
+  const { enCours, total, regles } = impression;
+  if (!enCours && regles === total) return null;
+  return (
+    <div className={styles.flottant} role="status">
+      <Loader size={14} color="currentColor" />
+      {enCours ? "Fichiers d'impression…" : `Fichiers d'impression ${regles} / ${total}`}
+    </div>
+  );
 }
 
 /**
@@ -81,38 +120,15 @@ async function telecharger(url: string, nom: string) {
   lien.click();
 }
 
-/** IVY Atelier : un fichier posé une fois sur le disque par l'application, partagé entre toutes les lignes. */
-const surDisque = new Map<string, Promise<boolean>>();
-const poser = (url: string, nom: string) => {
-  if (!surDisque.has(url)) surDisque.set(url, window.ivyAtelier!.preparer(url, nom));
-  return surDisque.get(url)!;
-};
-
 /**
  * Les fichiers d'une ligne de commande : un clic les télécharge, ou on les glisse.
  * Dans IVY Atelier, l'application pose chaque fichier sur le disque et le glisse comme un vrai fichier :
  * l'étiquette ne devient glissable qu'une fois le fichier posé, jamais un glisser vide.
  * shortcut: adresse signée valable 1 h, recharger la page au-delà.
  */
-export function FichiersDeLaLigne({ ligne, adresses, enCours }: { ligne: Ligne | undefined; adresses: Record<string, string>; enCours: boolean }) {
-  const [poses, setPoses] = useState<Record<string, boolean>>({}); // nom → posé (true) ou échec (false)
-  useEffect(() => {
-    if (!window.ivyAtelier || !ligne) return;
-    let actif = true;
-    for (const { nom } of ligne.fichiers) {
-      const url = adresses[nom];
-      if (url) void poser(url, nom).then((ok) => { if (actif) setPoses((p) => ({ ...p, [nom]: ok })); });
-    }
-    return () => { actif = false; };
-  }, [ligne, adresses]);
-
-  if (!ligne) {
-    return enCours ? (
-      <div className={styles.rangee}>
-        <span className={styles.chargement}><Loader size={10} color="currentColor" /> Fichiers d'impression…</span>
-      </div>
-    ) : null;
-  }
+export function FichiersDeLaLigne({ ligne, impression }: { ligne: Ligne | undefined; impression: Impression }) {
+  const { adresses, poses } = impression;
+  if (!ligne) return null;
   const atelier = typeof window !== 'undefined' && !!window.ivyAtelier;
   return (
     <div className={styles.rangee}>

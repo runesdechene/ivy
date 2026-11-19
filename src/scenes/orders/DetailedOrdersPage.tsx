@@ -10,7 +10,7 @@ import { VariantCheckbox } from '@/components/VariantCheckbox';
 import { StatusBadge } from '@/components/StatusBadge';
 import { TagPill } from '@/components/TagPill';
 import { MetaChip } from '@/components/MetaChip';
-import { FichiersDeLaLigne, useFichiersImpression } from '@/components/FichiersImpression';
+import { ChargementImpression, FichiersDeLaLigne, useFichiersImpression } from '@/components/FichiersImpression';
 import { METACHAMPS, type LigneAImprimer } from '@/lib/mockups/regles';
 import { SkuChip } from '@/components/SkuChip';
 import { FilterChip } from '@/components/FilterChip';
@@ -181,7 +181,7 @@ function ItemRow({ order, item, index, metafieldConfigs, impression }: ItemRowPr
             ))}
           </div>
         )}
-        {!item.isCancelled && <FichiersDeLaLigne ligne={impression.lignes[item.id]} adresses={impression.adresses} enCours={impression.enCours} />}
+        {!item.isCancelled && <FichiersDeLaLigne ligne={impression.lignes[item.id]} impression={impression} />}
       </div>
 
       <CostDisplay qty={item.quantity} unitCost={item.unitCost ?? null} />
@@ -520,6 +520,7 @@ export function DetailedOrdersPage() {
 
   return (
     <div className={styles.page}>
+      <ChargementImpression impression={impression} />
       <div className={styles.pageHead}>
         <div className={styles.eyebrow}>Atelier · {shopName}</div>
         <h1 className={styles.title}>

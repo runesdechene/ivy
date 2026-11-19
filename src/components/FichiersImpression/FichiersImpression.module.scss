@@ -30,14 +30,22 @@
   }
 }
 
-.chargement {
+.flottant {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 300;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: $radius-sm;
+  background: $slate;
+  color: $cream;
   font-family: $font-inter;
-  font-size: 10.5px;
-  color: $plum;
-  opacity: 0.6;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.18);
 }
 
 .manque {
