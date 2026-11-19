@@ -1,7 +1,7 @@
 {
   "name": "ivy-atelier",
   "productName": "IVY Atelier",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "IVY Atelier : les commandes à imprimer d'IVY, fichiers glissés droit dans le logiciel d'impression.",
   "main": "dist/main.js",
