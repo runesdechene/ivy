@@ -161,9 +161,10 @@ test('profilSuivi trouve le profil du même modèle qui couvre chaque taille', (
   assert.equal(profilSuivi('DRUMMER 2.0', { S: 'C-LARGE', M: 'D-MAX' }, [p]), null);
 });
 
-test('fichiersImpression : noms de l atelier, hauteurs de la fiche, sans doublon', () => {
+test('fichiersImpression : noms de l atelier, hauteurs de la fiche, sans doublon, zones réunies', () => {
   const variantes = [
     variante({ recto: 'DTG-CUI', taille: 'C-LARGE' }),
+    variante({ verso: 'DTG-CUI', taille: 'C-LARGE' }), // même fichier au dos : une seule étiquette, deux zones
     variante({ recto: 'DTG-CUI', taille: 'D-MAX' }),
     variante({ recto: 'DTG-CUI', taille: 'D-MAX' }),
     variante({ recto: 'MARQUE-TSHIRT-VR1', verso: 'DTG-VR1', taille: 'D-MAX' }),
@@ -172,11 +173,11 @@ test('fichiersImpression : noms de l atelier, hauteurs de la fiche, sans doublon
     variante({ recto: 'DTG-DOR', taille: 'D-MAX' }),
   ];
   assert.deepEqual(fichiersImpression('LOKI', variantes, R, F), [
-    { nom: 'LOKI DTF-OPA COEUR.png', source: 'DTF', teinte: 'OPA', hauteurCm: null },
-    { nom: 'LOKI DTG-CUI C-LARGE.png', source: 'SOMBRE', teinte: 'CUI', hauteurCm: 44.2 },
-    { nom: 'LOKI DTG-CUI D-MAX.png', source: 'SOMBRE', teinte: 'CUI', hauteurCm: 45.7 },
-    { nom: 'LOKI DTG-VR1 D-MAX.png', source: 'CLAIR', teinte: 'VR1', hauteurCm: 45.7 },
-    { nom: 'LOKI DTG-VR1 MARQUE.png', source: 'MARQUE', teinte: 'VR1', hauteurCm: null },
+    { nom: 'LOKI DTF-OPA COEUR.png', source: 'DTF', teinte: 'OPA', hauteurCm: null, faces: ['recto'] },
+    { nom: 'LOKI DTG-CUI C-LARGE.png', source: 'SOMBRE', teinte: 'CUI', hauteurCm: 44.2, faces: ['recto', 'verso'] },
+    { nom: 'LOKI DTG-CUI D-MAX.png', source: 'SOMBRE', teinte: 'CUI', hauteurCm: 45.7, faces: ['recto'] },
+    { nom: 'LOKI DTG-VR1 D-MAX.png', source: 'CLAIR', teinte: 'VR1', hauteurCm: 45.7, faces: ['verso'] },
+    { nom: 'LOKI DTG-VR1 MARQUE.png', source: 'MARQUE', teinte: 'VR1', hauteurCm: null, faces: ['recto'] },
   ]);
 });
 
@@ -253,7 +254,7 @@ test('demandesImpression : l impression de la commande fait foi, un fichier par 
   ];
   const demandes = demandesImpression('LOKI', lignes, R, F);
   assert.deepEqual(demandes.map((d) => d.nom), ['LOKI DTG-CUI C-LARGE.png', 'LOKI DTG-VR1 D-MAX.png', 'LOKI DTG-VR1 MARQUE.png']);
-  assert.deepEqual(demandes[0], { motif: 'LOKI', nom: 'LOKI DTG-CUI C-LARGE.png', recto: 'DTG-CUI', verso: null, taille: 'C-Large' });
+  assert.deepEqual(demandes[0], { motif: 'LOKI', nom: 'LOKI DTG-CUI C-LARGE.png', recto: 'DTG-CUI', verso: null, taille: 'C-Large', faces: ['recto'] });
   assert.equal(fichierDemande(demandes[1], R, F)?.hauteurCm, 45.7);
   assert.equal(fichierDemande({ ...demandes[0], nom: 'LOKI DTG-CUI D-MAX.png' }, R, F), null); // nom qui ne vient pas de cette impression
 });

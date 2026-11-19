@@ -170,7 +170,7 @@ function ItemRow({ order, item, index, metafieldConfigs, impression }: ItemRowPr
           )}
           <span className={styles.qtyPill}>×{item.quantity}</span>
         </div>
-        {visibleMetafields.length > 0 && (
+        {visibleMetafields.length > 0 && !impression.lignes[item.id]?.fichiers.length && (
           <div className={styles.itemMeta}>
             {visibleMetafields.map((mf, i) => (
               <MetaChip

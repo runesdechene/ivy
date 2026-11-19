@@ -44,7 +44,8 @@ export interface Apercu {
   manque: 'teinte' | 'hauteur' | 'gabarit' | 'poitrine' | 'fichier' | null;
 }
 export interface Profil { id: string; modele: string; nom: string; grille: Record<string, TailleImpression> }
-export interface FichierImpression { nom: string; source: Version | 'MARQUE' | 'DTF'; teinte: string; hauteurCm: number | null }
+/** `faces` : les zones du vêtement qui reçoivent ce fichier (un même fichier peut servir au recto et au verso). */
+export interface FichierImpression { nom: string; source: Version | 'MARQUE' | 'DTF'; teinte: string; hauteurCm: number | null; faces: Face[] }
 
 export const CADRE_HAUTEUR_CM = 49.5;
 export const CADRE_LARGEUR_CM = 40.64; // 16 pouces
@@ -299,6 +300,8 @@ export function profilSuivi(modele: string, tailles: Record<string, TailleImpres
 
 /** Ce qui décrit un fichier d'impression sans dépendre d'un produit : le motif, et l'impression qui l'appelle. */
 export interface DemandeImpression { motif: string; nom: string; recto: string | null; verso: string | null; taille: string | null }
+/** Un fichier d'une ligne de commande, avec les zones où il s'imprime. */
+export type FichierDeLigne = DemandeImpression & Pick<FichierImpression, 'faces'>;
 export type ImpressionLue = Pick<VarianteImpression, 'recto' | 'verso'> & { taille: string | null };
 /** Une ligne de commande (stock ou client) : son identifiant, le titre du produit (qui donne le motif) et son impression. */
 export type LigneAImprimer = ImpressionLue & { id: string; titre: string };
@@ -309,11 +312,11 @@ function commeVariante(i: ImpressionLue): VarianteImpression {
 }
 
 /** Les fichiers que demandent des impressions, chacun une fois, avec l'impression qui sait le refaire. */
-export function demandesImpression(motif: string, impressions: ImpressionLue[], reglages: Reglages, fiche: FicheMotif | null): DemandeImpression[] {
-  const demandes = new Map<string, DemandeImpression>();
+export function demandesImpression(motif: string, impressions: ImpressionLue[], reglages: Reglages, fiche: FicheMotif | null): FichierDeLigne[] {
+  const demandes = new Map<string, FichierDeLigne>();
   for (const i of impressions) {
     for (const f of fichiersImpression(motif, [commeVariante(i)], reglages, fiche)) {
-      if (!demandes.has(f.nom)) demandes.set(f.nom, { motif, nom: f.nom, recto: i.recto, verso: i.verso, taille: i.taille });
+      if (!demandes.has(f.nom)) demandes.set(f.nom, { motif, nom: f.nom, recto: i.recto, verso: i.verso, taille: i.taille, faces: f.faces });
     }
   }
   return [...demandes.values()].sort((a, b) => (a.nom < b.nom ? -1 : 1));
@@ -334,7 +337,7 @@ export function fichiersImpression(motif: string, variantes: VarianteImpression[
       const teinte = impression && teinteReglee(reglages, impression.teinte);
       if (!impression || !teinte || !valeur) continue;
 
-      let fichier: FichierImpression | null = null;
+      let fichier: Omit<FichierImpression, 'faces'> | null = null;
       if (impression.pose === 'dtf') {
         fichier = { nom: `${motif} DTF-${impression.teinte} COEUR.png`, source: 'DTF', teinte: impression.teinte, hauteurCm: null };
       } else if (impression.pose === 'marque') {
@@ -345,7 +348,9 @@ export function fichiersImpression(motif: string, variantes: VarianteImpression[
           fichier = { nom: `${motif} ${valeur.trim().toUpperCase()} ${v.taille}.png`, source: teinte.version, teinte: impression.teinte, hauteurCm: hauteur };
         }
       }
-      if (fichier) fichiers.set(fichier.nom, fichier);
+      if (!fichier) continue;
+      const deja = fichiers.get(fichier.nom);
+      if (deja) { if (!deja.faces.includes(face)) deja.faces.push(face); } else fichiers.set(fichier.nom, { ...fichier, faces: [face] });
     }
   }
   return [...fichiers.values()].sort((a, b) => (a.nom < b.nom ? -1 : 1));

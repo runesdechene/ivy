@@ -6,7 +6,7 @@ import { lireGabarits, lireMotif, lireProduit, lireReglages } from './donnees';
 import { BUCKET, retirer, urlPublique } from './serveur';
 import {
   avec300dpi, demandesImpression, fichierDemande, lireImpression, lireTaille, motifDuTitre, planifierApercus, roleDuFichier, teinteReglee, PX_PAR_CM_300DPI,
-  type Apercu, type DemandeImpression, type Face, type LigneAImprimer, type Reglages, type VarianteImpression,
+  type Apercu, type DemandeImpression, type Face, type FichierDeLigne, type LigneAImprimer, type Reglages, type VarianteImpression,
 } from './regles';
 
 /** Côté serveur : monte un mockup avec le même code que le navigateur, l'enregistre dans IVY. */
@@ -133,7 +133,7 @@ export async function fichiersDuMotifAImprimer(svc: SupabaseClient, shopId: stri
  * `adresses` donne d'un coup celles des fichiers déjà gardés ; seuls les autres restent à fabriquer un par un.
  */
 export async function fichiersDesLignes(svc: SupabaseClient, shopId: string, lignes: LigneAImprimer[]): Promise<{
-  lignes: { id: string; fichiers: DemandeImpression[]; manque: string | null }[]; adresses: Record<string, string>;
+  lignes: { id: string; fichiers: FichierDeLigne[]; manque: string | null }[]; adresses: Record<string, string>;
 }> {
   const { reglages, dtfUrl } = await lireReglages(svc, shopId);
   const motifs = new Map<string, Motif>();

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Loader } from '@mantine/core';
 import { IconPrinter } from '@tabler/icons-react';
 import { authJson } from '@/lib/auth-fetch';
-import type { DemandeImpression, LigneAImprimer } from '@/lib/mockups/regles';
+import type { DemandeImpression, FichierDeLigne, LigneAImprimer } from '@/lib/mockups/regles';
 import styles from './FichiersImpression.module.scss';
 
 /**
@@ -27,7 +27,10 @@ const poser = (url: string, nom: string) => {
   return surDisque.get(url)!;
 };
 
-interface Ligne { id: string; fichiers: DemandeImpression[]; manque: string | null }
+/** La zone du vêtement, comme l'atelier la lit : « Recto », « Verso » ou « Recto + Verso ». */
+const zone = (faces: FichierDeLigne['faces']) => faces.map((f) => (f === 'recto' ? 'Recto' : 'Verso')).join(' + ');
+
+interface Ligne { id: string; fichiers: FichierDeLigne[]; manque: string | null }
 
 /** `lignes` : chaque ligne de la commande, avec l'impression qu'elle porte (figée sur une commande de stock). */
 export function useFichiersImpression(shopId: string | undefined, lignesCommande: LigneAImprimer[]) {
@@ -133,7 +136,7 @@ export function FichiersDeLaLigne({ ligne, impression }: { ligne: Ligne | undefi
   return (
     <div className={styles.rangee}>
       {ligne.manque && <span className={styles.manque}>{ligne.manque}</span>}
-      {ligne.fichiers.map(({ nom }) => {
+      {ligne.fichiers.map(({ nom, faces }) => {
         const url = adresses[nom];
         const etat = poses[nom]; // atelier : undefined = en cours, true = posé, false = échec
         const echec = atelier && etat === false;
@@ -161,7 +164,7 @@ export function FichiersDeLaLigne({ ligne, impression }: { ligne: Ligne | undefi
             }}
           >
             {pret ? <IconPrinter size={12} /> : echec ? null : <Loader size={10} />}
-            {echec ? 'recharger la page' : nom.replace(/\.png$/, '').split(' ').slice(1).join(' ')}
+            {echec ? 'recharger la page' : <><b>{zone(faces)}</b> {nom.replace(/\.png$/, '').split(' ').slice(1).join(' ')}</>}
           </button>
         );
       })}

@@ -1373,7 +1373,7 @@ export default function OrderDetailPage() {
                         </td>
                         <td className={clsx(styles.td, styles.tdVariant)}>{firstItem.variant_title ? firstItem.variant_title.split(' / ').map(transformColor).join(' / ') : '—'}</td>
                         <td className={styles.td}>
-                          {Object.keys(metafields).length > 0 ? (
+                          {impression.lignes[firstItem.variant_id ?? '']?.fichiers.length ? null : Object.keys(metafields).length > 0 ? (
                             <div className={styles.metaChipRow}>
                               {Object.entries(metafields).map(([key, value]) => (
                                 <MetaChip key={key} keyName={key} value={String(value)} />
