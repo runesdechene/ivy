@@ -8,7 +8,9 @@
   "scripts": {
     "build": "tsc",
     "test": "node --test src/regles.test.ts",
-    "start": "tsc && electron ."
+    "start": "tsc && electron .",
+    "installateur": "tsc && electron-builder --win",
+    "publier": "pnpm installateur && node scripts/publier.mjs"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

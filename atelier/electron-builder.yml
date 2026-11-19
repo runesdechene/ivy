@@ -1,0 +1,20 @@
+# Installateur Windows d'IVY Atelier. Les versions sont publiées dans le bucket public `atelier-versions`
+# (scripts/publier.mjs) ; l'application installée y lit `latest.yml` pour se mettre à jour.
+appId: fr.runesdechene.ivy-atelier
+productName: IVY Atelier
+directories:
+  output: dist-installer
+files:
+  - dist/**/*
+  - package.json
+win:
+  target: nsis
+  icon: build/icon.png
+nsis:
+  oneClick: true
+  perMachine: false
+  createDesktopShortcut: always
+artifactName: IVY-Atelier-Setup-${version}.${ext}
+publish:
+  provider: generic
+  url: https://monessruufklcrrhzvub.supabase.co/storage/v1/object/public/atelier-versions/

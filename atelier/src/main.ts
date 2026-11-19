@@ -7,6 +7,7 @@ import { app, BrowserWindow, ipcMain, nativeImage, shell } from 'electron';
 import { existsSync } from 'node:fs';
 import { mkdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { autoUpdater } from 'electron-updater';
 import { BASE, adresseAutorisee, adresseExterne, cheminCache } from './regles';
 
 // En développement, on peut viser l'IVY local (`IVY_ATELIER_BASE=http://localhost:3000`).
@@ -81,5 +82,9 @@ ipcMain.on('atelier:glisser', (e, url: string, nom: string) => {
   e.sender.startDrag({ file: fichier, icon: nativeImage.createFromPath(fichier).resize({ width: 64 }) });
 });
 
-app.whenReady().then(ouvrir);
+app.whenReady().then(() => {
+  ouvrir();
+  // Une nouvelle version se télécharge en fond, s'annonce, et s'installe à la fermeture.
+  if (app.isPackaged) autoUpdater.checkForUpdatesAndNotify();
+});
 app.on('window-all-closed', () => app.quit());
