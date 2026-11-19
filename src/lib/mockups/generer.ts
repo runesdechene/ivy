@@ -88,6 +88,8 @@ const fondNoir = (fichier: { source: string }, version: Version) => version === 
 /**
  * Le dessin n'a qu'une teinte : une palette de 64 couleurs le rend sans perte visible, ~6 fois plus léger
  * (11,7 Mo → 1,9 Mo pour Loki C-LARGE, mesuré le 19/11/2026). Sans tramage, pour garder des bords nets.
+ * shortcut: suppose un dessin d'une seule teinte (`peindre`). Pour un motif client en couleurs, prévoir une teinte
+ * « ORIGINE » qui saute `peindre` et la palette (PNG complet), sinon ses dégradés feraient des marches.
  */
 async function alleger(png: Buffer, noir: boolean): Promise<Uint8Array> {
   const image = noir ? sharp(png).flatten({ background: '#000000' }) : sharp(png);
