@@ -53,14 +53,25 @@ export function useFichiersImpression(shopId: string | undefined, lignesCommande
   return { lignes, adresses };
 }
 
-/** Télécharge un fichier sous son vrai nom : copié en mémoire d'abord, car `download` est ignoré d'un autre domaine. */
+/**
+ * Copies en mémoire (`blob:`) des fichiers, par adresse : le clic et le glisser partent d'elles, pas du stockage.
+ * Windows bloque le glisser d'une adresse d'un autre domaine (« Bloqué par votre organisation »).
+ * shortcut: copies gardées tant que la page vit (~11 Mo chacune), à libérer si une commande en montre des dizaines.
+ */
+const copies = new Map<string, Promise<string>>();
+const copie = (url: string) => {
+  if (!copies.has(url)) copies.set(url, fetch(url).then((r) => r.blob()).then((b) => URL.createObjectURL(b)));
+  return copies.get(url)!;
+};
+const prete = new Map<string, string>(); // copies déjà arrivées : le glisser doit les lire sans attendre
+const preparer = (url: string) => void copie(url).then((local) => prete.set(url, local));
+
+/** Télécharge un fichier sous son vrai nom (`download` est ignoré d'un autre domaine, d'où la copie). */
 async function telecharger(url: string, nom: string) {
-  const local = URL.createObjectURL(await (await fetch(url)).blob());
   const lien = document.createElement('a');
-  lien.href = local;
+  lien.href = await copie(url);
   lien.download = nom;
   lien.click();
-  URL.revokeObjectURL(local);
 }
 
 /** Les fichiers d'une ligne de commande : un clic les télécharge, ou on les glisse. shortcut: adresse signée valable 1 h, recharger la page au-delà. */
@@ -79,9 +90,10 @@ export function FichiersDeLaLigne({ ligne, adresses }: { ligne: Ligne | undefine
             title={`${nom} — clic pour télécharger`}
             disabled={!url}
             onClick={(e) => { e.stopPropagation(); if (url) void telecharger(url, nom); }}
+            onPointerEnter={() => url && preparer(url)} // la copie arrive pendant qu'on vise
             draggable={!!url}
-            // Glisser-déposer de fichier de Chrome : Graphics Lab reçoit le PNG sous son nom.
-            onDragStart={(e) => url && e.dataTransfer.setData('DownloadURL', `image/png:${nom}:${url}`)}
+            // Glisser-déposer de fichier de Chrome : Graphics Lab reçoit le PNG sous son nom, depuis la copie si elle est là.
+            onDragStart={(e) => url && e.dataTransfer.setData('DownloadURL', `image/png:${nom}:${prete.get(url) ?? url}`)}
           >
             {url ? <IconPrinter size={12} /> : <Loader size={10} />}
             {nom.replace(/\.png$/, '').split(' ').slice(1).join(' ')}
