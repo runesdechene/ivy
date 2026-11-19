@@ -53,7 +53,17 @@ export function useFichiersImpression(shopId: string | undefined, lignesCommande
   return { lignes, adresses };
 }
 
-/** Les fichiers d'une ligne de commande. shortcut: adresse signée valable 1 h, recharger la page au-delà. */
+/** Télécharge un fichier sous son vrai nom : copié en mémoire d'abord, car `download` est ignoré d'un autre domaine. */
+async function telecharger(url: string, nom: string) {
+  const local = URL.createObjectURL(await (await fetch(url)).blob());
+  const lien = document.createElement('a');
+  lien.href = local;
+  lien.download = nom;
+  lien.click();
+  URL.revokeObjectURL(local);
+}
+
+/** Les fichiers d'une ligne de commande : un clic les télécharge, ou on les glisse. shortcut: adresse signée valable 1 h, recharger la page au-delà. */
 export function FichiersDeLaLigne({ ligne, adresses }: { ligne: Ligne | undefined; adresses: Record<string, string> }) {
   if (!ligne) return null;
   return (
@@ -62,17 +72,20 @@ export function FichiersDeLaLigne({ ligne, adresses }: { ligne: Ligne | undefine
       {ligne.fichiers.map(({ nom }) => {
         const url = adresses[nom];
         return (
-          <span
+          <button
+            type="button"
             key={nom}
             className={styles.fichier}
-            title={nom}
+            title={`${nom} — clic pour télécharger`}
+            disabled={!url}
+            onClick={(e) => { e.stopPropagation(); if (url) void telecharger(url, nom); }}
             draggable={!!url}
             // Glisser-déposer de fichier de Chrome : Graphics Lab reçoit le PNG sous son nom.
             onDragStart={(e) => url && e.dataTransfer.setData('DownloadURL', `image/png:${nom}:${url}`)}
           >
             {url ? <IconPrinter size={12} /> : <Loader size={10} />}
             {nom.replace(/\.png$/, '').split(' ').slice(1).join(' ')}
-          </span>
+          </button>
         );
       })}
     </div>

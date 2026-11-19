@@ -18,10 +18,13 @@
   font-family: $font-inter;
   font-size: 10.5px;
   font-weight: 600;
-  cursor: grab;
+  background: none;
+  cursor: pointer;
   user-select: none;
 
-  &[draggable='false'] {
+  &:hover:not(:disabled) { background: $plum-bg; }
+
+  &:disabled {
     cursor: progress;
     opacity: 0.6;
   }
