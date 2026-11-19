@@ -1,12 +1,13 @@
 import { createHash } from 'node:crypto';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Canvas, createCanvas, loadImage } from '@napi-rs/canvas';
+import sharp from 'sharp';
 import { centrer, chargerGabarit, chargerSource, composerMockup, peindre, utiliserPlateforme, versBlob, type Img } from './composer';
 import { lireGabarits, lireMotif, lireProduit, lireReglages } from './donnees';
 import { BUCKET, retirer, urlPublique } from './serveur';
 import {
-  avec300dpi, demandesImpression, fichierDemande, lireImpression, lireTaille, motifDuTitre, planifierApercus, roleDuFichier, teinteReglee, PX_PAR_CM_300DPI,
-  type Apercu, type DemandeImpression, type Face, type FichierDeLigne, type LigneAImprimer, type Reglages, type VarianteImpression,
+  avec300dpi, demandesImpression, noirPur, fichierDemande, lireImpression, lireTaille, motifDuTitre, planifierApercus, roleDuFichier, teinteReglee, PX_PAR_CM_300DPI,
+  type Apercu, type DemandeImpression, type Face, type FichierDeLigne, type Version, type LigneAImprimer, type Reglages, type VarianteImpression,
 } from './regles';
 
 /** Côté serveur : monte un mockup avec le même code que le navigateur, l'enregistre dans IVY. */
@@ -73,11 +74,26 @@ const BUCKET_IMPRESSION = 'impression'; // privé : les dessins en pleine résol
 const DUREE_ADRESSE = 3600; // secondes de validité d'une adresse signée
 
 /**
- * L'adresse signée d'un fichier d'impression : PNG 300 dpi, encre à 100 %.
+ * L'adresse signée d'un fichier d'impression : PNG 300 dpi, encre à 100 %, sur fond noir pur pour une encre sombre.
  * Fabriqué une fois puis gardé : son chemin porte l'empreinte de ce qui le fabrique (source, axe, hauteur, teinte),
  * donc un motif changé donne un autre chemin, le fichier est refait et l'ancien effacé.
  */
 type Motif = Awaited<ReturnType<typeof lireMotif>>;
+
+const ENCODAGE = 'palette-64-noir-pur';
+
+/** Une encre sombre s'imprime sur fond noir pur : Graphics Lab lit le noir comme le tissu. Le DTF (film) garde sa transparence. */
+const fondNoir = (fichier: { source: string }, version: Version) => version === 'SOMBRE' && fichier.source !== 'DTF';
+
+/**
+ * Le dessin n'a qu'une teinte : une palette de 64 couleurs le rend sans perte visible, ~6 fois plus léger
+ * (11,7 Mo → 1,9 Mo pour Loki C-LARGE, mesuré le 19/11/2026). Sans tramage, pour garder des bords nets.
+ */
+async function alleger(png: Buffer, noir: boolean): Promise<Uint8Array> {
+  const image = noir ? sharp(png).flatten({ background: '#000000' }) : sharp(png);
+  const leger = await image.png({ palette: true, colours: 64, dither: 0, compressionLevel: 9 }).toBuffer();
+  return noir ? noirPur(leger) : leger;
+}
 
 /** Où un fichier d'impression est gardé, et de quoi le fabriquer ; null s'il ne peut pas l'être. */
 function planImpression(shopId: string, d: DemandeImpression, reglages: Reglages, dtfUrl: string | null, motif: Motif) {
@@ -86,7 +102,8 @@ function planImpression(shopId: string, d: DemandeImpression, reglages: Reglages
   const url = fichier && (motif.fichiers[fichier.source]?.url ?? (fichier.source === 'DTF' ? dtfUrl : null));
   if (!fichier || !teinte || !url) return null;
   const axe = fichier.hauteurCm ? motif.axe ?? null : null; // marque et DTF : pas d'axe
-  const empreinte = createHash('sha256').update(JSON.stringify([url, fichier.hauteurCm, axe, teinte.couleur])).digest('hex').slice(0, 16);
+  // `ENCODAGE` dans l'empreinte : changer la façon d'écrire le fichier refait les fichiers déjà gardés.
+  const empreinte = createHash('sha256').update(JSON.stringify([ENCODAGE, url, fichier.hauteurCm, axe, teinte.couleur])).digest('hex').slice(0, 16);
   const dossier = `${shopId}/${d.motif.replace(/[^A-Z0-9]+/g, '-')}`;
   const base = d.nom.replace(/[^A-Za-z0-9-]+/g, '-');
   return { fichier, teinte, url, axe, dossier, base, chemin: `${dossier}/${base}.${empreinte}.png` };
@@ -106,8 +123,9 @@ export async function adresseImpression(svc: SupabaseClient, shopId: string, dem
     const source = fichier.hauteurCm ? centrer(brut, axe) : brut;
     const { w, h } = source.dessin;
     const hauteur = fichier.hauteurCm ? fichier.hauteurCm * PX_PAR_CM_300DPI : h;
-    const png = await versBlob(peindre(source, teinte.couleur, w * hauteur / h, hauteur), 'image/png');
-    const { error } = await stock.upload(chemin, avec300dpi(new Uint8Array(await png.arrayBuffer())), { contentType: 'image/png', upsert: true });
+    const peint = await versBlob(peindre(source, teinte.couleur, w * hauteur / h, hauteur), 'image/png');
+    const png = await alleger(Buffer.from(await peint.arrayBuffer()), fondNoir(fichier, teinte.version));
+    const { error } = await stock.upload(chemin, avec300dpi(png), { contentType: 'image/png', upsert: true });
     if (error) throw new Error(`${nom} : ${error.message}`);
     // Les versions d'avant de ce fichier (motif changé depuis) partent.
     const anciens = (existants ?? []).map((f) => `${dossier}/${f.name}`).filter((p) => p.startsWith(`${dossier}/${base}.`) && p !== chemin);

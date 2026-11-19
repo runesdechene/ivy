@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { crc32 } from 'node:zlib';
 import {
-  lireImpression, lireTaille, tailleDansNom, rangTaille, teinteReglee, trouverFichier,
+  lireImpression, lireTaille, noirPur, tailleDansNom, rangTaille, teinteReglee, trouverFichier,
   axeSymetrique, elargir, hauteurMax, placerMotif, placerPoitrine, planifierApercus, profilSuivi, profilsDepuisExistants,
   fichiersImpression, demandesImpression, fichierDemande, bornesDessin, avec300dpi, cleMotif, carteOmbres, roleDuFichier, motifDuTitre,
 } from './regles.ts';
@@ -257,4 +257,17 @@ test('demandesImpression : l impression de la commande fait foi, un fichier par 
   assert.deepEqual(demandes[0], { motif: 'LOKI', nom: 'LOKI DTG-CUI C-LARGE.png', recto: 'DTG-CUI', verso: null, taille: 'C-Large', faces: ['recto'] });
   assert.equal(fichierDemande(demandes[1], R, F)?.hauteurCm, 45.7);
   assert.equal(fichierDemande({ ...demandes[0], nom: 'LOKI DTG-CUI D-MAX.png' }, R, F), null); // nom qui ne vient pas de cette impression
+});
+
+test('noirPur : le quasi-noir de la palette redevient noir pur, CRC recalculé', () => {
+  const morceau = (type: string, donnees: number[]) => {
+    const corps = Buffer.concat([Buffer.from(type, 'latin1'), Buffer.from(donnees)]);
+    const tete = Buffer.alloc(4); tete.writeUInt32BE(donnees.length);
+    const fin = Buffer.alloc(4); fin.writeUInt32BE(crc32(corps));
+    return Buffer.concat([tete, corps, fin]);
+  };
+  const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const png = Buffer.concat([signature, morceau('PLTE', [1, 1, 0, 4, 2, 3, 200, 150, 100, 5, 0, 0]), morceau('IEND', [])]);
+  const attendu = Buffer.concat([signature, morceau('PLTE', [0, 0, 0, 0, 0, 0, 200, 150, 100, 5, 0, 0]), morceau('IEND', [])]);
+  assert.deepEqual(Buffer.from(noirPur(new Uint8Array(png))), attendu);
 });

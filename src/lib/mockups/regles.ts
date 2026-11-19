@@ -399,3 +399,23 @@ export function avec300dpi(png: Uint8Array): Uint8Array {
   for (const m of morceaux) { sortie.set(m, position); position += m.length; }
   return sortie;
 }
+
+/**
+ * Le noir pur d'un PNG à palette : la réduction des couleurs peut arrondir le noir du fond en (1,1,0), que
+ * l'imprimante lirait comme de l'encre. Toute couleur de la palette sans composante au-dessus de 4 redevient (0,0,0).
+ */
+export function noirPur(png: Uint8Array): Uint8Array {
+  const sortie = png.slice();
+  const vue = new DataView(sortie.buffer);
+  for (let i = 8; i < sortie.length;) {
+    const longueur = vue.getUint32(i);
+    if (String.fromCharCode(...sortie.subarray(i + 4, i + 8)) === 'PLTE') {
+      for (let c = i + 8; c < i + 8 + longueur; c += 3) {
+        if (Math.max(sortie[c], sortie[c + 1], sortie[c + 2]) <= 4) sortie.fill(0, c, c + 3);
+      }
+      vue.setUint32(i + 8 + longueur, crc32(sortie.subarray(i + 4, i + 8 + longueur)));
+    }
+    i += 12 + longueur;
+  }
+  return sortie;
+}

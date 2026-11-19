@@ -48,7 +48,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-firebase-hooks": "^5.1.1",
-    "sass-embedded": "^1.83.0"
+    "sass-embedded": "^1.83.0",
+    "sharp": "0.34.5"
   },
   "devDependencies": {
     "@types/node": "^20",
