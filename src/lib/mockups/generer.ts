@@ -155,14 +155,18 @@ export async function fichiersDuMotifAImprimer(svc: SupabaseClient, shopId: stri
 export async function fichiersDesLignes(svc: SupabaseClient, shopId: string, lignes: LigneAImprimer[]): Promise<{
   lignes: { id: string; fichiers: FichierDeLigne[]; manque: string | null }[]; adresses: Record<string, string>;
 }> {
-  const { reglages, dtfUrl } = await lireReglages(svc, shopId);
-  const motifs = new Map<string, Motif>();
+  // Réglages et motifs lus tous en même temps : un par un, une vingtaine de motifs coûtaient ~10 s (mesuré le 19/11/2026).
+  const cles = [...new Set(lignes.map((l) => motifDuTitre(l.titre)).filter((c): c is string => !!c))];
+  const [{ reglages, dtfUrl }, lus] = await Promise.all([
+    lireReglages(svc, shopId),
+    Promise.all(cles.map(async (cle) => [cle, await lireMotif(svc, shopId, cle)] as const)),
+  ]);
+  const motifs = new Map<string, Motif>(lus);
 
   const resultat = [];
   for (const l of lignes) {
     const cle = motifDuTitre(l.titre);
     if (!cle) { resultat.push({ id: l.id, fichiers: [], manque: 'motif introuvable dans le titre' }); continue; }
-    if (!motifs.has(cle)) motifs.set(cle, await lireMotif(svc, shopId, cle));
     const motif = motifs.get(cle)!;
     const demandes = demandesImpression(cle, [l], reglages, motif);
     // Une source absente (le logo commun pour le DTF) : ce fichier ne peut pas être fabriqué, on le dit au lieu de l'offrir.
@@ -191,11 +195,10 @@ export async function fichiersDesLignes(svc: SupabaseClient, shopId: string, lig
     if (plan) plans.set(plan.chemin, d.nom);
   }
   const stock = svc.storage.from(BUCKET_IMPRESSION);
-  const gardes: string[] = [];
-  for (const dossier of new Set([...plans.keys()].map((c) => c.slice(0, c.lastIndexOf('/'))))) {
-    const { data } = await stock.list(dossier, { limit: 1000 });
-    for (const f of data ?? []) if (plans.has(`${dossier}/${f.name}`)) gardes.push(`${dossier}/${f.name}`);
-  }
+  const dossiers = [...new Set([...plans.keys()].map((c) => c.slice(0, c.lastIndexOf('/'))))];
+  const listes = await Promise.all(dossiers.map(async (dossier) =>
+    ((await stock.list(dossier, { limit: 1000 })).data ?? []).map((f) => `${dossier}/${f.name}`)));
+  const gardes = listes.flat().filter((chemin) => plans.has(chemin));
   const adresses: Record<string, string> = {};
   if (gardes.length) {
     const { data, error } = await stock.createSignedUrls(gardes, DUREE_ADRESSE);
