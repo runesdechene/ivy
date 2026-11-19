@@ -7,7 +7,7 @@ import { app, BrowserWindow, ipcMain, nativeImage, shell } from 'electron';
 import { existsSync } from 'node:fs';
 import { mkdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { BASE, adresseAutorisee, cheminCache } from './regles';
+import { BASE, adresseAutorisee, adresseExterne, cheminCache } from './regles';
 
 // En développement, on peut viser l'IVY local (`IVY_ATELIER_BASE=http://localhost:3000`).
 const ivy = (!app.isPackaged && process.env.IVY_ATELIER_BASE) || BASE;
@@ -26,11 +26,17 @@ function ouvrir(): void {
   // IVY se met en mode Atelier quand il lit cette signature.
   page.setUserAgent(`${page.getUserAgent()} IvyAtelier/${app.getVersion()}`);
 
+  // Seul un site web part dans le navigateur de Windows, jamais un programme (`file:`, `ms-settings:`…).
+  const ouvrirAilleurs = (url: string) => {
+    const externe = adresseExterne(url);
+    if (externe && new URL(externe).origin !== new URL(ivy).origin) void shell.openExternal(externe);
+  };
   // Une page hors liste ne s'ouvre pas ; un lien d'un autre site part dans le navigateur.
+  // (La page hors ligne, chargée par loadFile, ne passe pas par ici ; son « Réessayer » si, et vise IVY.)
   const garder = (e: Electron.Event, url: string) => {
-    if (adresseAutorisee(url, ivy) || url.startsWith('file:')) return;
+    if (adresseAutorisee(url, ivy)) return;
     e.preventDefault();
-    if (!url.startsWith(ivy)) void shell.openExternal(url);
+    ouvrirAilleurs(url);
   };
   page.on('will-navigate', garder);
   page.on('will-redirect', garder);
@@ -39,7 +45,7 @@ function ouvrir(): void {
     if (principale && !adresseAutorisee(url, ivy)) void fenetre.loadURL(ACCUEIL);
   });
   page.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url);
+    ouvrirAilleurs(url);
     return { action: 'deny' };
   });
   // Pas de réseau : un message et « Réessayer », plutôt qu'une fenêtre blanche (-3 = navigation annulée).

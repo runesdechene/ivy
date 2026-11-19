@@ -1,7 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { BASE, adresseAutorisee, cheminCache } from './regles.ts';
+import { BASE, adresseAutorisee, adresseExterne, cheminCache } from './regles.ts';
+
+test('adresseExterne : seulement un site web, jamais un programme', () => {
+  assert.equal(adresseExterne('https://runesdechene.com/products/loki'), 'https://runesdechene.com/products/loki');
+  assert.equal(adresseExterne('http://exemple.com/'), 'http://exemple.com/');
+  for (const u of ['file:///C:/Windows/System32/calc.exe', 'ms-settings:', 'javascript:alert(1)', 'mailto:a@b.c', 'pas une adresse'])
+    assert.equal(adresseExterne(u), null, u);
+});
 
 test('adresseAutorisee', () => {
   for (const p of ['/', '/login', '/ivy/commandes/boutique', '/ivy/commandes/boutique?x=1', '/ivy/commandes/stock',

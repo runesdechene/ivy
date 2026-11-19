@@ -16,6 +16,16 @@ export function adresseAutorisee(url: string, base: string = BASE): boolean {
   }
 }
 
+/** Ce qu'on peut ouvrir dans le navigateur de Windows : un site web, jamais un programme (`file:`, `ms-settings:`…). */
+export function adresseExterne(url: string): string | null {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' || u.protocol === 'http:' ? u.href : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Adresse signée d'un fichier d'impression d'IVY : `…/sign/impression/…/<base>.<empreinte>.png`. */
 const FICHIER_IVY = /^https:\/\/monessruufklcrrhzvub\.supabase\.co\/storage\/v1\/object\/sign\/impression\/.*\.([0-9a-f]{16})\.png$/;
 
