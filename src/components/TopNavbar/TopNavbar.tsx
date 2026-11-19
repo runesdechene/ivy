@@ -7,12 +7,14 @@ import { APP_VERSION } from '@/config/version';
 import { ShopSelector } from '@/components/ShopSelector';
 import { useAuth } from '@/context/AuthContext';
 import { IvyMark } from '@/components/IvyMark';
+import { useAtelier } from '@/lib/atelier';
 import styles from './TopNavbar.module.scss';
 
 export function TopNavbar() {
   const pathname = usePathname();
   const router = useRouter();
   const { signOut } = useAuth();
+  const atelier = useAtelier();
 
   const isCommandesSection = pathname.startsWith('/ivy/commandes');
   const isInventaireSection = pathname.startsWith('/ivy/inventaire');
@@ -28,12 +30,16 @@ export function TopNavbar() {
     }
   };
 
-  const navItems = [
-    { label: 'Atelier', icon: IconBuildingStore, active: isCommandesSection, href: '/ivy/commandes' },
-    { label: 'Festivals', icon: IconTent, active: isStandSection, href: '/ivy/stand' },
-    { label: 'Inventaire', icon: null, active: isInventaireSection, href: '/ivy/inventaire' },
-    { label: 'HUB de stand', icon: IconPackage, active: isHubSection, href: '/ivy/hub' },
-  ];
+  const atelierItem = { label: 'Atelier', icon: IconBuildingStore, active: isCommandesSection, href: '/ivy/commandes' };
+  // IVY Atelier n'ouvre ni les festivals, ni l'inventaire, ni le hub de stand.
+  const navItems = atelier
+    ? [atelierItem]
+    : [
+        atelierItem,
+        { label: 'Festivals', icon: IconTent, active: isStandSection, href: '/ivy/stand' },
+        { label: 'Inventaire', icon: null, active: isInventaireSection, href: '/ivy/inventaire' },
+        { label: 'HUB de stand', icon: IconPackage, active: isHubSection, href: '/ivy/hub' },
+      ];
 
   return (
     <div className={styles.topNavbar}>

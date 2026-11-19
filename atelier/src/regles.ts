@@ -3,14 +3,14 @@ import path from 'node:path';
 /** IVY en ligne : l'application n'affiche que lui. */
 export const BASE = 'https://ivy.runesdechene.com';
 
-/** Les seules pages d'IVY que l'application montre : la connexion et les commandes à imprimer. */
-const PAGES = /^\/(login|ivy\/commandes\/boutique|ivy\/commandes\/stock(\/[^/]+(\/(impression|feuillet))?)?)?$/;
+/** Les sections d'IVY que l'application n'ouvre pas : l'atelier n'a que faire des festivals, de l'inventaire et du hub. */
+const INTERDITES = /^\/ivy\/(inventaire|stand|hub)(\/|$)/;
 
-/** Vrai si l'adresse est une page permise de l'IVY servi à `base` (requête et ancre ignorées). */
+/** Vrai si l'adresse est une page d'IVY servi à `base` hors des sections interdites (requête et ancre ignorées). */
 export function adresseAutorisee(url: string, base: string = BASE): boolean {
   try {
     const u = new URL(url);
-    return u.origin === new URL(base).origin && PAGES.test(u.pathname);
+    return u.origin === new URL(base).origin && !INTERDITES.test(u.pathname);
   } catch {
     return false;
   }

@@ -11,11 +11,11 @@ test('adresseExterne : seulement un site web, jamais un programme', () => {
 });
 
 test('adresseAutorisee', () => {
-  for (const p of ['/', '/login', '/ivy/commandes/boutique', '/ivy/commandes/boutique?x=1', '/ivy/commandes/stock',
-    '/ivy/commandes/stock/17258688-6e46-475f-9445-75a2135900f0', '/ivy/commandes/stock/abc/impression', '/ivy/commandes/stock/abc/feuillet'])
+  for (const p of ['/', '/login', '/ivy/commandes', '/ivy/commandes/boutique?x=1', '/ivy/commandes/boutique/facturation',
+    '/ivy/commandes/stock/abc/impression', '/parametres/couleurs', '/ivy/profil', '/ivy/standard'])
     assert.equal(adresseAutorisee(BASE + p), true, p);
-  for (const u of [BASE + '/ivy/commandes/boutique/facturation', BASE + '/ivy/inventaire/mockups', BASE + '/ivy/commandes',
-    BASE + '/ivy/commandes/stock/abc/autre', 'https://evil.example/ivy/commandes/boutique', 'http://ivy.runesdechene.com/'])
+  for (const u of [BASE + '/ivy/inventaire', BASE + '/ivy/inventaire/mockups', BASE + '/ivy/stand', BASE + '/ivy/stand/zones',
+    BASE + '/ivy/hub/x', 'https://evil.example/ivy/commandes/boutique', 'http://ivy.runesdechene.com/'])
     assert.equal(adresseAutorisee(u), false, u);
 });
 

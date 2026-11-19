@@ -10,7 +10,6 @@ import { IconHome, IconPackage, IconTruck, IconChartBar, IconShoppingCart, IconF
 import { LocationProvider } from '@/context/LocationContext';
 import { LocationSelector } from '@/components/LocationSelector';
 import { useShop } from '@/context/ShopContext';
-import { useAtelier } from '@/lib/atelier';
 import { LastSyncTime } from '@/components/LastSyncTime';
 import { authFetch } from '@/lib/auth-fetch';
 
@@ -21,7 +20,6 @@ interface IvyLayoutProps {
 function IvyLayoutContent({ children }: IvyLayoutProps) {
   const pathname = usePathname();
   const { currentShop } = useShop();
-  const atelier = useAtelier();
   const [syncing, setSyncing] = useState(false);
   const [orderCounts, setOrderCounts] = useState<{ atelier: number; stock: number }>({ atelier: 0, stock: 0 });
 
@@ -141,20 +139,7 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
     },
   ];
 
-  // IVY Atelier : seulement ce qu'il faut pour imprimer.
-  const atelierMenu = [
-    {
-      title: '',
-      items: [
-        { href: '/ivy/commandes/boutique', label: 'Commandes', icon: IconShoppingCart, exact: true, badge: orderCounts.atelier > 0 ? orderCounts.atelier : null },
-        { href: '/ivy/commandes/stock', label: 'Commandes stock', icon: IconTruck, badge: orderCounts.stock > 0 ? orderCounts.stock : null },
-      ],
-    },
-  ];
-
-  const menuCategories = atelier
-    ? atelierMenu
-    : isCommandesSection
+  const menuCategories = isCommandesSection
     ? commandesMenu
     : isStandSection
       ? standMenu
@@ -164,7 +149,7 @@ function IvyLayoutContent({ children }: IvyLayoutProps) {
     return <div className={styles.fullscreen}>{children}</div>;
   }
 
-  const showSyncButton = isCommandesSection || atelier;
+  const showSyncButton = isCommandesSection;
   const showLocationSelector = isInventaireSection || isStandSection;
 
   return (

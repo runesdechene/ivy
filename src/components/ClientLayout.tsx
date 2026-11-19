@@ -11,7 +11,6 @@ import { IvyLayout } from '@/layout/IvyLayout';
 import { ParametresLayout } from '@/layout/ParametresLayout';
 import { TopNavbar } from '@/components/TopNavbar/TopNavbar';
 import { usePathname } from 'next/navigation';
-import { useAtelier } from '@/lib/atelier';
 
 interface ClientLayoutProps {
   theme: any;
@@ -25,9 +24,8 @@ export function ClientLayout({ theme, children }: ClientLayoutProps) {
   const isHubSection = pathname.startsWith('/ivy/hub');
   const isParametresPage = pathname.startsWith('/parametres');
 
-  const atelier = useAtelier();
-  // La section HUB a son propre layout sans TopNavbar ; IVY Atelier n'a que ses deux onglets
-  const showTopNavbar = !isAuthPage && !isHubSection && !atelier;
+  // La section HUB a son propre layout sans TopNavbar
+  const showTopNavbar = !isAuthPage && !isHubSection;
 
   return (
     <MantineProvider theme={theme}>
