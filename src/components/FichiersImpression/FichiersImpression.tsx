@@ -74,29 +74,65 @@ async function telecharger(url: string, nom: string) {
   lien.click();
 }
 
-/** Les fichiers d'une ligne de commande : un clic les télécharge, ou on les glisse. shortcut: adresse signée valable 1 h, recharger la page au-delà. */
+/** IVY Atelier : un fichier posé une fois sur le disque par l'application, partagé entre toutes les lignes. */
+const surDisque = new Map<string, Promise<boolean>>();
+const poser = (url: string, nom: string) => {
+  if (!surDisque.has(url)) surDisque.set(url, window.ivyAtelier!.preparer(url, nom));
+  return surDisque.get(url)!;
+};
+
+/**
+ * Les fichiers d'une ligne de commande : un clic les télécharge, ou on les glisse.
+ * Dans IVY Atelier, l'application pose chaque fichier sur le disque et le glisse comme un vrai fichier :
+ * l'étiquette ne devient glissable qu'une fois le fichier posé, jamais un glisser vide.
+ * shortcut: adresse signée valable 1 h, recharger la page au-delà.
+ */
 export function FichiersDeLaLigne({ ligne, adresses }: { ligne: Ligne | undefined; adresses: Record<string, string> }) {
+  const [poses, setPoses] = useState<Record<string, boolean>>({}); // nom → posé (true) ou échec (false)
+  useEffect(() => {
+    if (!window.ivyAtelier || !ligne) return;
+    let actif = true;
+    for (const { nom } of ligne.fichiers) {
+      const url = adresses[nom];
+      if (url) void poser(url, nom).then((ok) => { if (actif) setPoses((p) => ({ ...p, [nom]: ok })); });
+    }
+    return () => { actif = false; };
+  }, [ligne, adresses]);
+
   if (!ligne) return null;
+  const atelier = typeof window !== 'undefined' && !!window.ivyAtelier;
   return (
     <div className={styles.rangee}>
       {ligne.manque && <span className={styles.manque}>{ligne.manque}</span>}
       {ligne.fichiers.map(({ nom }) => {
         const url = adresses[nom];
+        const etat = poses[nom]; // atelier : undefined = en cours, true = posé, false = échec
+        const echec = atelier && etat === false;
+        const pret = !!url && (!atelier || etat === true);
         return (
           <button
             type="button"
             key={nom}
             className={styles.fichier}
-            title={`${nom} — clic pour télécharger`}
-            disabled={!url}
-            onClick={(e) => { e.stopPropagation(); if (url) void telecharger(url, nom); }}
-            onPointerEnter={() => url && preparer(url)} // la copie arrive pendant qu'on vise
-            draggable={!!url}
-            // Glisser-déposer de fichier de Chrome : Graphics Lab reçoit le PNG sous son nom, depuis la copie si elle est là.
-            onDragStart={(e) => url && e.dataTransfer.setData('DownloadURL', `image/png:${nom}:${prete.get(url) ?? url}`)}
+            title={echec ? `${nom} — adresse expirée, recharger la page` : `${nom} — clic pour télécharger`}
+            disabled={!pret && !echec}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (echec) location.reload();
+              else if (url) void telecharger(url, nom);
+            }}
+            onPointerEnter={() => url && !atelier && preparer(url)} // navigateur : la copie arrive pendant qu'on vise
+            draggable={pret}
+            onDragStart={(e) => {
+              if (!url) return;
+              // IVY Atelier : l'application lâche le vrai fichier, que le logiciel d'impression accepte.
+              if (atelier) { e.preventDefault(); window.ivyAtelier!.glisser(url, nom); return; }
+              // Navigateur : glisser-déposer de fichier de Chrome, depuis la copie si elle est là.
+              e.dataTransfer.setData('DownloadURL', `image/png:${nom}:${prete.get(url) ?? url}`);
+            }}
           >
-            {url ? <IconPrinter size={12} /> : <Loader size={10} />}
-            {nom.replace(/\.png$/, '').split(' ').slice(1).join(' ')}
+            {pret ? <IconPrinter size={12} /> : echec ? null : <Loader size={10} />}
+            {echec ? 'recharger la page' : nom.replace(/\.png$/, '').split(' ').slice(1).join(' ')}
           </button>
         );
       })}
