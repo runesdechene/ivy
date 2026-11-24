@@ -129,6 +129,49 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ gabarit: versGabarit(svc, data as LigneGabarit) });
 }
 
+/**
+ * Applique les ombres, leurs intensités et le masque d'un gabarit à toutes les autres couleurs du même modèle et de
+ * la même face. Chaque couleur reçoit sa propre copie des fichiers : un remplacement ailleurs ne la supprime pas.
+ */
+export async function PATCH(request: NextRequest) {
+  const body = await request.json().catch(() => null) as { shopId?: string; id?: string } | null;
+  const acces = await autoriser(request, body?.shopId);
+  if (!acces.ok) return acces.reponse;
+  const { svc } = acces.auth;
+
+  const colonnes = 'id, modele, couleur, face, ombres_clair_path, ombres_sombre_path, masque_path, ombres_clair_intensite, ombres_sombre_intensite';
+  const { data: source } = await svc.from('mockup_gabarits').select(colonnes).eq('shop_id', acces.shopId).eq('id', body?.id ?? '').maybeSingle();
+  if (!source) return erreur('Gabarit introuvable', 404);
+  const { data: cibles, error } = await svc.from('mockup_gabarits').select(colonnes)
+    .eq('shop_id', acces.shopId).eq('modele', source.modele).eq('face', source.face).neq('id', source.id);
+  if (error) return erreur(error.message, 500);
+
+  const fichiers = ['ombres_clair_path', 'ombres_sombre_path', 'masque_path'] as const;
+  let faites = 0;
+  for (const cible of cibles ?? []) {
+    const nouveaux: Partial<Record<(typeof fichiers)[number], string | null>> = {};
+    try {
+      for (const c of fichiers) nouveaux[c] = source[c] ? await copierImage(svc, acces.shopId, 'gabarits', source[c]) : null;
+    } catch (e) {
+      await retirer(svc, Object.values(nouveaux));
+      return erreur(`${(e as Error).message} (${faites} couleur(s) faite(s) avant l’erreur)`, 500);
+    }
+    const { error: e2 } = await svc.from('mockup_gabarits').update({
+      ...nouveaux,
+      ombres_clair_intensite: source.ombres_clair_intensite,
+      ombres_sombre_intensite: source.ombres_sombre_intensite,
+      updated_at: new Date().toISOString(),
+    }).eq('shop_id', acces.shopId).eq('id', cible.id);
+    if (e2) {
+      await retirer(svc, Object.values(nouveaux));
+      return erreur(`${e2.message} (${faites} couleur(s) faite(s) avant l’erreur)`, 500);
+    }
+    await retirer(svc, fichiers.map((c) => cible[c])); // les anciens fichiers de cette couleur, une fois remplacés
+    faites++;
+  }
+  return NextResponse.json({ couleurs: faites });
+}
+
 export async function DELETE(request: NextRequest) {
   const params = request.nextUrl.searchParams;
   const acces = await autoriser(request, params.get('shopId'));

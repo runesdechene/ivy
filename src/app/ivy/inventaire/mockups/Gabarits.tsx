@@ -60,6 +60,7 @@ export function Gabarits({ shopId }: { shopId: string }) {
   const gabarits = data?.gabarits ?? [];
   const modeles = data?.modeles ?? {};
   const actuel = gabarits.find((g) => g.id === brouillon?.id) ?? null;
+  const autresCouleurs = actuel ? gabarits.filter((g) => g.modele === actuel.modele && g.face === actuel.face && g.id !== actuel.id).length : 0;
   const [zoneDe, setZoneDe] = useState<string | null>(null); // modèle dont on copie la zone d'impression
   // Fichiers déjà en place : ceux du gabarit ouvert, ou du gabarit qu'on duplique.
   const enPlace = actuel ?? gabarits.find((g) => g.id === brouillon?.copieDe) ?? null;
@@ -160,6 +161,22 @@ export function Gabarits({ shopId }: { shopId: string }) {
       notifications.show({ color: 'green', message: `${libelle(gabarit)} enregistré` });
       await refetch();
       setBrouillon(depuis(gabarit));
+    } catch (e) {
+      notifications.show({ color: 'red', message: (e as Error).message });
+    } finally {
+      setEnvoi(false);
+    }
+  }
+
+  async function appliquerATous() {
+    if (!actuel) return;
+    setEnvoi(true);
+    try {
+      const { couleurs } = await authJson<{ couleurs: number }>('/api/mockups/gabarits', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shopId, id: actuel.id }),
+      });
+      notifications.show({ color: 'green', message: `Ombres et masque appliqués à ${couleurs} autre(s) couleur(s)` });
+      await refetch();
     } catch (e) {
       notifications.show({ color: 'red', message: (e as Error).message });
     } finally {
@@ -301,6 +318,12 @@ export function Gabarits({ shopId }: { shopId: string }) {
             </Group>
             <div className={styles.aide}>Masque : noir là où l’encre s’efface (cordons, capuche), blanc ou transparent ailleurs, PNG à la taille de la photo.</div>
             <div className={styles.aide}>Sans fichier, IVY tire les ombres de la photo (curseur = intensité). Un fichier déposé l’emporte : calque d’ombres seul, PNG à la taille de la photo.</div>
+            {actuel && autresCouleurs > 0 && (
+              <Button size="xs" variant="default" loading={envoi} onClick={appliquerATous}
+                title="Enregistre d’abord : ce sont les ombres et le masque enregistrés qui partent">
+                Appliquer ombres et masque aux {autresCouleurs} autres couleurs
+              </Button>
+            )}
             {brouillon.face === 'recto' && !brouillon.poitrine && (
               <Button size="xs" variant="default" onClick={() => changer({ poitrine: { x: brouillon.cadre.x + (brouillon.cadre.hauteur * CADRE_LARGEUR_CM / CADRE_HAUTEUR_CM) / 2, y: brouillon.cadre.y } })}>
                 Poser le point poitrine
