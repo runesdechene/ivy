@@ -61,6 +61,10 @@ export function Gabarits({ shopId }: { shopId: string }) {
   const modeles = data?.modeles ?? {};
   const actuel = gabarits.find((g) => g.id === brouillon?.id) ?? null;
   const autresCouleurs = actuel ? gabarits.filter((g) => g.modele === actuel.modele && g.face === actuel.face && g.id !== actuel.id).length : 0;
+  // Le bouton « Appliquer » part de ce qui est enregistré : un réglage en cours le rendrait trompeur.
+  const nonEnregistre = !!brouillon && (!!(brouillon.ombresClair || brouillon.ombresSombre || brouillon.masque)
+    || Object.values(brouillon.retirer).some(Boolean)
+    || brouillon.intensites.CLAIR !== actuel?.intensites.CLAIR || brouillon.intensites.SOMBRE !== actuel?.intensites.SOMBRE);
   const [zoneDe, setZoneDe] = useState<string | null>(null); // modèle dont on copie la zone d'impression
   // Fichiers déjà en place : ceux du gabarit ouvert, ou du gabarit qu'on duplique.
   const enPlace = actuel ?? gabarits.find((g) => g.id === brouillon?.copieDe) ?? null;
@@ -319,9 +323,9 @@ export function Gabarits({ shopId }: { shopId: string }) {
             <div className={styles.aide}>Masque : noir là où l’encre s’efface (cordons, capuche), blanc ou transparent ailleurs, PNG à la taille de la photo.</div>
             <div className={styles.aide}>Sans fichier, IVY tire les ombres de la photo (curseur = intensité). Un fichier déposé l’emporte : calque d’ombres seul, PNG à la taille de la photo.</div>
             {actuel && autresCouleurs > 0 && (
-              <Button size="xs" variant="default" loading={envoi} onClick={appliquerATous}
-                title="Enregistre d’abord : ce sont les ombres et le masque enregistrés qui partent">
-                Appliquer ombres et masque aux {autresCouleurs} autres couleurs
+              <Button size="xs" variant="default" loading={envoi} onClick={appliquerATous} disabled={nonEnregistre}
+                title={nonEnregistre ? 'Enregistre d’abord : ce sont les ombres et le masque enregistrés qui partent' : undefined}>
+                Appliquer les ombres et le masque de {actuel.couleur} · {actuel.face} aux {autresCouleurs} autres couleurs
               </Button>
             )}
             {brouillon.face === 'recto' && !brouillon.poitrine && (

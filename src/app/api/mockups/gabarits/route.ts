@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Applique les ombres, leurs intensités et le masque d'un gabarit à toutes les autres couleurs du même modèle et de
+ * Applique les ombres, leurs intensités et le masque enregistrés d'un gabarit à toutes les autres couleurs du même modèle et de
  * la même face. Chaque couleur reçoit sa propre copie des fichiers : un remplacement ailleurs ne la supprime pas.
  */
 export async function PATCH(request: NextRequest) {
@@ -149,9 +149,10 @@ export async function PATCH(request: NextRequest) {
   const fichiers = ['ombres_clair_path', 'ombres_sombre_path', 'masque_path'] as const;
   let faites = 0;
   for (const cible of cibles ?? []) {
-    const nouveaux: Partial<Record<(typeof fichiers)[number], string | null>> = {};
+    // Seuls les fichiers que la source possède partent : une source sans masque n'efface pas celui des autres.
+    const nouveaux: Partial<Record<(typeof fichiers)[number], string>> = {};
     try {
-      for (const c of fichiers) nouveaux[c] = source[c] ? await copierImage(svc, acces.shopId, 'gabarits', source[c]) : null;
+      for (const c of fichiers) if (source[c]) nouveaux[c] = await copierImage(svc, acces.shopId, 'gabarits', source[c]);
     } catch (e) {
       await retirer(svc, Object.values(nouveaux));
       return erreur(`${(e as Error).message} (${faites} couleur(s) faite(s) avant l’erreur)`, 500);
@@ -166,7 +167,7 @@ export async function PATCH(request: NextRequest) {
       await retirer(svc, Object.values(nouveaux));
       return erreur(`${e2.message} (${faites} couleur(s) faite(s) avant l’erreur)`, 500);
     }
-    await retirer(svc, fichiers.map((c) => cible[c])); // les anciens fichiers de cette couleur, une fois remplacés
+    await retirer(svc, fichiers.filter((c) => c in nouveaux).map((c) => cible[c])); // les anciens fichiers remplacés, et eux seuls
     faites++;
   }
   return NextResponse.json({ couleurs: faites });
