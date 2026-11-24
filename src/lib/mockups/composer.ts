@@ -1,5 +1,5 @@
 import {
-  bornesDessin, carteOmbres, elargir, placerMotif, placerPoitrine, teinteReglee,
+  alphaDuMasque, bornesDessin, carteOmbres, elargir, placerMotif, placerPoitrine, teinteReglee,
   type Cadre, type Gabarit, type Impression, type Point, type Rect, type Reglages, type Version,
 } from './regles';
 
@@ -69,15 +69,15 @@ export function centrer(source: Source, axe: number | null | undefined): Source 
   return { image: canvas as unknown as Img, dessin: { x: 0, y: 0, w: largeur, h: dessin.h } };
 }
 
-/** Masque de fusion façon Photoshop (gris) → toile dont l'opacité suit le gris, pour un « destination-in ». */
+/**
+ * Masque → toile dont l'opacité dit où l'encre reste, pour un « destination-in ».
+ * Seul le sombre opaque efface : un masque de fusion (blanc/noir) comme un noir sur fond transparent marchent.
+ */
 function masqueEnAlpha(image: Img): HTMLCanvasElement {
   const [canvas, ctx] = toile(image.width, image.height);
   ctx.drawImage(image, 0, 0);
   const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const d = pixels.data;
-  for (let i = 0; i < d.length; i += 4) {
-    d[i + 3] = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000 * (d[i + 3] / 255);
-  }
+  alphaDuMasque(pixels.data);
   ctx.putImageData(pixels, 0, 0);
   return canvas;
 }

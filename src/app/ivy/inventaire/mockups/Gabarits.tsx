@@ -299,7 +299,7 @@ export function Gabarits({ shopId }: { shopId: string }) {
                 <Button size="xs" variant="subtle" color="red" onClick={() => changer({ retirer: { ...brouillon.retirer, MASQUE: true } })}>Retirer</Button>
               )}
             </Group>
-            <div className={styles.aide}>Masque : le masque de fusion du PSD, blanc où l’encre passe, noir là où elle s’efface (cordons, capuche), PNG à la taille de la photo.</div>
+            <div className={styles.aide}>Masque : noir là où l’encre s’efface (cordons, capuche), blanc ou transparent ailleurs, PNG à la taille de la photo.</div>
             <div className={styles.aide}>Sans fichier, IVY tire les ombres de la photo (curseur = intensité). Un fichier déposé l’emporte : calque d’ombres seul, PNG à la taille de la photo.</div>
             {brouillon.face === 'recto' && !brouillon.poitrine && (
               <Button size="xs" variant="default" onClick={() => changer({ poitrine: { x: brouillon.cadre.x + (brouillon.cadre.hauteur * CADRE_LARGEUR_CM / CADRE_HAUTEUR_CM) / 2, y: brouillon.cadre.y } })}>

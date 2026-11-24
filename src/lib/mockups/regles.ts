@@ -195,6 +195,15 @@ export function bornesDessin(alpha: Uint8ClampedArray, largeur: number, hauteur:
   return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
 }
 
+/** Masque (RGBA, modifié en place) → l'opacité dit où l'encre reste. Seul le sombre opaque efface :
+ *  un masque de fusion blanc/noir comme un noir sur fond transparent marchent. */
+export function alphaDuMasque(d: Uint8ClampedArray): void {
+  for (let i = 0; i < d.length; i += 4) {
+    const gris = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000;
+    d[i + 3] = 255 - (d[i + 3] / 255) * (255 - gris);
+  }
+}
+
 /** Carte d'ombres tirée de la photo (RGBA) : chaque gris est recentré sur 128, le neutre de la lumière crue,
  *  autour du gris moyen du tissu dans le cadre, et son écart multiplié par l'intensité. */
 export function carteOmbres(rgba: Uint8ClampedArray, largeur: number, cadre: Cadre, intensite: number): Uint8ClampedArray {

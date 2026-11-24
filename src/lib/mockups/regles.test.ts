@@ -4,7 +4,7 @@ import { crc32 } from 'node:zlib';
 import {
   lireImpression, lireTaille, noirPur, tailleDansNom, rangTaille, teinteReglee, trouverFichier,
   axeSymetrique, elargir, hauteurMax, placerMotif, placerPoitrine, planifierApercus, profilSuivi, profilsDepuisExistants,
-  fichiersImpression, demandesImpression, fichierDemande, bornesDessin, avec300dpi, cleMotif, carteOmbres, roleDuFichier, motifDuTitre,
+  alphaDuMasque, fichiersImpression, demandesImpression, fichierDemande, bornesDessin, avec300dpi, cleMotif, carteOmbres, roleDuFichier, motifDuTitre,
 } from './regles.ts';
 import type { Reglages, FicheMotif, Cadre, Gabarit, VarianteImpression, Profil, Rect } from './regles.ts';
 
@@ -270,4 +270,11 @@ test('noirPur : le quasi-noir de la palette redevient noir pur, CRC recalculé',
   const png = Buffer.concat([signature, morceau('PLTE', [1, 1, 0, 4, 2, 3, 200, 150, 100, 5, 0, 0]), morceau('IEND', [])]);
   const attendu = Buffer.concat([signature, morceau('PLTE', [0, 0, 0, 0, 0, 0, 200, 150, 100, 5, 0, 0]), morceau('IEND', [])]);
   assert.deepEqual(Buffer.from(noirPur(new Uint8Array(png))), attendu);
+});
+
+test('alphaDuMasque : seul le sombre opaque efface, fond blanc ou transparent', () => {
+  // blanc opaque, noir opaque, noir transparent, blanc transparent
+  const d = new Uint8ClampedArray([255, 255, 255, 255, 0, 0, 0, 255, 0, 0, 0, 0, 255, 255, 255, 0]);
+  alphaDuMasque(d);
+  assert.deepEqual([d[3], d[7], d[11], d[15]], [255, 0, 255, 255]);
 });
