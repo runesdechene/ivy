@@ -17,6 +17,9 @@ directement par l'API Shopify : elles valident les valeurs, filtrent par boutiqu
 | Écrire des métachamps | `POST /api/mockups/metachamps` `{shopId, ecritures:[{variantId, cle:'recto'\|'verso'\|'taille', valeur}]}` — **200 max par requête**, découper |
 | Profils de tailles | `GET/POST/DELETE /api/mockups/profils` (`DELETE ?shopId&id`) |
 | Générer / envoyer les mockups | `pnpm mockups "<produit>" \| <motif> [--envoyer]` |
+| Trouver les produits d'un motif | `GET /api/mockups/produit?shopId&recherche=<Motif>` → `produits[{id,title}]` (actifs dans IVY) |
+| Lire une fiche Shopify | `GET /api/mockups/fiche?shopId&productId` → `titre`, `handle`, `statut`, `tags`, `seo`, `champs[{cle,type,valeur}]` (métachamps `custom` : `illustrateur`, `illustration_produit`…) |
+| Écrire une fiche | `PATCH /api/mockups/fiche` `{shopId, productId, titre?, tags?, seoDescription?, champs?:{cle: valeur\|null}}` → la fiche relue. Clé sans définition Shopify refusée ; `null` efface |
 
 ## Méthode
 
