@@ -46,14 +46,17 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/** Corps : `{ shopId, productId, titre?, tags?, seoDescription?, champs?: { [cle]: valeur | null } }` ; renvoie la fiche relue. */
+const STATUTS = ['ACTIVE', 'UNLISTED', 'DRAFT', 'ARCHIVED'];
+
+/** Corps : `{ shopId, productId, titre?, statut?, tags?, seoDescription?, champs?: { [cle]: valeur | null } }` ; renvoie la fiche relue. */
 export async function PATCH(request: NextRequest) {
   const body = await request.json().catch(() => null) as {
-    shopId?: string; productId?: string; titre?: string; tags?: string[]; seoDescription?: string; champs?: Record<string, string | null>;
+    shopId?: string; productId?: string; titre?: string; statut?: string; tags?: string[]; seoDescription?: string; champs?: Record<string, string | null>;
   } | null;
   const acces = await autoriser(request, body?.shopId);
   if (!acces.ok) return acces.reponse;
   if (body?.titre !== undefined && !body.titre.trim()) return erreur('Titre vide');
+  if (body?.statut !== undefined && !STATUTS.includes(body.statut)) return erreur(`Statut invalide : ${STATUTS.join(', ')}`);
   if (body?.tags !== undefined && (!Array.isArray(body.tags) || body.tags.some((t) => typeof t !== 'string' || !t.trim()))) return erreur('Tags invalides');
 
   try {
@@ -68,6 +71,7 @@ export async function PATCH(request: NextRequest) {
 
     const produit: Record<string, unknown> = { id: gid };
     if (body?.titre !== undefined) produit.title = body.titre.trim();
+    if (body?.statut !== undefined) produit.status = body.statut;
     if (body?.tags !== undefined) produit.tags = body.tags.map((t) => t.trim());
     if (body?.seoDescription !== undefined) produit.seo = { title: avant.seo.titre, description: body.seoDescription };
     const aEcrire = champs.filter(([, v]) => v !== null).map(([cle, valeur]) =>
