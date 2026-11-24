@@ -5,8 +5,10 @@ import { boutique, shopifyGraphql, type Boutique } from '@/lib/mockups/shopify';
 
 /**
  * Envoi des mockups enregistrés sur Shopify, en deux temps pour ne jamais laisser un produit sans photo :
- *   POST  : crée les nouvelles images et les rattache à leurs variantes ; renvoie les anciennes et les nouvelles.
- *   PATCH : une fois les nouvelles traitées par Shopify (READY), supprime les anciennes.
+ *   POST  : crée les nouvelles images ; renvoie les anciennes et les nouvelles.
+ *   PATCH : une fois les nouvelles traitées par Shopify (READY), les rattache à leurs variantes, vérifie, puis
+ *           supprime les anciennes. À appeler toujours, même sans anciennes : c'est lui qui rattache.
+ * Rattacher dans le POST (mediaSrc) échoue en silence et au hasard sur une image encore en traitement (Loki, 24/11/2026).
  */
 
 interface Media { id: string; alt: string | null; status: 'UPLOADED' | 'PROCESSING' | 'READY' | 'FAILED' }
@@ -40,40 +42,33 @@ export async function POST(request: NextRequest) {
     const gid = `gid://shopify/Product/${lu.produit.shopify_id}`;
     const anciens = (await mediasDuProduit(shop, gid)).map((m) => m.id);
 
-    // Chaque variante prend l'image de sa couleur : le recto, sinon le verso.
-    const imageDe = (couleur: string) =>
-      (aEnvoyer.find((m) => m.couleur === couleur && m.face === 'recto') ?? aEnvoyer.find((m) => m.couleur === couleur))?.url;
-    const variants = body?.rattacher === false ? [] : lu.variantes.flatMap((v) => {
-      const url = imageDe(v.couleur);
-      return url ? [{ id: `gid://shopify/ProductVariant/${v.shopifyId}`, mediaSrc: [url] }] : [];
-    });
-
-    const d = await shopifyGraphql<{ productVariantsBulkUpdate: { product: { media: { nodes: Media[] } } } }>(shop,
-      `mutation($productId: ID!, $media: [CreateMediaInput!], $variants: [ProductVariantsBulkInput!]!) {
-        productVariantsBulkUpdate(productId: $productId, media: $media, variants: $variants) {
-          product { media(first: 250) { nodes { id alt status } } }
-          userErrors { field message }
-        }
+    // productVariantsBulkUpdate ignore `media` quand `variants` est vide : on crée les images par productUpdate.
+    await shopifyGraphql(shop,
+      `mutation($product: ProductUpdateInput!, $media: [CreateMediaInput!]) {
+        productUpdate(product: $product, media: $media) { product { id } userErrors { field message } }
       }`,
-      { productId: gid, media: aEnvoyer.map((m) => ({ originalSource: m.url, alt: m.alt, mediaContentType: 'IMAGE' })), variants });
+      { product: { id: gid }, media: aEnvoyer.map((m) => ({ originalSource: m.url, alt: m.alt, mediaContentType: 'IMAGE' })) });
 
-    const nouveaux = d.productVariantsBulkUpdate.product.media.nodes.filter((m) => !anciens.includes(m.id)).map((m) => m.id);
+    const nouveaux = (await mediasDuProduit(shop, gid)).filter((m) => !anciens.includes(m.id)).map((m) => m.id);
+    // Garde-fou : sans toutes ses nouvelles images, le PATCH supprimerait les anciennes pour rien.
+    if (nouveaux.length !== aEnvoyer.length) return erreur(`Shopify a créé ${nouveaux.length} image(s) sur ${aEnvoyer.length} : rien n'est remplacé`, 502);
     // Repère « à jour sur Shopify » : un mockup régénéré après cette date redevient à envoyer.
     await svc.from('mockups').update({ envoye_le: new Date().toISOString() }).in('id', aEnvoyer.map((m) => m.id));
-    return NextResponse.json({ anciens, nouveaux, envoyees: aEnvoyer.length, rattachees: variants.length });
+    return NextResponse.json({ anciens, nouveaux, envoyees: aEnvoyer.length });
   } catch (e) {
     return erreur((e as Error).message, 502);
   }
 }
 
 export async function PATCH(request: NextRequest) {
-  const body = await request.json().catch(() => null) as { shopId?: string; productId?: string; anciens?: string[]; nouveaux?: string[] } | null;
+  const body = await request.json().catch(() => null) as { shopId?: string; productId?: string; anciens?: string[]; nouveaux?: string[]; rattacher?: boolean } | null;
   const acces = await autoriser(request, body?.shopId);
   if (!acces.ok) return acces.reponse;
   const { svc } = acces.auth;
   const anciens = body?.anciens ?? [];
   const nouveaux = body?.nouveaux ?? [];
   if (anciens.some((id) => nouveaux.includes(id))) return erreur('Une image à supprimer fait partie des nouvelles');
+  if (anciens.length && !nouveaux.length) return erreur('Aucune nouvelle image : les anciennes sont gardées');
 
   try {
     const lu = await lireProduit(svc, acces.shopId, body?.productId ?? '');
@@ -86,6 +81,31 @@ export async function PATCH(request: NextRequest) {
     if (nouveaux.some((id) => etat(id) === 'FAILED' || !etat(id))) return erreur('Shopify a refusé une des nouvelles images : les anciennes sont gardées', 502);
     if (nouveaux.some((id) => etat(id) !== 'READY')) return erreur('Images encore en traitement chez Shopify', 409);
 
+    let rattachees = 0;
+    if (body?.rattacher !== false) {
+      // Chaque variante prend l'image de sa couleur (alt « <titre> — <couleur> — <face> ») : le recto, sinon le verso.
+      const neuves = medias.filter((m) => nouveaux.includes(m.id));
+      const alt = (couleur: string, face: string) => `${lu.produit.title} — ${couleur} — ${face}`;
+      const imageDe = (couleur: string) =>
+        (neuves.find((m) => m.alt === alt(couleur, 'recto')) ?? neuves.find((m) => m.alt === alt(couleur, 'verso')))?.id;
+      const variants = lu.variantes.flatMap((v) => {
+        const mediaId = imageDe(v.couleur);
+        return mediaId ? [{ id: `gid://shopify/ProductVariant/${v.shopifyId}`, mediaId }] : [];
+      });
+      if (variants.length) {
+        await shopifyGraphql(shop, `mutation($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+          productVariantsBulkUpdate(productId: $productId, variants: $variants) { userErrors { field message } }
+        }`, { productId: gid, variants });
+        // Shopify peut accepter sans rattacher : on relit avant de toucher aux anciennes.
+        const r = await shopifyGraphql<{ product: { variants: { nodes: { id: string; media: { nodes: { id: string }[] } }[] } } }>(shop,
+          `query($id: ID!) { product(id: $id) { variants(first: 250) { nodes { id media(first: 1) { nodes { id } } } } } }`, { id: gid });
+        const lien = new Map(r.product.variants.nodes.map((n) => [n.id, n.media.nodes[0]?.id]));
+        const rates = variants.filter((v) => lien.get(v.id) !== v.mediaId).length;
+        if (rates) return erreur(`${rates} variante(s) sur ${variants.length} sans leur nouvelle image : les anciennes sont gardées`, 502);
+      }
+      rattachees = variants.length;
+    }
+
     const aSupprimer = anciens.filter((id) => etat(id)); // déjà parties : rien à faire
     if (aSupprimer.length) {
       // Une image de produit est un fichier Shopify : le supprimer la retire du produit et de ses variantes.
@@ -93,7 +113,7 @@ export async function PATCH(request: NextRequest) {
         fileDelete(fileIds: $fileIds) { deletedFileIds userErrors { message } }
       }`, { fileIds: aSupprimer });
     }
-    return NextResponse.json({ supprimees: aSupprimer.length });
+    return NextResponse.json({ supprimees: aSupprimer.length, rattachees });
   } catch (e) {
     return erreur((e as Error).message, 502);
   }

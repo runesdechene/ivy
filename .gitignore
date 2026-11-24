@@ -55,6 +55,7 @@ __pycache__/
 # (git ne descend pas dans un dossier exclu -> on exclut le contenu, pas le dossier)
 /.claude/*
 !/.claude/rules/
+!/.claude/agents/
 /graphify-out
 /.superpowers
 /CLAUDE.md.openwolf-era

@@ -49,13 +49,14 @@ for (const p of produits) {
   }
   if (envoyerAussi) {
     try {
-      const r = await appel('/api/mockups/shopify', { shopId, productId: p.id, rattacher: true });
-      // Les anciennes photos ne partent qu'une fois les nouvelles traitées par Shopify (409 = pas encore).
-      for (let essai = 1; r.anciens.length; essai++) {
-        try { await appel('/api/mockups/shopify', { shopId, productId: p.id, anciens: r.anciens, nouveaux: r.nouveaux }, 'PATCH'); break; }
+      const r = await appel('/api/mockups/shopify', { shopId, productId: p.id });
+      // Rattachement puis retrait des anciennes, une fois les nouvelles traitées par Shopify (409 = pas encore).
+      let fin;
+      for (let essai = 1; ; essai++) {
+        try { fin = await appel('/api/mockups/shopify', { shopId, productId: p.id, anciens: r.anciens, nouveaux: r.nouveaux, rattacher: true }, 'PATCH'); break; }
         catch (e) { if (e.status !== 409 || essai >= 15) throw e; await new Promise((ok) => setTimeout(ok, 2000)); }
       }
-      console.log(`  → Shopify : ${r.envoyees} image(s), ${r.rattachees} variante(s) rattachée(s), ${r.anciens.length} ancienne(s) retirée(s)`);
+      console.log(`  → Shopify : ${r.envoyees} image(s), ${fin.rattachees} variante(s) rattachée(s) et vérifiée(s), ${fin.supprimees} ancienne(s) retirée(s)`);
     } catch (e) {
       manques++; console.log(`  ✗ Shopify : ${e.message}`);
     }

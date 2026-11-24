@@ -10,18 +10,20 @@ export async function envoyerSurShopify(
   shopId: string, productId: string, options: { remplacer: boolean; rattacher: boolean }, etape?: (texte: string) => void,
 ): Promise<BilanEnvoi> {
   etape?.('Envoi…');
-  const r = await authJson<{ anciens: string[]; nouveaux: string[]; envoyees: number; rattachees: number }>('/api/mockups/shopify', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shopId, productId, rattacher: options.rattacher }),
+  const r = await authJson<{ anciens: string[]; nouveaux: string[]; envoyees: number }>('/api/mockups/shopify', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shopId, productId }),
   });
-  if (!options.remplacer || r.anciens.length === 0) return { envoyees: r.envoyees, rattachees: r.rattachees, retirees: 0 };
+  // Le PATCH rattache les variantes une fois les images traitées : toujours l'appeler, même sans rien à retirer.
+  const anciens = options.remplacer ? r.anciens : [];
 
   for (let essai = 1; ; essai++) {
     etape?.(`Traitement chez Shopify… (${essai})`);
     const p = await authFetch('/api/mockups/shopify', {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shopId, productId, anciens: r.anciens, nouveaux: r.nouveaux }),
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shopId, productId, anciens, nouveaux: r.nouveaux, rattacher: options.rattacher }),
     });
-    const corps = await p.json() as { supprimees?: number; error?: string };
-    if (p.ok) return { envoyees: r.envoyees, rattachees: r.rattachees, retirees: corps.supprimees ?? 0 };
+    const corps = await p.json() as { supprimees?: number; rattachees?: number; error?: string };
+    if (p.ok) return { envoyees: r.envoyees, rattachees: corps.rattachees ?? 0, retirees: corps.supprimees ?? 0 };
     if (p.status !== 409 || essai >= 15) throw new Error(corps.error ?? 'Remplacement interrompu : les anciennes photos sont gardées');
     await new Promise((ok) => setTimeout(ok, 2000));
   }

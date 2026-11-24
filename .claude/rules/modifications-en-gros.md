@@ -26,4 +26,4 @@ directement par l'API Shopify : elles valident les valeurs, filtrent par boutiqu
 4. **Écrire** par paquets, puis **relire** (`GET` à nouveau) pour vérifier.
 5. Noter la décision dans le `_État.md` d'IVY (Tranché).
 
-Fiches produits (titre, description, prix) : **aucune route IVY** pour l'instant — le dire plutôt que d'improviser un appel Shopify direct.
+Fiches produits et stocks : **tout passe par IVY** (Uriel, 24/11/2026), avec ses droits Shopify (`productUpdate`, `publishablePublish`…). Protocole d'un motif : `Savoir-faire/Nouveau motif.md` du vault.
