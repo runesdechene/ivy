@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { autoriser, erreur, urlPublique } from '@/lib/mockups/serveur';
+import { autoriser, BUCKET, erreur, retirer, urlPublique } from '@/lib/mockups/serveur';
+import { genererDuo } from '@/lib/mockups/generer';
 import { lireProduit } from '@/lib/mockups/donnees';
 import { boutique, shopifyGraphql, type Boutique } from '@/lib/mockups/shopify';
 
@@ -38,6 +39,23 @@ export async function POST(request: NextRequest) {
       .map((m) => ({ ...m, url: urlPublique(svc, m.image_path)!, alt: `${lu.produit.title} — ${m.couleur} — ${m.face}` }));
     if (aEnvoyer.length === 0) return erreur('Aucun mockup enregistré pour ce produit : génère-les d’abord');
 
+    // Une couleur imprimée des deux côtés part en une seule image, recto et verso assemblés (Uriel, 24/11/2026).
+    // Les assemblages vivent dans un dossier à part, vidé à chaque envoi : Shopify garde sa propre copie.
+    const dossierDuo = `${acces.shopId}/mockups/${lu.produit.id}/duo`;
+    const { data: vieuxDuos } = await svc.storage.from(BUCKET).list(dossierDuo);
+    await retirer(svc, (vieuxDuos ?? []).map((f) => `${dossierDuo}/${f.name}`));
+    const envoi: { url: string; alt: string }[] = [];
+    for (const couleur of [...new Set(aEnvoyer.map((m) => m.couleur))]) {
+      const recto = aEnvoyer.find((m) => m.couleur === couleur && m.face === 'recto');
+      const verso = aEnvoyer.find((m) => m.couleur === couleur && m.face === 'verso');
+      if (!recto || !verso) { envoi.push(...aEnvoyer.filter((m) => m.couleur === couleur)); continue; }
+      const duo = await genererDuo(recto.url, verso.url);
+      const path = `${dossierDuo}/${crypto.randomUUID()}.webp`;
+      const { error: e } = await svc.storage.from(BUCKET).upload(path, new Uint8Array(await duo.arrayBuffer()), { contentType: 'image/webp' });
+      if (e) throw new Error(e.message);
+      envoi.push({ url: urlPublique(svc, path)!, alt: `${lu.produit.title} — ${couleur} — duo` });
+    }
+
     const shop = await boutique(svc, acces.shopId);
     const gid = `gid://shopify/Product/${lu.produit.shopify_id}`;
     const anciens = (await mediasDuProduit(shop, gid)).map((m) => m.id);
@@ -47,14 +65,14 @@ export async function POST(request: NextRequest) {
       `mutation($product: ProductUpdateInput!, $media: [CreateMediaInput!]) {
         productUpdate(product: $product, media: $media) { product { id } userErrors { field message } }
       }`,
-      { product: { id: gid }, media: aEnvoyer.map((m) => ({ originalSource: m.url, alt: m.alt, mediaContentType: 'IMAGE' })) });
+      { product: { id: gid }, media: envoi.map((m) => ({ originalSource: m.url, alt: m.alt, mediaContentType: 'IMAGE' })) });
 
     const nouveaux = (await mediasDuProduit(shop, gid)).filter((m) => !anciens.includes(m.id)).map((m) => m.id);
     // Garde-fou : sans toutes ses nouvelles images, le PATCH supprimerait les anciennes pour rien.
-    if (nouveaux.length !== aEnvoyer.length) return erreur(`Shopify a créé ${nouveaux.length} image(s) sur ${aEnvoyer.length} : rien n'est remplacé`, 502);
+    if (nouveaux.length !== envoi.length) return erreur(`Shopify a créé ${nouveaux.length} image(s) sur ${envoi.length} : rien n'est remplacé`, 502);
     // Repère « à jour sur Shopify » : un mockup régénéré après cette date redevient à envoyer.
     await svc.from('mockups').update({ envoye_le: new Date().toISOString() }).in('id', aEnvoyer.map((m) => m.id));
-    return NextResponse.json({ anciens, nouveaux, envoyees: aEnvoyer.length });
+    return NextResponse.json({ anciens, nouveaux, envoyees: envoi.length });
   } catch (e) {
     return erreur((e as Error).message, 502);
   }
@@ -83,11 +101,11 @@ export async function PATCH(request: NextRequest) {
 
     let rattachees = 0;
     if (body?.rattacher !== false) {
-      // Chaque variante prend l'image de sa couleur (alt « <titre> — <couleur> — <face> ») : le recto, sinon le verso.
+      // Chaque variante prend l'image de sa couleur (alt « <titre> — <couleur> — <face> ») : l'assemblage, sinon le recto, sinon le verso.
       const neuves = medias.filter((m) => nouveaux.includes(m.id));
       const alt = (couleur: string, face: string) => `${lu.produit.title} — ${couleur} — ${face}`;
       const imageDe = (couleur: string) =>
-        (neuves.find((m) => m.alt === alt(couleur, 'recto')) ?? neuves.find((m) => m.alt === alt(couleur, 'verso')))?.id;
+        (['duo', 'recto', 'verso'].map((f) => neuves.find((m) => m.alt === alt(couleur, f))).find(Boolean))?.id;
       const variants = lu.variantes.flatMap((v) => {
         const mediaId = imageDe(v.couleur);
         return mediaId ? [{ id: `gid://shopify/ProductVariant/${v.shopifyId}`, mediaId }] : [];

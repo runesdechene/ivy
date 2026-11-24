@@ -180,6 +180,22 @@ export function placerPoitrine(cadre: Cadre, point: Point, largeurPx: number, ha
   return { x: point.x - w / 2, y: point.y, w, h: hauteurPx * echelle };
 }
 
+/**
+ * Un produit imprimé des deux côtés a un seul mockup par couleur (comme les Hoplite) : sur une toile 1100 × 1260,
+ * le recto en haut à gauche, le verso devant, en bas à droite, un peu plus petit pour laisser voir la poitrine.
+ * Les hauteurs s'appliquent au vêtement lui-même (rectangle de ses pixels visibles), pas à la photo.
+ */
+export const DUO = { largeur: 1100, hauteur: 1260, marge: 26, hauteurRecto: 980, hauteurVerso: 940 };
+
+export function placerDuo(recto: Rect, verso: Rect): { recto: Rect; verso: Rect } {
+  const r = { w: recto.w * DUO.hauteurRecto / recto.h, h: DUO.hauteurRecto };
+  const v = { w: verso.w * DUO.hauteurVerso / verso.h, h: DUO.hauteurVerso };
+  return {
+    recto: { x: DUO.marge, y: DUO.marge, ...r },
+    verso: { x: DUO.largeur - DUO.marge - v.w, y: DUO.hauteur - DUO.marge - v.h, ...v },
+  };
+}
+
 /** Rectangle des pixels non transparents ; `alpha` = un octet par pixel. */
 export function bornesDessin(alpha: Uint8ClampedArray, largeur: number, hauteur: number): Rect | null {
   let x0 = largeur, y0 = hauteur, x1 = -1, y1 = -1;

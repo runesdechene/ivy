@@ -4,7 +4,7 @@ import { crc32 } from 'node:zlib';
 import {
   lireImpression, lireTaille, noirPur, tailleDansNom, rangTaille, teinteReglee, trouverFichier,
   axeSymetrique, elargir, hauteurMax, placerMotif, placerPoitrine, planifierApercus, profilSuivi, profilsDepuisExistants,
-  alphaDuMasque, fichiersImpression, demandesImpression, fichierDemande, bornesDessin, avec300dpi, cleMotif, carteOmbres, roleDuFichier, motifDuTitre,
+  alphaDuMasque, DUO, placerDuo, fichiersImpression, demandesImpression, fichierDemande, bornesDessin, avec300dpi, cleMotif, carteOmbres, roleDuFichier, motifDuTitre,
 } from './regles.ts';
 import type { Reglages, FicheMotif, Cadre, Gabarit, VarianteImpression, Profil, Rect } from './regles.ts';
 
@@ -277,4 +277,12 @@ test('alphaDuMasque : seul le sombre opaque efface, fond blanc ou transparent', 
   const d = new Uint8ClampedArray([255, 255, 255, 255, 0, 0, 0, 255, 0, 0, 0, 0, 255, 255, 255, 0]);
   alphaDuMasque(d);
   assert.deepEqual([d[3], d[7], d[11], d[15]], [255, 0, 255, 255]);
+});
+
+test('placerDuo : recto en haut à gauche, verso plus petit devant en bas à droite, dans la toile', () => {
+  const { recto, verso } = placerDuo({ x: 0, y: 0, w: 722, h: 969 }, { x: 0, y: 0, w: 725, h: 960 });
+  assert.deepEqual([recto.x, recto.y, recto.h], [DUO.marge, DUO.marge, DUO.hauteurRecto]);
+  assert.equal(Math.round(verso.x + verso.w), DUO.largeur - DUO.marge);
+  assert.equal(verso.y + verso.h, DUO.hauteur - DUO.marge);
+  assert.ok(verso.h < recto.h && verso.x > recto.x);
 });

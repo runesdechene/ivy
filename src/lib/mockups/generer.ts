@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Canvas, createCanvas, loadImage } from '@napi-rs/canvas';
 import sharp from 'sharp';
-import { centrer, chargerGabarit, chargerSource, composerMockup, peindre, utiliserPlateforme, versBlob, type Img } from './composer';
+import { centrer, chargerGabarit, chargerSource, composerDuo, composerMockup, peindre, utiliserPlateforme, versBlob, type Img } from './composer';
 import { lireGabarits, lireMotif, lireProduit, lireReglages } from './donnees';
 import { BUCKET, retirer, urlPublique } from './serveur';
 import {
@@ -25,6 +25,16 @@ utiliserPlateforme({
     return new Blob([new Uint8Array(octets)], { type });
   },
 });
+
+/** Le mockup unique d'une couleur imprimée des deux côtés, assemblé depuis ses mockups recto et verso. */
+export async function genererDuo(urlRecto: string, urlVerso: string): Promise<Blob> {
+  const [recto, verso] = await Promise.all([urlRecto, urlVerso].map(async (u) => {
+    const r = await fetch(u);
+    if (!r.ok) throw new Error(`Mockup illisible (${r.status})`);
+    return chargerSource(await r.blob());
+  }));
+  return versBlob(composerDuo(recto, verso), 'image/webp');
+}
 
 export type Resultat = { image_url: string } | { manque: NonNullable<Apercu['manque']> | 'motif' | 'impression' };
 

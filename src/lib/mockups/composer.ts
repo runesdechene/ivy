@@ -1,5 +1,5 @@
 import {
-  alphaDuMasque, bornesDessin, carteOmbres, elargir, placerMotif, placerPoitrine, teinteReglee,
+  alphaDuMasque, bornesDessin, DUO, placerDuo, carteOmbres, elargir, placerMotif, placerPoitrine, teinteReglee,
   type Cadre, type Gabarit, type Impression, type Point, type Rect, type Reglages, type Version,
 } from './regles';
 
@@ -152,6 +152,16 @@ export function composerMockup(g: GabaritCharge, source: Source, impression: Imp
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'hard-light';
     ctx.drawImage(calque, 0, 0);
+  }
+  return canvas;
+}
+
+/** Le mockup unique d'une couleur imprimée des deux côtés : recto et verso assemblés (voir `placerDuo`). */
+export function composerDuo(recto: Source, verso: Source): HTMLCanvasElement {
+  const place = placerDuo(recto.dessin, verso.dessin);
+  const [canvas, ctx] = toile(DUO.largeur, DUO.hauteur);
+  for (const [s, r] of [[recto, place.recto], [verso, place.verso]] as const) {
+    ctx.drawImage(s.image, s.dessin.x, s.dessin.y, s.dessin.w, s.dessin.h, r.x, r.y, r.w, r.h);
   }
   return canvas;
 }
