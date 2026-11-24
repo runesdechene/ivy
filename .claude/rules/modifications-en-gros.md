@@ -19,7 +19,7 @@ directement par l'API Shopify : elles valident les valeurs, filtrent par boutiqu
 | Générer / envoyer les mockups | `pnpm mockups "<produit>" \| <motif> [--envoyer]` |
 | Trouver les produits d'un motif | `GET /api/mockups/produit?shopId&recherche=<Motif>` → `produits[{id,title}]` (actifs dans IVY) |
 | Lire une fiche Shopify | `GET /api/mockups/fiche?shopId&productId` → `titre`, `handle`, `statut`, `tags`, `seo`, `champs[{cle,type,valeur}]` (métachamps `custom` : `illustrateur`, `illustration_produit`…) |
-| Écrire une fiche | `PATCH /api/mockups/fiche` `{shopId, productId, titre?, tags?, seoDescription?, champs?:{cle: valeur\|null}}` → la fiche relue. Clé sans définition Shopify refusée ; `null` efface |
+| Écrire une fiche | `PATCH /api/mockups/fiche` `{shopId, productId, titre?, statut?, tags?, seoDescription?, champs?:{cle: valeur|null}}` (statut : ACTIVE, UNLISTED, DRAFT, ARCHIVED ; passer en ACTIVE = mise en vente, accord d’RIEL)\|null}}` → la fiche relue. Clé sans définition Shopify refusée ; `null` efface |
 
 ## Méthode
 
