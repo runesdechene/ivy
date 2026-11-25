@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { autoriser, BUCKET, erreur, retirer, urlPublique } from '@/lib/mockups/serveur';
 import { genererDuo } from '@/lib/mockups/generer';
-import { lireProduit } from '@/lib/mockups/donnees';
+import { lireGabarits, lireProduit } from '@/lib/mockups/donnees';
+import { cadrageMacaron, MACARON } from '@/lib/mockups/regles';
 import { boutique, shopifyGraphql, type Boutique } from '@/lib/mockups/shopify';
 
 /**
@@ -45,11 +46,15 @@ export async function POST(request: NextRequest) {
     const { data: vieuxDuos } = await svc.storage.from(BUCKET).list(dossierDuo);
     await retirer(svc, (vieuxDuos ?? []).map((f) => `${dossierDuo}/${f.name}`));
     const envoi: { url: string; alt: string }[] = [];
+    const { gabarits } = await lireGabarits(svc, acces.shopId);
     for (const couleur of [...new Set(aEnvoyer.map((m) => m.couleur))]) {
       const recto = aEnvoyer.find((m) => m.couleur === couleur && m.face === 'recto');
       const verso = aEnvoyer.find((m) => m.couleur === couleur && m.face === 'verso');
       if (!recto || !verso) { envoi.push(...aEnvoyer.filter((m) => m.couleur === couleur)); continue; }
-      const duo = await genererDuo(recto.url, verso.url);
+      const modele = lu.variantes.find((v) => v.couleur === couleur && MACARON.modeles.includes(v.sku ?? ''))?.sku;
+      const gabarit = gabarits.find((g) => g.modele === modele && g.couleur === couleur && g.face === 'recto');
+      const macaron = gabarit?.poitrine ? cadrageMacaron(gabarit.cadre, gabarit.poitrine) : null;
+      const duo = await genererDuo(recto.url, verso.url, macaron);
       const path = `${dossierDuo}/${crypto.randomUUID()}.webp`;
       const { error: e } = await svc.storage.from(BUCKET).upload(path, new Uint8Array(await duo.arrayBuffer()), { contentType: 'image/webp' });
       if (e) throw new Error(e.message);

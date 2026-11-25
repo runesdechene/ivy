@@ -4,7 +4,7 @@ import { crc32 } from 'node:zlib';
 import {
   lireImpression, lireTaille, noirPur, tailleDansNom, rangTaille, teinteReglee, trouverFichier,
   axeSymetrique, elargir, hauteurMax, placerMotif, placerPoitrine, planifierApercus, profilSuivi, profilsDepuisExistants,
-  alphaDuMasque, DUO, placerDuo, fichiersImpression, demandesImpression, fichierDemande, bornesDessin, avec300dpi, cleMotif, carteOmbres, roleDuFichier, motifDuTitre,
+  alphaDuMasque, DUO, placerDuo, cadrageMacaron, fichiersImpression, demandesImpression, fichierDemande, bornesDessin, avec300dpi, cleMotif, carteOmbres, roleDuFichier, motifDuTitre,
 } from './regles.ts';
 import type { Reglages, FicheMotif, Cadre, Gabarit, VarianteImpression, Profil, Rect } from './regles.ts';
 
@@ -285,4 +285,9 @@ test('placerDuo : recto en haut à gauche, verso plus petit devant en bas à dro
   assert.equal(Math.round(verso.x + verso.w), DUO.largeur - DUO.marge);
   assert.equal(verso.y + verso.h, DUO.hauteur - DUO.marge);
   assert.ok(verso.h < recto.h && verso.x > recto.x);
+});
+
+test('cadrageMacaron : un carré centré sur le point de la Marque, qui remonte jusqu’au col', () => {
+  const c = rr(cadrageMacaron({ x: 252, y: 220, hauteur: 740 }, { x: 556, y: 257 }));
+  assert.deepEqual(c, { x: 411.7, y: 109, w: 288.5, h: 288.5 });
 });

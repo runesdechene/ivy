@@ -196,6 +196,20 @@ export function placerDuo(recto: Rect, verso: Rect): { recto: Rect; verso: Rect 
   };
 }
 
+/**
+ * Sur les modèles listés, le recto ne porte que la Marque : au lieu de l'assemblage, le dos remplit l'image et un
+ * macaron rond, en haut à droite, montre le col et la Marque (validé par Uriel le 25/11/2026).
+ * `coteCm` et `auDessusCm` cadrent le vêtement ; le reste est en pixels de la photo du verso (1100 de large).
+ */
+export const MACARON = { modeles: ['FREESTYLER VINTAGE'], coteCm: 19.3, auDessusCm: 9.9, rayon: 185, marge: 18, bord: 6 };
+
+/** Le carré de la photo recto vu dans le macaron, placé d'après le point où s'accroche la Marque. */
+export function cadrageMacaron(cadre: Cadre, point: Point): Rect {
+  const pxParCm = cadre.hauteur / CADRE_HAUTEUR_CM;
+  const cote = MACARON.coteCm * pxParCm;
+  return { x: point.x - cote / 2, y: point.y - MACARON.auDessusCm * pxParCm, w: cote, h: cote };
+}
+
 /** Rectangle des pixels non transparents ; `alpha` = un octet par pixel. */
 export function bornesDessin(alpha: Uint8ClampedArray, largeur: number, hauteur: number): Rect | null {
   let x0 = largeur, y0 = hauteur, x1 = -1, y1 = -1;

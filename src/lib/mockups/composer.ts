@@ -1,5 +1,5 @@
 import {
-  alphaDuMasque, bornesDessin, DUO, placerDuo, carteOmbres, elargir, placerMotif, placerPoitrine, teinteReglee,
+  alphaDuMasque, bornesDessin, DUO, MACARON, placerDuo, carteOmbres, elargir, placerMotif, placerPoitrine, teinteReglee,
   type Cadre, type Gabarit, type Impression, type Point, type Rect, type Reglages, type Version,
 } from './regles';
 
@@ -163,6 +163,26 @@ export function composerDuo(recto: Source, verso: Source): HTMLCanvasElement {
   for (const [s, r] of [[recto, place.recto], [verso, place.verso]] as const) {
     ctx.drawImage(s.image, s.dessin.x, s.dessin.y, s.dessin.w, s.dessin.h, r.x, r.y, r.w, r.h);
   }
+  return canvas;
+}
+
+/** L'autre mockup unique : le dos en entier, et en haut à droite le macaron du recto (voir `MACARON`). */
+export function composerMacaron(recto: Img, verso: Img, cadrage: Rect): HTMLCanvasElement {
+  const [canvas, ctx] = toile(verso.width, verso.height);
+  ctx.drawImage(verso, 0, 0);
+  const { rayon, marge, bord } = MACARON;
+  const x = verso.width - marge - rayon, y = marge + rayon;
+  ctx.beginPath();
+  ctx.arc(x, y, rayon, 0, 2 * Math.PI);
+  ctx.save();
+  ctx.clip();
+  ctx.fillStyle = '#e9e5dc'; // le fond là où le carré déborde du vêtement
+  ctx.fill();
+  ctx.drawImage(recto, cadrage.x, cadrage.y, cadrage.w, cadrage.h, x - rayon, y - rayon, 2 * rayon, 2 * rayon);
+  ctx.restore();
+  ctx.lineWidth = bord;
+  ctx.strokeStyle = '#ffffff';
+  ctx.stroke();
   return canvas;
 }
 

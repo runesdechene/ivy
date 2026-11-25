@@ -2,12 +2,12 @@ import { createHash } from 'node:crypto';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Canvas, createCanvas, loadImage } from '@napi-rs/canvas';
 import sharp from 'sharp';
-import { centrer, chargerGabarit, chargerSource, composerDuo, composerMockup, peindre, utiliserPlateforme, versBlob, type Img } from './composer';
+import { centrer, chargerGabarit, chargerSource, composerDuo, composerMacaron, composerMockup, peindre, utiliserPlateforme, versBlob, type Img } from './composer';
 import { lireGabarits, lireMotif, lireProduit, lireReglages } from './donnees';
 import { BUCKET, retirer, urlPublique } from './serveur';
 import {
   avec300dpi, demandesImpression, noirPur, fichierDemande, lireImpression, lireTaille, motifDuTitre, planifierApercus, roleDuFichier, teinteReglee, PX_PAR_CM_300DPI,
-  type Apercu, type DemandeImpression, type Face, type FichierDeLigne, type Version, type LigneAImprimer, type Reglages, type VarianteImpression,
+  type Apercu, type DemandeImpression, type Face, type FichierDeLigne, type Version, type LigneAImprimer, type Rect, type Reglages, type VarianteImpression,
 } from './regles';
 
 /** Côté serveur : monte un mockup avec le même code que le navigateur, l'enregistre dans IVY. */
@@ -26,14 +26,14 @@ utiliserPlateforme({
   },
 });
 
-/** Le mockup unique d'une couleur imprimée des deux côtés, assemblé depuis ses mockups recto et verso. */
-export async function genererDuo(urlRecto: string, urlVerso: string): Promise<Blob> {
+/** Le mockup unique d'une couleur imprimée des deux côtés, assemblé depuis ses mockups recto et verso ; avec un `macaron`, le dos et le recto en médaillon. */
+export async function genererDuo(urlRecto: string, urlVerso: string, macaron: Rect | null): Promise<Blob> {
   const [recto, verso] = await Promise.all([urlRecto, urlVerso].map(async (u) => {
     const r = await fetch(u);
     if (!r.ok) throw new Error(`Mockup illisible (${r.status})`);
     return chargerSource(await r.blob());
   }));
-  return versBlob(composerDuo(recto, verso), 'image/webp');
+  return versBlob(macaron ? composerMacaron(recto.image, verso.image, macaron) : composerDuo(recto, verso), 'image/webp');
 }
 
 export type Resultat = { image_url: string } | { manque: NonNullable<Apercu['manque']> | 'motif' | 'impression' };
