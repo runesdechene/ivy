@@ -396,7 +396,7 @@ export function Gabarits({ shopId }: { shopId: string }) {
                         {actuel && autresCouleurs > 0 && (
                           <Button size="xs" variant="default" loading={envoi} onClick={appliquerATous} disabled={nonEnregistre}
                             title={nonEnregistre ? 'Enregistre d’abord : ce sont les ombres et le masque enregistrés qui partent' : undefined}>
-                            Appliquer les ombres et le masque de {actuel.couleur} · {actuel.face} aux {autresCouleurs} autres couleurs
+                            Appliquer ombres et masque à tous
                           </Button>
                         )}
                       </Stack>
