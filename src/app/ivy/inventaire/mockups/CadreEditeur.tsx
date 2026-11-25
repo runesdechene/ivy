@@ -1,12 +1,11 @@
 'use client';
 
-import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import { ActionIcon } from '@mantine/core';
 import { IconEye, IconEyeOff } from '@tabler/icons-react';
 import { CADRE_HAUTEUR_CM, CADRE_LARGEUR_CM, type Cadre, type Point } from '@/lib/mockups/regles';
 import styles from './mockups.module.scss';
 
-const LARGEUR_AFFICHEE = 440;
 const RATIO = CADRE_LARGEUR_CM / CADRE_HAUTEUR_CM;
 const HAUTEUR_MIN = 40; // px de la photo, pour garder une poignée saisissable
 
@@ -25,10 +24,17 @@ interface Props {
 /** Photo du gabarit avec son cadre maximal (déplaçable, redimensionnable) et le point poitrine.
  *  Toutes les coordonnées sont en pixels de la photo d'origine. */
 export function CadreEditeur({ photoUrl, apercuUrl, cadre, poitrine, onChange }: Props) {
-  const [largeurPhoto, setLargeurPhoto] = useState<number | null>(null);
+  const [photo, setPhoto] = useState<{ largeur: number; hauteur: number } | null>(null); // taille d'origine
+  const [largeurAffichee, setLargeurAffichee] = useState(0); // suit la place disponible (voir `.editeur`)
+  const racine = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const observateur = new ResizeObserver(([e]) => setLargeurAffichee(e.contentRect.width));
+    observateur.observe(racine.current!);
+    return () => observateur.disconnect();
+  }, []);
   const [cadreVisible, setCadreVisible] = useState(true); // l'œil masque cadre et point pour voir le mockup seul
   const depart = useRef<{ prise: Prise; x: number; y: number; cadre: Cadre; poitrine: Point | null } | null>(null);
-  const echelle = largeurPhoto ? LARGEUR_AFFICHEE / largeurPhoto : 1;
+  const echelle = photo && largeurAffichee ? largeurAffichee / photo.largeur : 1;
 
   function saisir(prise: Prise) {
     return (e: PointerEvent<HTMLDivElement>) => {
@@ -66,9 +72,11 @@ export function CadreEditeur({ photoUrl, apercuUrl, cadre, poitrine, onChange }:
   const px = (v: number) => `${v * echelle}px`;
 
   return (
-    <div className={styles.editeur} style={{ width: LARGEUR_AFFICHEE }} onPointerMove={bouger} onPointerUp={lacher} onPointerCancel={lacher}>
+    <div
+      ref={racine} className={styles.editeur} style={{ '--ratio': photo ? photo.largeur / photo.hauteur : 1100 / 1260 } as CSSProperties}
+      onPointerMove={bouger} onPointerUp={lacher} onPointerCancel={lacher}>
       {/* eslint-disable-next-line @next/next/no-img-element -- photo du bucket, taille d'origine requise */}
-      <img src={apercuUrl ?? photoUrl} alt="" draggable={false} width={LARGEUR_AFFICHEE} onLoad={(e) => setLargeurPhoto(e.currentTarget.naturalWidth)} />
+      <img src={apercuUrl ?? photoUrl} alt="" draggable={false} onLoad={(e) => setPhoto({ largeur: e.currentTarget.naturalWidth, hauteur: e.currentTarget.naturalHeight })} />
       <ActionIcon
         className={styles.oeil} variant="default" size="sm"
         title={cadreVisible ? 'Masquer le cadre' : 'Afficher le cadre'} aria-label={cadreVisible ? 'Masquer le cadre' : 'Afficher le cadre'}
@@ -76,7 +84,7 @@ export function CadreEditeur({ photoUrl, apercuUrl, cadre, poitrine, onChange }:
       >
         {cadreVisible ? <IconEyeOff size={14} /> : <IconEye size={14} />}
       </ActionIcon>
-      {largeurPhoto && cadreVisible && (
+      {photo && largeurAffichee > 0 && cadreVisible && (
         <>
           <div
             className={styles.cadre}

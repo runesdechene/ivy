@@ -79,14 +79,105 @@
   padding: 8px;
 }
 
-/* Onglet Gabarits : liste · éditeur · réglages */
-.troisColonnes {
-  display: grid;
-  grid-template-columns: 260px auto 300px;
-  gap: 16px;
-  align-items: start;
+/* Onglet Gabarits : modèles, bande des couleurs, puis éditeur et réglages. Tout tient sur un écran. */
+.gabarits {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: calc(100dvh - 276px); // barre du haut, titre de la page et marges
+  min-height: 440px;
+}
 
-  .panneau { margin-bottom: 0; }
+.modeles { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+
+.bande, .colonne {
+  background: $cream-soft;
+  border: 1px solid $divider;
+  border-radius: $radius-md;
+}
+
+.bande { display: flex; align-items: center; gap: 14px; padding: 8px 12px; }
+
+.couleurs { display: flex; gap: 6px; min-width: 0; overflow-x: auto; padding: 2px; }
+
+.couleur {
+  position: relative;
+  flex: none;
+  width: 92px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 5px 3px;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.2;
+  background: none;
+  border: 2px solid transparent;
+  border-radius: $radius-md;
+  cursor: pointer;
+
+  &:hover { background: rgba(0, 0, 0, 0.04); }
+
+  img, .trou { width: 56px; height: 62px; object-fit: contain; }
+}
+
+.couleurActive { border-color: var(--moss); background: var(--moss-bg); font-weight: 600; }
+
+.trou {
+  display: grid;
+  place-items: center;
+  border: 1.5px dashed $divider;
+  border-radius: $radius-md;
+  color: $slate-muted;
+}
+
+.point {
+  position: absolute;
+  top: 5px;
+  right: 14px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #e8590c;
+  border: 2px solid #fff;
+}
+
+.travail { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 320px; grid-template-rows: minmax(0, 1fr); gap: 10px; }
+
+.colonne { display: flex; flex-direction: column; min-height: 0; }
+
+.tete {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid $divider;
+
+  h2 { font-size: 13px; font-weight: 600; }
+}
+
+// La photo prend toute la place disponible, sans jamais déborder (voir `.editeur`).
+.scene {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 8px 22px; // en bas : la légende du cadre
+  container-type: size;
+}
+
+.volets { flex: 1; min-height: 0; overflow-y: auto; }
+
+.pied { padding: 10px 12px; border-top: 1px solid $divider; }
+
+@media (max-width: 900px) {
+  .gabarits { height: auto; }
+  .bande { flex-direction: column; align-items: stretch; }
+  .travail { grid-template-columns: 1fr; grid-template-rows: auto; }
+  .scene { flex: none; height: 70vh; }
 }
 
 .groupe {
@@ -132,10 +223,11 @@
 
 .editeur {
   position: relative;
+  width: min(100cqw, calc(100cqh * var(--ratio)));
   user-select: none;
   touch-action: none;
 
-  img { display: block; height: auto; border-radius: $radius-md; }
+  img { display: block; width: 100%; height: auto; border-radius: $radius-md; }
 }
 
 .cadre {
@@ -175,14 +267,6 @@
   background: #e8590c;
   border: 2px solid #fff;
   cursor: grab;
-}
-
-.test {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-top: 8px;
-  border-top: 1px solid $divider;
 }
 
 .cadre:focus,
